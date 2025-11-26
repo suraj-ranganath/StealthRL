@@ -4,7 +4,7 @@
 
 > RL-trained paraphraser for multi-detector-robust, fair text generation.
 
-🚀 **NEW: Tinker Integration** - Now supports training on remote compute with Qwen3-4B via the [Tinker platform](https://tinker-docs.thinkingmachines.ai/). See [TINKER_README.md](TINKER_README.md) for quickstart and DSC 291 deployment guide.
+🚀 **NEW: Tinker Integration** - Now supports training on remote compute with Qwen3-4B via the [Tinker platform](https://tinker-docs.thinkingmachines.ai/). See [TINKER_README.md](knowledge_base/TINKER_README.md) for quickstart and DSC 291 deployment guide.
 
 ---
 
@@ -17,7 +17,7 @@ A core focus of this project is **fairness**: AI text detectors have been shown 
 ### Two Deployment Options
 
 - **Local Training (Original)**: HuggingFace TRL + local GPUs (see sections below)
-- **Tinker Platform (DSC 291)**: Remote compute, Qwen3-4B, GRPO enhancements → [TINKER_README.md](TINKER_README.md)
+- **Tinker Platform (DSC 291)**: Remote compute, Qwen3-4B, GRPO enhancements → [TINKER_README.md](knowledge_base/TINKER_README.md)
 
 ---
 
@@ -99,7 +99,8 @@ stealthrl/
 ├── rewards/         # Composite reward computation (detectors, BERTScore, PPL, fairness)
 ├── detectors/       # Wrappers for Fast-DetectGPT, Ghostbuster, Binoculars, etc.
 ├── training/        # RL training loops (GRPO/PPO via HuggingFace TRL)
-└── evaluation/      # StealthBench metrics: AUROC, FPR, BERTScore, perplexity
+├── evaluation/      # StealthBench metrics: AUROC, FPR, BERTScore, perplexity
+└── tinker/          # Tinker platform integration (env, dataset, reward, training)
 
 scripts/
 ├── prepare_data.py        # Prepare human/LLM text, ESL vs native subsets
@@ -111,10 +112,23 @@ scripts/
 configs/               # YAML/JSON configs for models, training, detectors
 examples/              # Sample scripts and notebooks
 data/                  # Small toy data (large datasets downloaded separately)
+knowledge_base/        # Comprehensive documentation (guides, setup, API docs)
 requirements.txt       # Python dependencies
 environment.yml        # Conda environment (optional)
 LICENSE
 ```
+
+### 📚 Documentation
+
+All comprehensive guides and documentation are organized in the [`knowledge_base/`](knowledge_base/) directory. **Start here**: [`knowledge_base/README.md`](knowledge_base/README.md) for a complete index and navigation guide.
+
+**Quick Access:**
+- **Getting Started**: [SETUP_AND_RUN.md](knowledge_base/SETUP_AND_RUN.md), [QUICKSTART.md](knowledge_base/QUICKSTART.md), [QUICK_START_RUNS.md](knowledge_base/QUICK_START_RUNS.md)
+- **Platform**: [TINKER_README.md](knowledge_base/TINKER_README.md) - Tinker integration guide
+- **Implementation**: [CHECKPOINT_GUIDE.md](knowledge_base/CHECKPOINT_GUIDE.md), [CHECKPOINT_IMPLEMENTATION.md](knowledge_base/CHECKPOINT_IMPLEMENTATION.md), [REWARD_REFINEMENT.md](knowledge_base/REWARD_REFINEMENT.md), [DETECTOR_SETUP.md](knowledge_base/DETECTOR_SETUP.md)
+- **Evaluation**: [ESL_FAIRNESS_GUIDE.md](knowledge_base/ESL_FAIRNESS_GUIDE.md), [IMPLEMENTATION_VERIFICATION.md](knowledge_base/IMPLEMENTATION_VERIFICATION.md)
+- **Research**: [RESEARCH_ROADMAP.md](knowledge_base/RESEARCH_ROADMAP.md), [NEXT_STEPS.md](knowledge_base/NEXT_STEPS.md)
+- **Operations**: [RUN_MANAGEMENT.md](knowledge_base/RUN_MANAGEMENT.md)
 
 ---
 

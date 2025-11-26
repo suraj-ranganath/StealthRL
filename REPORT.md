@@ -811,12 +811,12 @@ wandb>=0.15.0             # Experiment tracking
 
 **Documentation**:
 - `README.md` - Project overview and quickstart
-- `SETUP_AND_RUN.md` - Complete setup guide with API keys
-- `QUICKSTART.md` - Fast-track research experiments
-- `TINKER_README.md` - Tinker platform details
-- `ESL_FAIRNESS_GUIDE.md` - ESL evaluation guide
+- `knowledge_base/SETUP_AND_RUN.md` - Complete setup guide with API keys
+- `knowledge_base/QUICKSTART.md` - Fast-track research experiments
+- `knowledge_base/TINKER_README.md` - Tinker platform details
+- `knowledge_base/ESL_FAIRNESS_GUIDE.md` - ESL evaluation guide
 - `REPORT.md` - This comprehensive report
-- `RESEARCH_ROADMAP.md` - Research plan and status
+- `knowledge_base/RESEARCH_ROADMAP.md` - Research plan and status
 - `interaction_records.md` - Detailed development log
 
 **Key Scripts**:

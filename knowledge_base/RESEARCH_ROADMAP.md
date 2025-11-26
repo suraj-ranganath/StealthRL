@@ -582,10 +582,12 @@ Per proposal: "We will not release evasion-tuned weights; instead we will share 
 - Ablations: `scripts/evaluate_ablations.py`
 
 **Documentation**:
-- Setup: `TINKER_README.md`
-- Project overview: `README.md`
-- Implementation log: `interaction_records.md`
-- This roadmap: `RESEARCH_ROADMAP.md`
+- Setup: [`SETUP_AND_RUN.md`](SETUP_AND_RUN.md)
+- Tinker platform: [`TINKER_README.md`](TINKER_README.md)
+- Quick start: [`QUICKSTART.md`](QUICKSTART.md)
+- Project overview: [`../README.md`](../README.md)
+- Implementation log: [`../interaction_records.md`](../interaction_records.md)
+- This roadmap: [`RESEARCH_ROADMAP.md`](RESEARCH_ROADMAP.md)
 
 ---
 

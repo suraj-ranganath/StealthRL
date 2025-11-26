@@ -93,6 +93,8 @@ Normalization (Session 4 refinements):
 
 ### 1. Installation
 
+**See [`SETUP_AND_RUN.md`](SETUP_AND_RUN.md) for complete setup instructions.**
+
 ```bash
 # Clone repository
 git clone https://github.com/your-org/StealthRL.git

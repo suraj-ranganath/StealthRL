@@ -186,6 +186,8 @@ class StealthRLConfig:
     log_interval: int = 10  # Log every N batches
     eval_interval: int = 100  # Eval every N batches
     save_interval: int = 500  # Save checkpoint every N batches
+    save_every: int = 10  # Save checkpoint every N iterations (10 is good for 100+ iteration runs)
+    eval_every: int = 5  # Run evaluation every N iterations (5 allows frequent monitoring)
     
     # Debug
     num_groups_to_log: int = 4  # Number of groups to log in detail
@@ -314,11 +316,81 @@ class StealthRLTrainer:
             tokenizer=self.tokenizer,
         )
         
+        # Save final checkpoints
+        checkpoint_path = await self._save_final_checkpoint()
+        
         # Close TensorBoard writer
         self.ml_logger.close()
         
         logger.info("Training complete")
         logger.info(f"TensorBoard logs saved to: {Path(self.config.log_path) / 'tensorboard'}")
+    
+    async def _save_final_checkpoint(self) -> str:
+        """Save final checkpoint and return the path.
+        
+        Uses Tinker's save_state() to save both weights and optimizer state.
+        The checkpoint path is a tinker:// URI that can be used to load the model later.
+        
+        Returns:
+            str: The tinker:// path to the saved checkpoint
+        """
+        checkpoint_name = "final"
+        logger.info(f"Saving final checkpoint: {checkpoint_name}")
+        
+        # Save full state (weights + optimizer) for potential resume
+        save_future = self.training_client.save_state(name=checkpoint_name)
+        save_result = await save_future.result_async()
+        checkpoint_path = save_result.path
+        
+        logger.info(f"✓ Final checkpoint saved to: {checkpoint_path}")
+        
+        # Also save a sampler-only checkpoint (faster, smaller)
+        sampler_future = self.training_client.save_weights_for_sampler(name=f"{checkpoint_name}_sampler")
+        sampler_result = await sampler_future.result_async()
+        sampler_path = sampler_result.path
+        
+        logger.info(f"✓ Sampler checkpoint saved to: {sampler_path}")
+        
+        # Save checkpoint info to local file
+        checkpoint_info = {
+            "model_id": self.training_client.model_id,
+            "base_model": self.config.model_name,
+            "lora_rank": self.config.lora_rank,
+            "checkpoints": {
+                "final_state": checkpoint_path,  # Full state for resuming training
+                "sampler_weights": sampler_path,  # Just weights for inference
+            },
+            "usage": {
+                "load_for_training": f"training_client.load_state('{checkpoint_path}')",
+                "load_for_inference": f"service_client.create_sampling_client(model_path='{sampler_path}')",
+            }
+        }
+        
+        checkpoint_info_path = Path(self.config.log_path) / "checkpoints" / "final_checkpoint_info.json"
+        checkpoint_info_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(checkpoint_info_path, "w") as f:
+            json.dump(checkpoint_info, f, indent=2)
+        
+        logger.info(f"✓ Checkpoint info saved to: {checkpoint_info_path}")
+        logger.info(f"""\n{'='*60}
+📦 Training Complete - Model Checkpoints Saved
+{'='*60}
+Full State (for resuming): {checkpoint_path}
+Sampler Weights (for inference): {sampler_path}
+
+To use this model later:
+  1. For inference:
+     sampling_client = service_client.create_sampling_client(
+         model_path='{sampler_path}'
+     )
+  
+  2. To resume training:
+     training_client.load_state('{checkpoint_path}')
+{'='*60}
+""")
+        
+        return checkpoint_path
+        logger.info("To use this model: Create a SamplingClient with this model_id")
     
     def _build_tinker_config(self, dataset) -> rl_train.Config:
         """
@@ -350,6 +422,8 @@ class StealthRLTrainer:
             dataset_builder=self.config.dataset_builder,
             remove_constant_reward_groups=self.config.remove_constant_reward_groups,
             log_path=self.config.log_path,
+            save_every=self.config.save_every,
+            eval_every=self.config.eval_every,
         )
         
         return tinker_config
@@ -495,6 +569,8 @@ async def main():
     parser.add_argument("--num-epochs", type=int, default=3, help="Number of training epochs")
     parser.add_argument("--batch-size", type=int, default=8, help="Batch size")
     parser.add_argument("--run-name", type=str, help="Custom run name (default: auto-generated with timestamp)")
+    parser.add_argument("--save-every", type=int, default=10, help="Save checkpoint every N iterations (default: 10)")
+    parser.add_argument("--eval-every", type=int, default=5, help="Run evaluation every N iterations (default: 5)")
     args = parser.parse_args()
     
     # Load environment variables from .env file
@@ -578,6 +654,8 @@ async def main():
         kl_penalty_coef=0.001,
         dataset_builder=dataset_builder,
         log_path=str(output_dir),  # Save metrics to output directory
+        save_every=args.save_every,
+        eval_every=args.eval_every,
     )
     
     logger.info(f"Output directory: {output_dir}")

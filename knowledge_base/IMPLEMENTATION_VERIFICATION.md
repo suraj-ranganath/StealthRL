@@ -307,10 +307,13 @@ python scripts/compare_baselines.py --input_file data/processed/test.jsonl --ste
 
 ## 📚 Documentation
 
-- **README.md**: Comprehensive project documentation (600+ lines)
-- **NEXT_STEPS.md**: Getting started guide with experiments (400+ lines)
+- **README.md**: Comprehensive project documentation (600+ lines) - in root
+- **REPORT.md**: Complete project report - in root
+- **knowledge_base/NEXT_STEPS.md**: Getting started guide with experiments (400+ lines)
+- **knowledge_base/QUICKSTART.md**: Fast-track research guide
+- **knowledge_base/SETUP_AND_RUN.md**: Complete setup with API keys
 - **configs/ablations/README.md**: Ablation study documentation (200+ lines)
-- **interaction_records.md**: Development log (350+ lines)
+- **interaction_records.md**: Development log (350+ lines) - in root
 - **Code comments**: Extensive docstrings in all modules
 
 **Total documentation**: 1,550+ lines

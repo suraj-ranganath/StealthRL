@@ -353,4 +353,7 @@ reward:
 
 ---
 
-**Questions?** Check `RESEARCH_ROADMAP.md` for detailed implementation specs.
+**Questions?** Check [`RESEARCH_ROADMAP.md`](RESEARCH_ROADMAP.md) for detailed implementation specs. See also:
+- [`SETUP_AND_RUN.md`](SETUP_AND_RUN.md) for complete setup guide
+- [`TINKER_README.md`](TINKER_README.md) for Tinker platform details
+- [`../README.md`](../README.md) for project overview

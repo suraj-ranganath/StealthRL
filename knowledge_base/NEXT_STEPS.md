@@ -463,15 +463,17 @@ pip install dipper-paraphrases
 
 ---
 
-## ✉️ Questions or Issues?
+**Questions or Issues?**
 
 If you encounter problems:
 
-1. Check `interaction_records.md` for implementation details
-2. Review error messages carefully
-3. Check dependency versions
-4. Review the code comments and docstrings
-5. Consult the referenced papers and codebases
+1. Check [`../interaction_records.md`](../interaction_records.md) for implementation details
+2. Check [`SETUP_AND_RUN.md`](SETUP_AND_RUN.md) for setup guidance
+3. Review [`TINKER_README.md`](TINKER_README.md) for platform-specific issues
+4. Review error messages carefully
+5. Check dependency versions
+6. Review the code comments and docstrings
+7. Consult the referenced papers and codebases
 
 ---
 
