@@ -1,0 +1,35 @@
+name: stealthrl
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.10
+  - pip
+  - pytorch>=2.0.0
+  - pytorch-cuda=11.8
+  - cudatoolkit=11.8
+  
+  # Install remaining via pip
+  - pip:
+    - transformers>=4.36.0
+    - trl>=0.7.0
+    - peft>=0.7.0
+    - accelerate>=0.25.0
+    - datasets>=2.14.0
+    - bert-score>=0.3.13
+    - scikit-learn>=1.3.0
+    - scipy>=1.11.0
+    - pandas>=2.0.0
+    - numpy>=1.24.0
+    - pyyaml>=6.0
+    - matplotlib>=3.7.0
+    - seaborn>=0.12.0
+    - tabulate>=0.9.0
+    - sentencepiece>=0.1.99
+    - protobuf>=4.24.0
+    - pytest>=7.4.0
+    - black>=23.7.0
+    - flake8>=6.1.0

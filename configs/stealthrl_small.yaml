@@ -1,0 +1,67 @@
+# StealthRL Training Configuration - Small Model
+# With refined reward normalization for stable GRPO/PPO training
+
+model:
+  base_model: "Qwen/Qwen2.5-1.5B-Instruct"
+  lora_rank: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+
+training:
+  algorithm: "grpo"  # or "ppo"
+  learning_rate: 1.0e-5
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  max_steps: 10000
+  warmup_steps: 500
+  eval_steps: 500
+  save_steps: 1000
+  logging_steps: 10
+  max_grad_norm: 1.0
+
+trainer:
+  # KL regularization (following AuthorMist β=0.001)
+  kl_beta: 0.001
+
+reward:
+  detectors:
+    - "fast-detectgpt"
+    - "roberta-base-openai-detector"
+  
+  # Reward component weights
+  detector_weight: 1.0      # w₁
+  semantic_weight: 1.0      # w₂
+  quality_weight: 0.5       # w₃
+  fairness_weight: 0.2      # w₄
+  
+  # Semantic fidelity settings
+  semantic_metric: "bertscore"  # or "cosine"
+  
+  # NEW: Normalization and thresholding for RL stability
+  normalize_terms: true
+  detector_zscore: true     # Apply z-score normalization to detector scores
+  semantic_min: 0.90        # Minimum acceptable semantic similarity
+  quality_min: 0.80         # Minimum acceptable quality score
+  
+  # Fairness
+  fairness_mode: "esl_penalty"  # Per-sample ESL-aware proxy
+
+quality:
+  # Explicit min-max normalization bounds for perplexity and readability
+  perplexity_min: 5.0
+  perplexity_max: 80.0
+  readability_min: 0.0
+  readability_max: 100.0
+  quality_balance: 0.5      # α in Q formula (weight for perplexity vs readability)
+
+data:
+  train_dataset: "data/processed/train.jsonl"
+  eval_dataset: "data/processed/eval.jsonl"
+  esl_validation: "data/processed/esl_validation.jsonl"
+  native_validation: "data/processed/native_validation.jsonl"
+  max_length: 512
+
+output:
+  output_dir: "checkpoints/stealthrl-small"
+  logging_dir: "logs/stealthrl-small"
+

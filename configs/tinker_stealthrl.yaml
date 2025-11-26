@@ -1,0 +1,118 @@
+# StealthRL Training Configuration for Tinker
+
+# Model settings
+model:
+  name: "Qwen/Qwen3-4B-Instruct-2507"  # Base model
+  renderer: "qwen3"  # Tinker renderer name
+
+# LoRA settings
+lora:
+  rank: 16  # 8-16 recommended for RL (small ranks work well)
+  alpha: null  # If null, uses rank
+  dropout: 0.05
+  target_modules: null  # null = all linear layers (recommended)
+
+# Training hyperparameters
+training:
+  learning_rate: 1.0e-5  # Base LR (will be scaled 20-100x for LoRA)
+  batch_size: 8  # Number of different prompts per batch
+  group_size: 4  # Number of rollouts per prompt (GRPO)
+  num_epochs: 3
+  num_substeps: 1  # Gradient accumulation
+  max_tokens: 512  # Max generation length
+
+# Sampling settings
+sampling:
+  temperature: 1.0  # Higher = more exploration
+  temperature_schedule: "decay"  # "constant" | "decay"
+  temperature_decay: 0.95
+  top_p: 0.9
+
+# GRPO settings
+grpo:
+  normalize_advantages: true  # Group-normalize advantages
+  advantage_clip: 5.0  # Clip to [-5, 5]
+  reward_clip: null  # Optional reward clipping
+  remove_constant_reward_groups: true  # Remove degenerate groups
+
+# KL divergence penalty (AuthorMist-inspired)
+kl:
+  penalty_coef: 0.001  # β in L = -E[R] + β*KL(π || π_ref)
+  target: null  # Target KL for adaptive penalty (null = no adaptation)
+  adapt_rate: 0.1  # Adaptation rate
+
+# All-negative group handling
+all_negative:
+  min_reward: 0.01  # Minimum reward for all-negative groups
+  downweight: 0.5  # Downweight factor
+
+# Curriculum learning
+curriculum:
+  enabled: false
+  start_quantile: 0.7  # Start with top 70% easiest
+  end_quantile: 0.0  # End with all examples
+  steps: 1000  # Transition steps
+
+# Reward function configuration
+reward:
+  # Weights (α, β, γ, δ)
+  detector_weight: 1.0  # α: Detector evasion
+  semantic_weight: 1.0  # β: Semantic similarity
+  perplexity_weight: 0.5  # γ: Fluency
+  fairness_weight: 0.2  # δ: ESL fairness
+  
+  # Detector ensemble
+  detectors:
+    names:
+      - "fast_detectgpt"
+      - "ghostbuster"
+    weights:  # Optional custom weights (null = equal)
+      fast_detectgpt: 0.5
+      ghostbuster: 0.5
+    cache_path: "cache/detectors.db"
+  
+  # Semantic similarity (E5)
+  semantic:
+    model: "intfloat/e5-large-v2"
+    threshold: 0.90  # Minimum acceptable similarity
+  
+  # BERTScore (optional, for evaluation only)
+  bertscore:
+    enabled: false  # Enable for comprehensive evaluation
+    model_type: "roberta-large"  # Options: bert-base, roberta-large, microsoft/deberta-base
+    batch_size: 16
+    num_layers: null  # Auto-select best layer
+  
+  # Perplexity (fluency)
+  perplexity:
+    model: "gpt2"
+    min: 5.0  # Too predictable (LLM-like)
+    max: 80.0  # Too unpredictable (incoherent)
+    target: 30.0  # Human-like target
+  
+  # Fairness
+  fairness:
+    mode: "esl_penalty"  # Per-sample ESL penalty
+  
+  # Normalization (Session 4 refinements)
+  normalization:
+    enabled: true
+    detector_zscore: true  # Z-score normalize detector scores
+    semantic_min: 0.90  # Threshold for semantic
+    quality_min: 0.80  # Threshold for quality
+
+# Dataset settings
+dataset:
+  path: "data/tinker"
+  max_examples: null  # Optional limit for debugging
+  seed: 42
+  few_shot: "standard"  # "standard" | null | custom
+
+# Logging
+logging:
+  path: "outputs/tinker"
+  interval: 10  # Log every N batches
+  eval_interval: 100  # Eval every N batches
+  save_interval: 500  # Save every N batches
+  num_groups_to_log: 4  # Detailed logs
+  debug_mode: false

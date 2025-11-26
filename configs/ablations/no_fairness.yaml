@@ -1,0 +1,41 @@
+# Ablation: No Fairness Term
+# Tests impact of fairness penalty removal
+
+model:
+  base_model: "Qwen/Qwen2.5-1.5B-Instruct"
+  lora_rank: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+
+training:
+  algorithm: "grpo"
+  learning_rate: 1.0e-5
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  max_steps: 10000
+  warmup_steps: 500
+  eval_steps: 500
+  save_steps: 1000
+  logging_steps: 10
+  max_grad_norm: 1.0
+
+reward:
+  detectors:
+    - "fast-detectgpt"
+    - "roberta-base-openai-detector"
+  # Fairness weight set to 0 (no fairness penalty)
+  detector_weight: 0.5
+  semantic_weight: 0.35
+  quality_weight: 0.15
+  fairness_weight: 0.0
+
+data:
+  train_dataset: "data/processed/train.jsonl"
+  eval_dataset: "data/processed/eval.jsonl"
+  esl_validation: "data/processed/esl_validation.jsonl"
+  native_validation: "data/processed/native_validation.jsonl"
+  max_length: 512
+
+output:
+  output_dir: "checkpoints/ablation-no-fairness"
+  logging_dir: "logs/ablation-no-fairness"

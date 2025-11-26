@@ -1,0 +1,131 @@
+# Tinker StealthRL Configuration - Transfer Evaluation (In-Ensemble Training)
+#
+# This config trains on a SUBSET of detectors (Fast-DetectGPT + Ghostbuster only)
+# to evaluate transfer to held-out detector families (Binoculars).
+#
+# Research Question: Can ensemble training generalize to unseen detector mechanisms?
+
+model:
+  name: "Qwen/Qwen3-4B-Instruct-2507"
+  device: "cuda"  # Will be handled by Tinker
+
+lora:
+  rank: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+
+training:
+  learning_rate: 1.0e-5  # Base LR, will be scaled for LoRA
+  batch_size: 8
+  group_size: 4  # GRPO: 4 rollouts per prompt
+  num_epochs: 3
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+  warmup_steps: 100
+  logging_steps: 10
+  save_steps: 500
+  eval_steps: 500
+
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  max_length: 512
+
+grpo:
+  advantage_clip: 5.0
+  value_clip: 5.0
+  entropy_coef: 0.01
+  group_normalization: true  # GRPO reward centering
+
+kl:
+  penalty_coef: 0.001  # AuthorMist β
+  target: 0.01  # Target KL divergence
+  adapt: true  # Adaptive KL penalty
+  adapt_rate: 0.1
+
+all_negative:
+  # Handle groups where all candidates get negative rewards
+  min_reward: 0.01  # Small shaped signal
+  downweight: 0.5  # Reduce contribution to training
+
+curriculum:
+  enabled: false  # Disable for controlled comparison
+  start_quantile: 0.7
+  end_quantile: 0.0
+  steps: 1000
+
+reward:
+  # TRANSFER SETUP: Train on Fast-DetectGPT + Ghostbuster ONLY
+  # Evaluate on Binoculars (held-out)
+  
+  detector_weight: 1.0
+  semantic_weight: 1.0
+  perplexity_weight: 0.5
+  fairness_weight: 0.2
+  
+  detectors:
+    # IN-ENSEMBLE: Only these detectors used during training
+    in_ensemble:
+      - "fast_detectgpt"
+      - "ghostbuster"
+    
+    # HELD-OUT: Evaluate on these after training (not used in reward)
+    held_out:
+      - "binoculars"
+    
+    weights:
+      fast_detectgpt: 0.5
+      ghostbuster: 0.5
+      # binoculars: 0.0  (not used in training)
+    
+    cache_path: "cache/detectors_transfer.db"
+  
+  semantic:
+    model: "intfloat/e5-large-v2"
+    threshold: 0.90
+    normalize: true
+  
+  perplexity:
+    model: "gpt2"
+    target: 30.0
+    min: 5.0
+    max: 80.0
+    normalize: true
+  
+  fairness:
+    penalty_type: "per_sample"  # detector_prob * is_esl
+    esl_weight: 1.0
+  
+  normalization:
+    detector: "zscore"  # z-score normalization
+    semantic: "threshold"  # (sim - 0.90) / 0.10
+    perplexity: "threshold"  # (score - 0.80) / 0.20
+
+dataset:
+  data_path: "data/tinker"
+  train_file: "train.jsonl"
+  test_file: "test.jsonl"
+  max_examples: null  # Use all data
+  shuffle: true
+  few_shot_examples: 2
+
+logging:
+  log_dir: "outputs/tinker_transfer_in_ensemble"
+  tensorboard: true
+  wandb: false
+  debug_samples: true
+  debug_frequency: 100
+
+# Transfer evaluation notes:
+# 1. Train with this config (Fast-DetectGPT + Ghostbuster)
+# 2. Evaluate with scripts/evaluate_transfer.py
+# 3. Compare ASR on in-ensemble vs held-out detectors
+# 4. Measure cross-family generalization
