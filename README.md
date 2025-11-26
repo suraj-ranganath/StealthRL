@@ -132,38 +132,337 @@ All comprehensive guides and documentation are organized in the [`knowledge_base
 
 ---
 
-## Installation
+## 🚀 Getting Started (For New Team Members)
 
 ### Prerequisites
 
-- Python 3.10+
-- NVIDIA GPU with CUDA 11.8+ (recommended: A100, RTX 3090/4090, or similar)
-- Access to HuggingFace Hub for base models
+**Required:**
+- Python 3.10 or higher
+- Tinker API key (from [Tinker Platform](https://tinker.thinkingmachines.ai/))
+- 5-10 GB disk space for dependencies and data
 
-### Setup
+**Optional (for local detector testing):**
+- NVIDIA GPU with CUDA 11.8+ (8-16GB VRAM recommended)
+- If no GPU: Use Tinker's remote compute (recommended for DSC 291)
+
+### Step-by-Step Setup
+
+#### 1. Clone the Repository
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-org/stealthrl.git
-cd stealthrl
+git clone https://github.com/suraj-ranganath/StealthRL.git
+cd StealthRL
+```
 
-# Create a virtual environment (recommended)
-python -m venv venv
+#### 2. Create Virtual Environment
+
+**IMPORTANT**: Always use a virtual environment to avoid dependency conflicts.
+
+```bash
+# Create virtual environment
+python3 -m venv venv
+
+# Activate it (macOS/Linux)
 source venv/bin/activate
 
-# Install dependencies
+# Activate it (Windows)
+# venv\Scripts\activate
+```
+
+**Verify activation**: Your terminal prompt should now show `(venv)` at the beginning.
+
+#### 3. Install Dependencies
+
+```bash
+# Upgrade pip first
+pip install --upgrade pip
+
+# Install all required packages
 pip install -r requirements.txt
 ```
 
+**Expected time**: 2-5 minutes. If errors occur, see [Troubleshooting](#troubleshooting) below.
+
+#### 4. Set Up Tinker API Key
+
+**Get your API key:**
+1. Go to [Tinker Platform](https://tinker.thinkingmachines.ai/)
+2. Sign in (use your UCSD credentials for DSC 291)
+3. Navigate to **Settings** → **API Keys**
+4. Copy your API key (starts with `tk-`)
+
+**Add to .env file:**
+
+```bash
+# Open the .env file
+nano .env
+# OR: code .env (if using VS Code)
+# OR: open -e .env (macOS TextEdit)
+```
+
+Find this line:
+```bash
+TINKER_API_KEY=your_tinker_api_key_here
+```
+
+Replace it with your actual key:
+```bash
+TINKER_API_KEY=tk-abc123xyz789...
+```
+
+**Save and verify:**
+```bash
+grep TINKER_API_KEY .env
+# Should show: TINKER_API_KEY=tk-...
+```
+
+#### 5. Quick Test (5 minutes)
+
+Verify everything works:
+
+```bash
+# Generate synthetic test data
+python scripts/prepare_tinker_data.py --synthetic --num-train 10 --output-dir data/tinker_test
+
+# Run a quick training test (1 epoch)
+python -m stealthrl.tinker.train \
+  --data-path data/tinker_test \
+  --run-name test_run \
+  --num-epochs 1 \
+  --batch-size 2
+
+# Check that it created output
+ls outputs/runs/test_run/
+```
+
+**Success indicators:**
+- ✅ No error messages
+- ✅ `outputs/runs/test_run/` directory created
+- ✅ `training.log` file shows training progress
+- ✅ Checkpoint info saved
+
 ### Core Dependencies
 
-- `transformers` - HuggingFace Transformers for base LMs
-- `trl` - Transformer Reinforcement Learning (GRPO, PPO, DPO)
-- `peft` - Parameter-Efficient Fine-Tuning (LoRA)
-- `accelerate` - Distributed training utilities
-- `datasets` - HuggingFace Datasets
-- `bert-score` - Semantic similarity metric
-- `torch` - PyTorch backend
+The project uses these main packages (all auto-installed via `requirements.txt`):
+
+- `tinker-ai` - Tinker platform API for remote compute
+- `transformers` - HuggingFace models (Qwen3-4B)
+- `torch` - PyTorch deep learning framework
+- `sentence-transformers` - E5 embeddings for semantic similarity
+- `bert-score` - BERTScore for evaluation
+- `peft` - LoRA adapters for efficient fine-tuning
+- `trl` - Reinforcement learning utilities
+
+**Total install size**: ~3-4 GB
+
+---
+
+## 📊 Project Status: What's Done vs. What's Remaining
+
+### ✅ COMPLETED (Ready to Use)
+
+#### Infrastructure & Training Pipeline
+- ✅ **Complete Tinker integration** (~3,555 lines of code)
+  - GRPO training loop with Qwen3-4B
+  - LoRA adapters (rank 16, efficient training)
+  - Async reward computation
+  - Checkpoint management (remote storage on Tinker)
+  
+- ✅ **Multi-objective reward function** with normalization
+  - Detector ensemble scoring (Fast-DetectGPT, Ghostbuster, Binoculars)
+  - Semantic similarity (E5 embeddings)
+  - Perplexity-based quality control (GPT-2)
+  - ESL fairness penalty (per-sample)
+  - Z-score normalization, threshold-based gating
+  - KL regularization (β=0.001, AuthorMist-inspired)
+
+- ✅ **Training configurations**
+  - Full ensemble config (`configs/tinker_stealthrl.yaml`)
+  - Transfer learning config (`configs/tinker_transfer_in_ensemble.yaml`)
+  - 5 ablation configs (detector-only, no-fairness, etc.)
+
+- ✅ **Comprehensive evaluation suite**
+  - ASR (Attack Success Rate) metrics
+  - AUROC, F1, FPR@TPR95
+  - Low-FPR metrics (FPR@0.5%, FPR@1%)
+  - ESL fairness gap tracking
+  - BERTScore and E5 cosine similarity
+
+- ✅ **Pipeline testing with synthetic data**
+  - ✅ Successfully tested end-to-end training
+  - ✅ Checkpoint saving/loading verified
+  - ✅ Reward computation working
+  - ✅ GRPO algorithm validated
+
+#### Documentation
+- ✅ **13 comprehensive guides** in `knowledge_base/`
+- ✅ **Setup instructions** (this file + SETUP_AND_RUN.md)
+- ✅ **Research roadmap** with priorities
+- ✅ **Implementation verification** report
+
+### 🔨 IN PROGRESS / TODO (Team Tasks)
+
+#### Priority 1: Detector Setup (HIGH - Week 1)
+**Status**: Mock implementations exist, need real detectors
+
+**What needs to be done:**
+1. **Install detector packages**:
+   ```bash
+   pip install fast-detectgpt ghostbuster binoculars-detect
+   # OR clone from GitHub repos
+   ```
+
+2. **Update detector implementations** in `stealthrl/tinker/detectors.py`:
+   - Replace mock `_compute_score()` with real model calls
+   - Current: Returns dummy scores based on text length
+   - Needed: Load actual detector models (Fast-DetectGPT, Ghostbuster, Binoculars)
+   - See [`knowledge_base/DETECTOR_SETUP.md`](knowledge_base/DETECTOR_SETUP.md) for detailed instructions
+
+3. **Test detectors**:
+   ```bash
+   python -c "from stealthrl.tinker.detectors import DetectorEnsemble; ..."
+   ```
+
+**Who should do this**: Team member with GPU access (8-16GB VRAM needed)  
+**Estimated time**: 1-2 days  
+**Blocker**: Models need to be downloaded (~10GB total)
+
+---
+
+#### Priority 2: Dataset Curation (HIGH - Week 1-2)
+**Status**: Data pipeline ready, need real datasets
+
+**What needs to be done:**
+1. **Curate ESL/Native corpus** for fairness evaluation:
+   - **ESL sources**: TOEFL11, ICNALE, ELLIPSE
+   - **Native sources**: Academic papers, essays
+   - **Target split**: 40% ESL, 60% native
+   - See [`knowledge_base/ESL_FAIRNESS_GUIDE.md`](knowledge_base/ESL_FAIRNESS_GUIDE.md)
+
+2. **Prepare JSONL files** with this format:
+   ```json
+   {
+     "ai_text": "AI-generated text here...",
+     "human_reference": "Original human text...",
+     "domain": "academic",
+     "is_esl": true,
+     "metadata": {"source": "TOEFL11"}
+   }
+   ```
+
+3. **Run data preparation**:
+   ```bash
+   python scripts/prepare_tinker_data.py \
+     --input-paths data/raw/toefl11.jsonl data/raw/icnale.jsonl \
+     --output-dir data/tinker \
+     --train-split 0.8
+   ```
+
+**Who should do this**: Team member comfortable with data processing  
+**Estimated time**: 2-3 days (includes data collection + preprocessing)  
+**Resources needed**: Access to TOEFL11 corpus (may require permissions)
+
+---
+
+#### Priority 3: Main RL Training (MEDIUM - Week 2-3)
+**Status**: Infrastructure ready, waiting on detectors + data
+
+**What needs to be done:**
+1. **Full ensemble training** (all 3 detectors):
+   ```bash
+   python -m stealthrl.tinker.train \
+     --config configs/tinker_stealthrl.yaml \
+     --data-path data/tinker \
+     --run-name full_ensemble \
+     --num-epochs 3
+   ```
+   - **Expected time**: 2-4 hours on Tinker
+   - **Checkpoint**: Saved to `outputs/runs/full_ensemble/`
+
+2. **Transfer learning experiment**:
+   ```bash
+   python -m stealthrl.tinker.train \
+     --config configs/tinker_transfer_in_ensemble.yaml \
+     --data-path data/tinker \
+     --run-name transfer_experiment
+   ```
+   - **Goal**: Train on Fast-DetectGPT + Ghostbuster only
+   - **Evaluate**: Test on held-out Binoculars
+
+3. **Ablation studies** (5 experiments):
+   ```bash
+   bash scripts/run_ablations.sh
+   ```
+   - **Expected time**: 10-15 hours total (can parallelize)
+
+**Who should do this**: Team member monitoring training  
+**Prerequisites**: Detectors working + real data ready  
+**Compute**: Tinker credits (DSC 291 sponsored)
+
+---
+
+#### Priority 4: ESL Fairness Evaluation (MEDIUM - Week 3)
+**Status**: Evaluation code ready, need ESL-stratified data
+
+**What needs to be done:**
+1. **Run ESL evaluation pipeline**:
+   ```bash
+   python scripts/run_esl_eval.py \
+     --eval_data data/processed/esl_native_test.jsonl \
+     --stealthrl_model outputs/runs/full_ensemble \
+     --enable_bertscore \
+     --output_dir results/esl_eval
+   ```
+
+2. **Analyze fairness metrics**:
+   - FPR gap: FPR(ESL) - FPR(native) per detector
+   - Target: Reduce gap from 0.15 to <0.07
+   - BERTScore by group (ESL vs native)
+
+3. **Generate visualizations**:
+   ```bash
+   python scripts/visualize_stealthbench.py \
+     --results results/esl_eval \
+     --output-dir outputs/figures
+   ```
+
+**Who should do this**: Team member with data analysis experience  
+**Prerequisites**: ESL-stratified dataset + trained model  
+**Deliverables**: Fairness report + heatmap visualizations
+
+---
+
+#### Priority 5: Results & Paper Writing (LOW - Week 4)
+**What needs to be done:**
+1. Compile all experimental results
+2. Generate publication-ready figures
+3. Write results section for paper/report
+4. Compare against SICO baseline (if time permits)
+
+**Who should do this**: All team members  
+**Prerequisites**: All experiments completed  
+
+---
+
+### 📋 Task Assignment Recommendations
+
+**Week 1:**
+- **Person A**: Set up real detectors + test locally
+- **Person B**: Curate ESL/native datasets
+- **Person C**: Review documentation + set up environment
+
+**Week 2:**
+- **Person A**: Run main training experiments
+- **Person B**: Prepare ESL evaluation pipeline
+- **Person C**: Monitor training + debug issues
+
+**Week 3:**
+- **Person A**: Run ablation studies
+- **Person B**: Run ESL fairness evaluation
+- **Person C**: Generate visualizations
+
+**Week 4:**
+- **All**: Results analysis + paper writing
 
 ---
 
@@ -513,6 +812,97 @@ If you use StealthRL or StealthBench in your research, please cite:
 
 - **Awesome Machine-Generated Text** - Comprehensive resource list  
   GitHub: `https://github.com/ICTMCG/Awesome-Machine-Generated-Text`
+
+---
+
+## 🐛 Troubleshooting
+
+### Environment Setup Issues
+
+**Problem**: `pip install -r requirements.txt` fails
+- **Solution 1**: Upgrade pip: `pip install --upgrade pip`
+- **Solution 2**: Install with no cache: `pip install -r requirements.txt --no-cache-dir`
+- **Solution 3**: Check Python version: `python --version` (must be 3.10+)
+
+**Problem**: Virtual environment not activating
+- **macOS/Linux**: Use `source venv/bin/activate` (not just `venv/bin/activate`)
+- **Windows**: Use `venv\Scripts\activate`
+- **Check**: Terminal prompt should show `(venv)` prefix
+
+**Problem**: Import errors after installation
+- **Solution**: Make sure venv is activated
+- **Verify**: `which python` should point to `./venv/bin/python`
+- **Reinstall**: Deactivate venv, delete `venv/` folder, recreate from scratch
+
+### Tinker API Issues
+
+**Problem**: "Invalid API key" error
+- **Check**: Key starts with `tk-` and has no extra spaces
+- **Verify**: `grep TINKER_API_KEY .env` shows correct key
+- **Test**: Try logging into Tinker dashboard with same credentials
+
+**Problem**: Training hangs or times out
+- **Check**: Tinker credits available (DSC 291 students should have sponsored credits)
+- **Monitor**: Check Tinker dashboard for active jobs
+- **Retry**: Sometimes network issues cause hangs, restart training
+
+### Training Issues
+
+**Problem**: "All-negative groups" fraction is very high (>0.8)
+- **Cause**: Reward function returning negative values for all attempts
+- **Solution**: Increase `all_negative_min_reward` in config:
+  ```yaml
+  all_negative:
+    min_reward: 0.05  # Increase from 0.01
+    downweight: 0.3   # Reduce from 0.5
+  ```
+
+**Problem**: KL divergence too high (>0.05)
+- **Solution**: Increase KL penalty coefficient:
+  ```yaml
+  kl:
+    penalty_coef: 0.01  # Increase from 0.001
+  ```
+
+**Problem**: Semantic similarity too low (<0.80)
+- **Solution**: Increase semantic weight:
+  ```yaml
+  reward:
+    semantic_weight: 2.0  # Increase from 1.0
+  ```
+
+### Data Issues
+
+**Problem**: "File not found" when running training
+- **Check**: Data directory exists: `ls data/tinker/`
+- **Verify**: JSONL files present: `ls data/tinker/*.jsonl`
+- **Regenerate**: Run `python scripts/prepare_tinker_data.py --synthetic ...` again
+
+**Problem**: JSONL format errors
+- **Validate**: Each line must be valid JSON with required fields
+- **Required fields**: `ai_text`, `human_reference`, `domain`, `is_esl`
+- **Check**: `head -1 data/tinker/train.jsonl | jq` should parse successfully
+
+### Detector Issues
+
+**Problem**: Mock detectors returning same scores
+- **Expected**: This is normal! Mock detectors use deterministic formulas
+- **Solution**: Implement real detectors (see [`knowledge_base/DETECTOR_SETUP.md`](knowledge_base/DETECTOR_SETUP.md))
+
+**Problem**: Real detector out of memory
+- **Solution 1**: Reduce batch size in detector config
+- **Solution 2**: Use CPU instead of GPU for detectors
+- **Solution 3**: Use smaller detector models (e.g., RoBERTa-base instead of large)
+
+### Getting Help
+
+1. **Check logs**: `tail -50 outputs/runs/<run_name>/training.log`
+2. **Review documentation**: See [`knowledge_base/`](knowledge_base/) for detailed guides
+3. **Search interaction records**: [`interaction_records.md`](interaction_records.md) has detailed implementation history
+4. **Ask team**: Post in team Slack/Discord with:
+   - Error message (full traceback)
+   - Command you ran
+   - What you've tried already
 
 ---
 
