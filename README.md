@@ -906,6 +906,25 @@ If you use StealthRL or StealthBench in your research, please cite:
 
 ---
 
+## 📚 Additional Resources
+
+### For AI Agents & Builders
+
+If you're building on this project or using AI agents to extend it, these resources are invaluable:
+
+- **[Tinker Full Docs for LLMs](https://tinker-docs.thinkingmachines.ai/llms-full.txt)** - Complete API reference optimized for AI agents
+- **[Tinker Cookbook for Agents](https://github.com/thinking-machines-lab/tinker-cookbook/blob/main/AGENTS.md)** - Best practices and patterns for building with Tinker
+- **[LoRA with RL Best Practices](https://thinkingmachines.ai/blog/lora/)** - How to effectively combine LoRA with RL training
+- **[GRPO RL Training Tips](https://github.com/zechenzhangAGI/AI-research-SKILLs/tree/main/06-post-training/grpo-rl-training)** - Practical tips for the GRPO algorithm we use
+
+These were instrumental in building StealthRL's training pipeline and will help you understand:
+- How to structure RL training jobs on Tinker
+- Best practices for reward shaping and hyperparameter tuning
+- Common pitfalls and how to avoid them
+- How to debug training issues
+
+---
+
 ## License
 
 This project is released under the [MIT License](LICENSE).

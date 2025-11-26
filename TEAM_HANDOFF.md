@@ -78,7 +78,7 @@ python -m stealthrl.tinker.train --data-path data/tinker_test --run-name test --
 
 **Task 1: Real Detectors (HIGH PRIORITY)**
 - **Status**: Mock implementations exist, need real ones
-- **Who**: Person with GPU access (8-16GB VRAM)
+- **Who**: Person with GPU access (8-16GB VRAM) - You can possibly use UCSD independant study compute too. Request here for access: 
 - **Time**: 1-2 days
 - **Steps**:
   1. Install detector packages: `pip install fast-detectgpt ghostbuster binoculars-detect`
@@ -147,25 +147,18 @@ python -m stealthrl.tinker.train --data-path data/tinker_test --run-name test --
 
 ---
 
-## 🎯 Task Assignments (Suggested)
+## 🎯 Tasks
 
-### Week 1
-- **Person A (GPU access)**: Set up real detectors
-- **Person B (data person)**: Curate ESL/native datasets
-- **Person C (organizer)**: Review docs, coordinate, test setup
-
-### Week 2
-- **Person A**: Run training experiments
-- **Person B**: Prepare ESL evaluation
-- **Person C**: Monitor training, debug issues
-
-### Week 3
-- **Person A**: Run ablations
-- **Person B**: ESL evaluation
-- **Person C**: Generate visualizations
-
-### Week 4
-- **All**: Results analysis, paper writing
+- Set up real detectors
+- Curate ESL/native datasets
+- Review docs, coordinate, test setup
+- Run training experiments
+- Prepare ESL evaluation
+- Monitor training, debug issues
+- Run ablations
+- ESL evaluation
+- Generate visualizations
+- Results analysis, paper writing
 
 ---
 
@@ -233,6 +226,12 @@ python -m stealthrl.tinker.train --data-path data/tinker_test --run-name test --
 - [Tinker Docs](https://tinker-docs.thinkingmachines.ai/)
 - [AuthorMist Paper](https://arxiv.org/abs/2503.08716) (our main reference)
 
+**Essential References for Agents & Humans**:
+- [Tinker Full Docs for LLMs](https://tinker-docs.thinkingmachines.ai/llms-full.txt) - Complete API reference for AI agents
+- [Tinker Cookbook for Agents](https://github.com/thinking-machines-lab/tinker-cookbook/blob/main/AGENTS.md) - Best practices for building with Tinker
+- [LoRA with RL Best Practices](https://thinkingmachines.ai/blog/lora/) - How to effectively use LoRA in RL training
+- [GRPO RL Training Tips](https://github.com/zechenzhangAGI/AI-research-SKILLs/tree/main/06-post-training/grpo-rl-training) - Practical tips for GRPO algorithm
+
 **GitHub Issues/Questions**:
 - Check [interaction_records.md](interaction_records.md) for implementation history
 - Search documentation in `knowledge_base/`
@@ -266,8 +265,8 @@ python -m stealthrl.tinker.train --data-path data/tinker_test --run-name test --
 1. **Start with synthetic data**: Test everything with `--synthetic` flag first
 2. **Use small batches**: Start with `--batch-size 2` to avoid OOM errors
 3. **Monitor early**: Check training logs frequently in first few iterations
-4. **Parallelize**: Detectors (Person A) and data (Person B) can work in parallel
-5. **Document**: Keep notes on what works/doesn't work
+4. **Parallelize**: Detectors and data can work in parallel
+5. **Document**: Keep notes on what works/doesn't work. Log everything and keep those logs organised. The training logs + output is a good reference for the standard to be maintained.
 6. **Ask questions**: Better to ask than waste time debugging alone
 
 ---

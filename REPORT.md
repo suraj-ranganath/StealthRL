@@ -109,6 +109,36 @@ Prior work (AuthorMist, DIPPER) trains **one model per detector**:
 
 ### 2.2 Evasion Methods
 
+#### 2.2.1 Paraphrase-Based Methods
+- **DIPPER** (Krishna et al., 2023): Discourse-aware paraphrase generation
+- **AuthorMist** (Yang et al., 2025): RL training with GRPO against single detector
+- **Key idea**: Learn lexical/syntactic transformations that preserve semantics
+
+#### 2.2.2 Substitution-Based Methods
+- **SICO** (Lu et al., 2024): In-context optimization for token substitution
+- **Homoglyph attacks**: Character-level perturbations
+- **Limitation**: Often degrade semantic quality significantly
+
+### 2.3 Essential Technical Resources
+
+**For Implementation & Reproducibility:**
+
+This project heavily relied on the following resources for practical implementation:
+
+1. **[Tinker Full Docs for LLMs](https://tinker-docs.thinkingmachines.ai/llms-full.txt)** - Complete API reference for AI agents building on Tinker platform. Essential for understanding GRPO training job structure and checkpoint management.
+
+2. **[Tinker Cookbook for Agents](https://github.com/thinking-machines-lab/tinker-cookbook/blob/main/AGENTS.md)** - Best practices and patterns for building ML training pipelines on Tinker. Covers reward shaping, debugging, and optimization strategies.
+
+3. **[LoRA with RL Best Practices](https://thinkingmachines.ai/blog/lora/)** - How to effectively combine parameter-efficient fine-tuning (LoRA) with reinforcement learning. Critical for understanding our training configuration choices.
+
+4. **[GRPO RL Training Tips](https://github.com/zechenzhangAGI/AI-research-SKILLs/tree/main/06-post-training/grpo-rl-training)** - Practical tips for the Group Relative Policy Optimization algorithm. Covers common pitfalls, hyperparameter tuning, and reward design patterns.
+
+**Note**: These resources go beyond academic papers to provide practical engineering guidance that was essential for implementing a production-ready RL training system. Future work building on this codebase should reference these materials.
+
+---
+
+## 3. Methodology
+
 #### 2.2.1 Paraphrasing Approaches
 - **DIPPER** (Krishna et al., 2023): Controlled paraphrasing with T5
 - **SICO** (Lu et al., 2023): Substitution-based in-context optimization
