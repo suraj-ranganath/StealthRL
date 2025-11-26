@@ -14,10 +14,17 @@ StealthRL is a research framework that uses **Reinforcement Learning with Verifi
 
 A core focus of this project is **fairness**: AI text detectors have been shown to produce elevated false-positive rates on writing by ESL (English as a Second Language) authors. StealthRL explicitly monitors and optimizes for shrinking the ESL vs native FPR gap, treating fairness as a first-class objective rather than an afterthought.
 
-### Two Deployment Options
+### Training Platform
 
-- **Local Training (Original)**: HuggingFace TRL + local GPUs (see sections below)
-- **Tinker Platform (DSC 291)**: Remote compute, Qwen3-4B, GRPO enhancements → [TINKER_README.md](knowledge_base/TINKER_README.md)
+**For this project (DSC 291), all RL training is conducted on the [Tinker platform](https://tinker.thinkingmachines.ai/)** using remote compute with Qwen3-4B and GRPO. This provides:
+- 🖥️ **Remote GPU access** - No local GPU required
+- ⚡ **Optimized for RL** - GRPO algorithm with LoRA fine-tuning
+- 💰 **Sponsored compute credits** - Provided through DSC 291 course
+- 📊 **Built-in monitoring** - TensorBoard integration and checkpoint management
+
+See [TINKER_README.md](knowledge_base/TINKER_README.md) for the complete Tinker quickstart guide.
+
+> **Note**: The original codebase supported local training with HuggingFace TRL, but for reproducibility and resource efficiency in this course, we standardized on Tinker.
 
 ---
 
@@ -141,9 +148,10 @@ All comprehensive guides and documentation are organized in the [`knowledge_base
 - Tinker API key (from [Tinker Platform](https://tinker.thinkingmachines.ai/))
 - 5-10 GB disk space for dependencies and data
 
-**Optional (for local detector testing):**
-- NVIDIA GPU with CUDA 11.8+ (8-16GB VRAM recommended)
-- If no GPU: Use Tinker's remote compute (recommended for DSC 291)
+**Note on GPU Requirements:**
+- **RL Training**: Runs on Tinker's remote GPUs (no local GPU needed)
+- **Local Detector Testing**: Optional, requires NVIDIA GPU with 8-16GB VRAM
+- For this project, all training happens on Tinker - local GPU is only useful for testing detector implementations
 
 ### Step-by-Step Setup
 
