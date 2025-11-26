@@ -153,17 +153,16 @@ class StealthRLTrainer:
         # Create log directory (config.log_path should be the specific run directory)
         Path(config.log_path).mkdir(parents=True, exist_ok=True)
         
-        # Initialize ML logger (use JsonLogger which writes to a file)
-        # metrics.jsonl should be directly in the run directory, not in a subdirectory
-        log_file = str(Path(config.log_path) / "metrics.jsonl")
-        self.ml_logger = ml_log.JsonLogger(log_file)
+        # Initialize ML logger - Tinker expects a logger that writes to a file
+        # Pass the directory to JsonLogger, it will create metrics.jsonl inside
+        self.ml_logger = ml_log.JsonLogger(config.log_path)
         
         logger.info("Initialized StealthRLTrainer")
         logger.info(f"Model: {config.model_name}")
         logger.info(f"LoRA rank: {config.lora_rank}")
         logger.info(f"Batch size: {config.batch_size}, Group size: {config.group_size}")
         logger.info(f"KL penalty: {self.kl_penalty_coef}")
-        logger.info(f"Logging metrics to: {log_file}")
+        logger.info(f"Metrics will be logged by Tinker to: {config.log_path}/")
     
     async def train(self):
         """
@@ -476,10 +475,6 @@ async def main():
         base_model="Qwen/Qwen3-4B-Instruct-2507",
         rank=16
     )
-    
-    # Create output directory
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
     
     # Load config (placeholder - would load from YAML)
     from stealthrl.tinker.dataset import StealthRLDatasetBuilder
