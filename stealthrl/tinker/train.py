@@ -28,8 +28,101 @@ from tinker_cookbook.rl import train as rl_train
 from tinker_cookbook.rl.types import RLDatasetBuilder
 from tinker_cookbook.tokenizer_utils import get_tokenizer
 from tinker_cookbook.utils import ml_log
+from torch.utils.tensorboard import SummaryWriter
 
 logger = logging.getLogger(__name__)
+
+
+class TensorBoardLogger:
+    """Logger that writes to both JSON file and TensorBoard."""
+    
+    def __init__(self, log_dir: str, tensorboard_dir: str):
+        self.json_logger = ml_log.JsonLogger(log_dir)
+        self.tensorboard_writer = SummaryWriter(log_dir=tensorboard_dir)
+        logger.info(f"TensorBoardLogger initialized: json={log_dir}, tensorboard={tensorboard_dir}")
+        
+    def log_hparams(self, config: Any) -> None:
+        """Log hyperparameters to JSON file."""
+        self.json_logger.log_hparams(config)
+        
+    def log_metrics(self, metrics: Dict[str, Any], step: int | None = None) -> None:
+        """Log metrics to both JSON and TensorBoard."""
+        # Write to JSON
+        self.json_logger.log_metrics(metrics, step)
+        
+        # Write to TensorBoard with better organization
+        if step is None:
+            step = metrics.get('step', 0)
+            
+        scalar_count = 0
+        for key, value in metrics.items():
+            if isinstance(value, (int, float)) and key != 'step':
+                # Transform keys for better TensorBoard organization
+                tb_key = self._format_tensorboard_key(key)
+                self.tensorboard_writer.add_scalar(tb_key, value, step)
+                scalar_count += 1
+        self.tensorboard_writer.flush()
+        logger.debug(f"Logged {scalar_count} scalars to TensorBoard at step {step}")
+    
+    def _format_tensorboard_key(self, key: str) -> str:
+        """Format metric keys for better TensorBoard organization."""
+        # Mapping for better names
+        if key.startswith('env/all/reward/'):
+            component = key.split('/')[-1]
+            return f"Training/Rewards/{component.title()}"
+        elif key.startswith('test/env/all/reward/'):
+            component = key.split('/')[-1]
+            return f"Evaluation/Rewards/{component.title()}"
+        elif key.startswith('env/all/'):
+            metric = key.replace('env/all/', '')
+            return f"Training/Environment/{metric.replace('_', ' ').title()}"
+        elif key.startswith('test/env/all/'):
+            metric = key.replace('test/env/all/', '')
+            return f"Evaluation/Environment/{metric.replace('_', ' ').title()}"
+        elif key.startswith('optim/'):
+            metric = key.replace('optim/', '')
+            return f"Optimizer/{metric.upper()}"
+        elif key.startswith('progress/'):
+            metric = key.replace('progress/', '')
+            return f"Progress/{metric.replace('_', ' ').title()}"
+        elif key.startswith('time/'):
+            metric = key.replace('time/', '')
+            return f"Performance/{metric.replace('_', ' ').title()}"
+        elif key.startswith('kl'):
+            return f"Training/KL Divergence/{key.replace('_', ' ').title()}"
+        elif 'detector' in key.lower():
+            return f"Detectors/{key.replace('_', ' ').title()}"
+        elif 'semantic' in key.lower():
+            return f"Semantic/{key.replace('_', ' ').title()}"
+        elif 'perplexity' in key.lower():
+            return f"Perplexity/{key.replace('_', ' ').title()}"
+        elif 'fairness' in key.lower():
+            return f"Fairness/{key.replace('_', ' ').title()}"
+        elif 'by_group' in key:
+            metric = key.split('/')[-1]
+            return f"Training/Group Statistics/{metric.replace('_', ' ').title()}"
+        else:
+            # Default: capitalize and replace underscores
+            return key.replace('_', ' ').replace('/', ' / ').title()
+    
+    def log_long_text(self, key: str, text: str) -> None:
+        """Log long text content."""
+        self.json_logger.log_long_text(key, text)
+    
+    def close(self) -> None:
+        """Close both loggers."""
+        logger.info("Closing TensorBoard writer")
+        self.tensorboard_writer.close()
+        self.json_logger.close()
+    
+    def sync(self) -> None:
+        """Force synchronization."""
+        self.json_logger.sync()
+        self.tensorboard_writer.flush()
+    
+    def get_logger_url(self) -> str | None:
+        """Get logger URL."""
+        return self.json_logger.get_logger_url()
 
 
 @chz.chz
@@ -153,9 +246,10 @@ class StealthRLTrainer:
         # Create log directory (config.log_path should be the specific run directory)
         Path(config.log_path).mkdir(parents=True, exist_ok=True)
         
-        # Initialize ML logger - Tinker expects a logger that writes to a file
-        # Pass the directory to JsonLogger, it will create metrics.jsonl inside
-        self.ml_logger = ml_log.JsonLogger(config.log_path)
+        # Initialize combined logger (JSON + TensorBoard)
+        tensorboard_dir = Path(config.log_path) / "tensorboard"
+        tensorboard_dir.mkdir(exist_ok=True)
+        self.ml_logger = TensorBoardLogger(config.log_path, str(tensorboard_dir))
         
         logger.info("Initialized StealthRLTrainer")
         logger.info(f"Model: {config.model_name}")
@@ -163,6 +257,7 @@ class StealthRLTrainer:
         logger.info(f"Batch size: {config.batch_size}, Group size: {config.group_size}")
         logger.info(f"KL penalty: {self.kl_penalty_coef}")
         logger.info(f"Metrics will be logged by Tinker to: {config.log_path}/")
+        logger.info(f"TensorBoard logs: {tensorboard_dir}")
     
     async def train(self):
         """
@@ -219,7 +314,11 @@ class StealthRLTrainer:
             tokenizer=self.tokenizer,
         )
         
+        # Close TensorBoard writer
+        self.ml_logger.close()
+        
         logger.info("Training complete")
+        logger.info(f"TensorBoard logs saved to: {Path(self.config.log_path) / 'tensorboard'}")
     
     def _build_tinker_config(self, dataset) -> rl_train.Config:
         """
@@ -251,7 +350,6 @@ class StealthRLTrainer:
             dataset_builder=self.config.dataset_builder,
             remove_constant_reward_groups=self.config.remove_constant_reward_groups,
             log_path=self.config.log_path,
-            checkpoint_dir=self.config.log_path,  # Save checkpoints to run directory
         )
         
         return tinker_config
@@ -362,31 +460,6 @@ class StealthRLTrainer:
         kl_error = kl_div - self.config.kl_target
         self.kl_penalty_coef *= (1.0 + self.config.kl_adapt_rate * kl_error)
         self.kl_penalty_coef = max(1e-6, min(1.0, self.kl_penalty_coef))
-    
-    def log_step(self, metrics: Dict[str, Any]):
-        """
-        Log step metrics.
-        
-        Args:
-            metrics: Dictionary of metrics to log
-        """
-        # Add step-level stats
-        metrics["step"] = self.step
-        metrics["all_negative_frac_total"] = self.all_negative_count / max(1, self.total_groups)
-        metrics["curriculum_quantile"] = self.current_quantile
-        metrics["temperature"] = self.current_temperature
-        metrics["kl_penalty_coef"] = self.kl_penalty_coef
-        
-        # Write to ML logger
-        self.ml_logger.log(metrics)
-        
-        # Print summary
-        if self.step % self.config.log_interval == 0:
-            logger.info(f"Step {self.step}: reward={metrics.get('reward/total', 0):.3f}, "
-                       f"kl={metrics.get('kl', 0):.3f}, "
-                       f"all_neg={metrics.get('all_negative_frac_total', 0):.2%}")
-        
-        self.step += 1
     
     def save_debug_samples(self, samples: List[Dict[str, Any]]):
         """
