@@ -251,6 +251,7 @@ class StealthRLTrainer:
             dataset_builder=self.config.dataset_builder,
             remove_constant_reward_groups=self.config.remove_constant_reward_groups,
             log_path=self.config.log_path,
+            checkpoint_dir=self.config.log_path,  # Save checkpoints to run directory
         )
         
         return tinker_config
