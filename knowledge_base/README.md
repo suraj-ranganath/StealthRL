@@ -6,6 +6,14 @@ This directory contains comprehensive documentation for the StealthRL project. A
 
 ## 📚 Documentation Index
 
+### Team Onboarding
+
+0. **[TEAM_HANDOFF.md](TEAM_HANDOFF.md)** - Quick handoff guide for new team members
+   - 30-minute setup guide
+   - What's done vs what's remaining
+   - Week-by-week task assignments
+   - Success criteria and troubleshooting
+
 ### Getting Started
 
 1. **[QUICKSTART.md](QUICKSTART.md)** - Fast-track guide to run research experiments
