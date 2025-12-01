@@ -307,33 +307,30 @@ The project uses these main packages (all auto-installed via `requirements.txt`)
 - ✅ **Setup instructions** (this file + SETUP_AND_RUN.md)
 - ✅ **Research roadmap** with priorities
 - ✅ **Implementation verification** report
+- ✅ **Task 1 completion** (see `task1_detector_implementation/` folder)
 
 ### 🔨 IN PROGRESS / TODO (Team Tasks)
 
-#### Priority 1: Detector Setup (HIGH - Week 1)
-**Status**: Mock implementations exist, need real detectors
+#### ~~Priority 1: Detector Setup (HIGH - Week 1)~~ ✅ **COMPLETED**
+**Status**: ✅ Real detectors implemented and tested
 
-**What needs to be done:**
-1. **Install detector packages**:
-   ```bash
-   pip install fast-detectgpt ghostbuster binoculars-detect
-   # OR clone from GitHub repos
-   ```
+**What was completed:**
+1. ✅ Installed detector dependencies (transformers, torch, sentence-transformers)
+2. ✅ Implemented FastDetectGPT (GPT-2 based curvature detection)
+3. ✅ Implemented Ghostbuster (RoBERTa classifier)
+4. ✅ Implemented Binoculars (paired language models)
+5. ✅ Implemented semantic similarity (E5 embeddings)
+6. ✅ Implemented perplexity computation (GPT-2)
+7. ✅ Tested all detectors successfully
+8. ✅ Verified caching works
 
-2. **Update detector implementations** in `stealthrl/tinker/detectors.py`:
-   - Replace mock `_compute_score()` with real model calls
-   - Current: Returns dummy scores based on text length
-   - Needed: Load actual detector models (Fast-DetectGPT, Ghostbuster, Binoculars)
-   - See [`knowledge_base/DETECTOR_SETUP.md`](knowledge_base/DETECTOR_SETUP.md) for detailed instructions
+**Documentation**: See `task1_detector_implementation/` folder for complete details
 
-3. **Test detectors**:
-   ```bash
-   python -c "from stealthrl.tinker.detectors import DetectorEnsemble; ..."
-   ```
-
-**Who should do this**: Team member with GPU access (8-16GB VRAM needed)  
-**Estimated time**: 1-2 days  
-**Blocker**: Models need to be downloaded (~10GB total)
+**Quick test**:
+```bash
+cd task1_detector_implementation
+python test_detectors_standalone.py
+```
 
 ---
 

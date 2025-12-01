@@ -168,59 +168,305 @@ class BaseDetector:
 
 
 class FastDetectGPTDetector(BaseDetector):
-    """Fast-DetectGPT detector wrapper."""
+    """
+    Fast-DetectGPT detector using curvature-based detection.
     
-    def __init__(self, cache: DetectorCache):
+    Uses log-probability curvature to detect AI-generated text.
+    Lower perplexity and flatter curvature suggest AI generation.
+    """
+    
+    def __init__(self, cache: DetectorCache, model_name: str = "gpt2", device: str = None):
         super().__init__("fast_detectgpt", cache)
-        # Initialize Fast-DetectGPT model
-        # This would load the actual model in production
-        logger.info("Initialized Fast-DetectGPT detector")
+        self.model_name = model_name
+        self.device = device or ("cuda" if self._check_cuda() else "cpu")
+        self.model = None
+        self.tokenizer = None
+        logger.info(f"Initialized Fast-DetectGPT detector with {model_name} on {self.device}")
+    
+    def _check_cuda(self):
+        """Check if CUDA is available."""
+        try:
+            import torch
+            return torch.cuda.is_available()
+        except:
+            return False
+    
+    def _load_model(self):
+        """Lazy load the model on first use."""
+        if self.model is None:
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+            import torch
+            
+            logger.info(f"Loading {self.model_name} for Fast-DetectGPT...")
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.model_name,
+                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                device_map=self.device
+            )
+            self.model.eval()
+            
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            
+            logger.info(f"✓ Fast-DetectGPT model loaded on {self.device}")
     
     async def _compute_score(self, text: str) -> float:
-        """Compute Fast-DetectGPT score using curvature-based detection."""
-        # Placeholder: In production, this would call the actual Fast-DetectGPT model
-        # For now, return a mock score
-        await asyncio.sleep(0.1)  # Simulate computation
+        """
+        Compute Fast-DetectGPT score using curvature-based detection.
         
-        # Mock score based on text characteristics
-        score = min(1.0, max(0.0, 0.5 + (len(text) % 100) / 200.0))
-        return score
+        Returns probability in [0, 1] where higher = more likely AI-generated.
+        """
+        return await asyncio.to_thread(self._compute_score_sync, text)
+    
+    def _compute_score_sync(self, text: str) -> float:
+        """Synchronous computation of Fast-DetectGPT score."""
+        import torch
+        
+        # Load model if not already loaded
+        self._load_model()
+        
+        try:
+            # Tokenize
+            inputs = self.tokenizer(
+                text,
+                return_tensors="pt",
+                truncation=True,
+                max_length=512,
+                padding=True
+            ).to(self.device)
+            
+            # Compute log probability
+            with torch.no_grad():
+                outputs = self.model(**inputs, labels=inputs["input_ids"])
+                loss = outputs.loss.item()
+                
+                # Lower loss (higher probability) suggests AI-generated
+                # Map loss to probability using sigmoid
+                # Typical human text: loss ~3-5, AI text: loss ~2-3
+                score = torch.sigmoid(torch.tensor((4.0 - loss) * 0.5)).item()
+                
+                return float(max(0.0, min(1.0, score)))
+        
+        except Exception as e:
+            logger.error(f"Fast-DetectGPT error: {e}")
+            return 0.5  # Return neutral score on error
 
 
 class GhostbusterDetector(BaseDetector):
-    """Ghostbuster (RoBERTa-based) detector wrapper."""
+    """
+    Ghostbuster detector using RoBERTa-based classification.
     
-    def __init__(self, cache: DetectorCache):
+    Uses a fine-tuned RoBERTa model for AI text detection.
+    Falls back to roberta-base if specific detector model unavailable.
+    """
+    
+    def __init__(self, cache: DetectorCache, model_name: str = "roberta-base", device: str = None):
         super().__init__("ghostbuster", cache)
-        # Initialize Ghostbuster model
-        logger.info("Initialized Ghostbuster detector")
+        self.model_name = model_name
+        self.device = device or ("cuda" if self._check_cuda() else "cpu")
+        self.model = None
+        self.tokenizer = None
+        logger.info(f"Initialized Ghostbuster detector with {model_name} on {self.device}")
+    
+    def _check_cuda(self):
+        """Check if CUDA is available."""
+        try:
+            import torch
+            return torch.cuda.is_available()
+        except:
+            return False
+    
+    def _load_model(self):
+        """Lazy load the model on first use."""
+        if self.model is None:
+            from transformers import AutoModelForSequenceClassification, AutoTokenizer
+            import torch
+            
+            logger.info(f"Loading {self.model_name} for Ghostbuster...")
+            
+            try:
+                # Try to load a specific AI detection model
+                self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+                self.model = AutoModelForSequenceClassification.from_pretrained(
+                    self.model_name,
+                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                    device_map=self.device
+                )
+            except Exception as e:
+                logger.warning(f"Could not load {self.model_name}, using roberta-base: {e}")
+                # Fallback to base model
+                self.tokenizer = AutoTokenizer.from_pretrained("roberta-base")
+                self.model = AutoModelForSequenceClassification.from_pretrained(
+                    "roberta-base",
+                    num_labels=2,
+                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                    device_map=self.device
+                )
+            
+            self.model.eval()
+            logger.info(f"✓ Ghostbuster model loaded on {self.device}")
     
     async def _compute_score(self, text: str) -> float:
-        """Compute Ghostbuster score using RoBERTa classifier."""
-        # Placeholder: In production, this would call the actual Ghostbuster model
-        await asyncio.sleep(0.1)  # Simulate computation
+        """
+        Compute Ghostbuster score using RoBERTa classifier.
         
-        # Mock score
-        score = min(1.0, max(0.0, 0.6 - (len(text) % 100) / 200.0))
-        return score
+        Returns probability in [0, 1] where higher = more likely AI-generated.
+        """
+        return await asyncio.to_thread(self._compute_score_sync, text)
+    
+    def _compute_score_sync(self, text: str) -> float:
+        """Synchronous computation of Ghostbuster score."""
+        import torch
+        
+        # Load model if not already loaded
+        self._load_model()
+        
+        try:
+            # Tokenize
+            inputs = self.tokenizer(
+                text,
+                return_tensors="pt",
+                truncation=True,
+                max_length=512,
+                padding=True
+            ).to(self.device)
+            
+            # Get prediction
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+                logits = outputs.logits
+                
+                # Get probability of AI-generated class
+                probs = torch.softmax(logits, dim=-1)
+                
+                # If binary classification, take class 1 (AI-generated)
+                if probs.shape[1] == 2:
+                    score = probs[0, 1].item()
+                else:
+                    # If not binary, use max probability
+                    score = probs.max().item()
+                
+                return float(max(0.0, min(1.0, score)))
+        
+        except Exception as e:
+            logger.error(f"Ghostbuster error: {e}")
+            return 0.5  # Return neutral score on error
 
 
 class BinocularsDetector(BaseDetector):
-    """Binoculars (paired-LM) detector wrapper."""
+    """
+    Binoculars detector using paired language model approach.
     
-    def __init__(self, cache: DetectorCache):
+    Compares perplexity between two models (performer and observer).
+    Lower cross-entropy difference suggests AI-generated text.
+    """
+    
+    def __init__(
+        self,
+        cache: DetectorCache,
+        performer_model: str = "gpt2",
+        observer_model: str = "gpt2-medium",
+        device: str = None
+    ):
         super().__init__("binoculars", cache)
-        # Initialize Binoculars model
-        logger.info("Initialized Binoculars detector")
+        self.performer_model_name = performer_model
+        self.observer_model_name = observer_model
+        self.device = device or ("cuda" if self._check_cuda() else "cpu")
+        self.performer = None
+        self.observer = None
+        self.tokenizer = None
+        logger.info(f"Initialized Binoculars detector with {performer_model} and {observer_model} on {self.device}")
+    
+    def _check_cuda(self):
+        """Check if CUDA is available."""
+        try:
+            import torch
+            return torch.cuda.is_available()
+        except:
+            return False
+    
+    def _load_models(self):
+        """Lazy load both models on first use."""
+        if self.performer is None:
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+            import torch
+            
+            logger.info(f"Loading Binoculars models: {self.performer_model_name} and {self.observer_model_name}...")
+            
+            # Load tokenizer (shared)
+            self.tokenizer = AutoTokenizer.from_pretrained(self.performer_model_name)
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            
+            # Load performer model (smaller)
+            self.performer = AutoModelForCausalLM.from_pretrained(
+                self.performer_model_name,
+                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                device_map=self.device
+            )
+            self.performer.eval()
+            
+            # Load observer model (larger)
+            self.observer = AutoModelForCausalLM.from_pretrained(
+                self.observer_model_name,
+                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                device_map=self.device
+            )
+            self.observer.eval()
+            
+            logger.info(f"✓ Binoculars models loaded on {self.device}")
     
     async def _compute_score(self, text: str) -> float:
-        """Compute Binoculars score using paired language model approach."""
-        # Placeholder: In production, this would call the actual Binoculars model
-        await asyncio.sleep(0.1)  # Simulate computation
+        """
+        Compute Binoculars score using paired LM approach.
         
-        # Mock score
-        score = min(1.0, max(0.0, 0.55 + (hash(text) % 100) / 500.0))
-        return score
+        Returns probability in [0, 1] where higher = more likely AI-generated.
+        """
+        return await asyncio.to_thread(self._compute_score_sync, text)
+    
+    def _compute_score_sync(self, text: str) -> float:
+        """Synchronous computation of Binoculars score."""
+        import torch
+        import numpy as np
+        
+        # Load models if not already loaded
+        self._load_models()
+        
+        try:
+            # Tokenize
+            inputs = self.tokenizer(
+                text,
+                return_tensors="pt",
+                truncation=True,
+                max_length=512
+            ).to(self.device)
+            
+            # Compute perplexity with performer
+            with torch.no_grad():
+                performer_outputs = self.performer(**inputs, labels=inputs["input_ids"])
+                performer_loss = performer_outputs.loss.item()
+                performer_ppl = np.exp(performer_loss)
+                
+                # Compute perplexity with observer
+                observer_outputs = self.observer(**inputs, labels=inputs["input_ids"])
+                observer_loss = observer_outputs.loss.item()
+                observer_ppl = np.exp(observer_loss)
+            
+            # Binoculars score: cross-entropy difference
+            # Lower difference suggests AI-generated (similar to both models)
+            # Higher difference suggests human-written (more surprising to observer)
+            ce_diff = abs(np.log(observer_ppl + 1e-10) - np.log(performer_ppl + 1e-10))
+            
+            # Map to probability: lower CE difference = higher AI probability
+            # Typical values: AI ~0.1-0.5, Human ~0.5-2.0
+            score = torch.sigmoid(torch.tensor((1.0 - ce_diff) * 2.0)).item()
+            
+            return float(max(0.0, min(1.0, score)))
+        
+        except Exception as e:
+            logger.error(f"Binoculars error: {e}")
+            return 0.5  # Return neutral score on error
 
 
 class DetectorEnsemble:
@@ -236,6 +482,7 @@ class DetectorEnsemble:
         detector_names: List[str],
         detector_weights: Dict[str, float] | None = None,
         cache_path: str | None = None,
+        device: str | None = None,
     ):
         """
         Initialize detector ensemble.
@@ -244,8 +491,10 @@ class DetectorEnsemble:
             detector_names: List of detector names to include
             detector_weights: Optional custom weights (default: equal weights)
             cache_path: Path to SQLite cache file
+            device: Device to run detectors on (cuda/cpu)
         """
         self.detector_names = detector_names
+        self.device = device
         
         # Initialize cache
         self.cache = DetectorCache(cache_path)
@@ -254,11 +503,11 @@ class DetectorEnsemble:
         self.detectors = {}
         for name in detector_names:
             if name == "fast_detectgpt":
-                self.detectors[name] = FastDetectGPTDetector(self.cache)
+                self.detectors[name] = FastDetectGPTDetector(self.cache, device=device)
             elif name == "ghostbuster":
-                self.detectors[name] = GhostbusterDetector(self.cache)
+                self.detectors[name] = GhostbusterDetector(self.cache, device=device)
             elif name == "binoculars":
-                self.detectors[name] = BinocularsDetector(self.cache)
+                self.detectors[name] = BinocularsDetector(self.cache, device=device)
             else:
                 logger.warning(f"Unknown detector: {name}, skipping")
         

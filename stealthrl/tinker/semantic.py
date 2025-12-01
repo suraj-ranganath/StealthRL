@@ -45,10 +45,8 @@ class SemanticSimilarity:
         else:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
-        # Initialize model (placeholder - in production, load actual model)
-        # from sentence_transformers import SentenceTransformer
-        # self.model = SentenceTransformer(model_name).to(self.device)
-        self.model = None  # Placeholder
+        # Initialize model
+        self.model = None  # Lazy load on first use
         
         logger.info(f"Initialized SemanticSimilarity with {model_name} on {self.device}")
     
@@ -71,6 +69,15 @@ class SemanticSimilarity:
             "above_threshold": float(similarity >= self.threshold),
         }
     
+    def _load_model(self):
+        """Lazy load the model on first use."""
+        if self.model is None:
+            from sentence_transformers import SentenceTransformer
+            
+            logger.info(f"Loading {self.model_name} for semantic similarity...")
+            self.model = SentenceTransformer(self.model_name).to(self.device)
+            logger.info(f"✓ Semantic similarity model loaded on {self.device}")
+    
     def _compute_similarity(self, text1: str, text2: str) -> float:
         """
         Compute cosine similarity (synchronous).
@@ -82,25 +89,19 @@ class SemanticSimilarity:
         Returns:
             Cosine similarity [0, 1]
         """
-        if self.model is None:
-            # Placeholder: Mock similarity based on text overlap
-            words1 = set(text1.lower().split())
-            words2 = set(text2.lower().split())
-            
-            if not words1 or not words2:
-                return 0.0
-            
-            # Jaccard similarity as rough proxy
-            intersection = len(words1 & words2)
-            union = len(words1 | words2)
-            similarity = intersection / union if union > 0 else 0.0
-            
-            # Scale to be more optimistic (for demo)
-            return min(1.0, similarity * 1.5)
+        # Load model if not already loaded
+        self._load_model()
         
-        # Production code would use actual model:
-        # embeddings = self.model.encode([text1, text2], convert_to_tensor=True)
-        # similarity = F.cosine_similarity(embeddings[0:1], embeddings[1:2]).item()
-        # return (similarity + 1.0) / 2.0  # Map [-1, 1] to [0, 1]
+        try:
+            # Encode texts
+            embeddings = self.model.encode([text1, text2], convert_to_tensor=True)
+            
+            # Compute cosine similarity
+            similarity = F.cosine_similarity(embeddings[0:1], embeddings[1:2]).item()
+            
+            # Map [-1, 1] to [0, 1]
+            return (similarity + 1.0) / 2.0
         
-        return 0.0
+        except Exception as e:
+            logger.error(f"Semantic similarity error: {e}")
+            return 0.5  # Return neutral score on error

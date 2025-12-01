@@ -51,12 +51,8 @@ class PerplexityReward:
         else:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
-        # Initialize model (placeholder - in production, load actual model)
-        # from transformers import AutoModelForCausalLM, AutoTokenizer
-        # self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        # self.model = AutoModelForCausalLM.from_pretrained(model_name).to(self.device)
-        # self.model.eval()
-        self.model = None  # Placeholder
+        # Initialize model (lazy load)
+        self.model = None
         self.tokenizer = None
         
         logger.info(f"Initialized PerplexityReward with {model_name} on {self.device}")
@@ -84,6 +80,25 @@ class PerplexityReward:
             "in_range": float(self.ppl_min <= perplexity <= self.ppl_max),
         }
     
+    def _load_model(self):
+        """Lazy load the model on first use."""
+        if self.model is None:
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+            
+            logger.info(f"Loading {self.model_name} for perplexity computation...")
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.model_name,
+                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                device_map=self.device
+            )
+            self.model.eval()
+            
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            
+            logger.info(f"✓ Perplexity model loaded on {self.device}")
+    
     def _compute_perplexity(self, text: str) -> float:
         """
         Compute perplexity (synchronous).
@@ -94,32 +109,27 @@ class PerplexityReward:
         Returns:
             Perplexity value
         """
-        if self.model is None or self.tokenizer is None:
-            # Placeholder: Mock perplexity based on text statistics
-            words = text.split()
-            unique_words = len(set(words))
-            total_words = len(words)
-            
-            if total_words == 0:
-                return self.ppl_max
-            
-            # Higher diversity → higher perplexity (rough proxy)
-            diversity_ratio = unique_words / total_words
-            
-            # Map to [ppl_min, ppl_max] range
-            perplexity = self.ppl_min + (self.ppl_max - self.ppl_min) * diversity_ratio
+        # Load model if not already loaded
+        self._load_model()
+        
+        try:
+            with torch.no_grad():
+                encodings = self.tokenizer(
+                    text,
+                    return_tensors="pt",
+                    truncation=True,
+                    max_length=512
+                ).to(self.device)
+                
+                outputs = self.model(**encodings, labels=encodings["input_ids"])
+                loss = outputs.loss
+                perplexity = torch.exp(loss).item()
             
             return perplexity
         
-        # Production code would use actual model:
-        # with torch.no_grad():
-        #     encodings = self.tokenizer(text, return_tensors="pt").to(self.device)
-        #     outputs = self.model(**encodings, labels=encodings["input_ids"])
-        #     loss = outputs.loss
-        #     perplexity = torch.exp(loss).item()
-        # return perplexity
-        
-        return self.ppl_target
+        except Exception as e:
+            logger.error(f"Perplexity computation error: {e}")
+            return self.ppl_target  # Return target on error
     
     def _perplexity_to_reward(self, perplexity: float) -> float:
         """
