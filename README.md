@@ -107,19 +107,24 @@ stealthrl/
 ├── detectors/       # Wrappers for Fast-DetectGPT, Ghostbuster, Binoculars, etc.
 ├── training/        # RL training loops (GRPO/PPO via HuggingFace TRL)
 ├── evaluation/      # StealthBench metrics: AUROC, FPR, BERTScore, perplexity
+├── data/            # Data loading utilities (esl_native_corpus, etc.)
 └── tinker/          # Tinker platform integration (env, dataset, reward, training)
 
 scripts/
 ├── prepare_data.py        # Prepare human/LLM text, ESL vs native subsets
+├── prepare_tinker_data.py # Prepare Tinker-format training data
 ├── train_stealthrl.py     # Main RL training entry point
 ├── evaluate_detectors.py  # Run detector ensemble, produce CSVs
 ├── run_stealthbench.py    # Unified evaluation harness
+├── run_esl_eval.py        # ESL fairness evaluation
 └── download_datasets.sh   # Download datasets from original sources
 
 configs/               # YAML/JSON configs for models, training, detectors
 examples/              # Sample scripts and notebooks
-data/                  # Small toy data (large datasets downloaded separately)
+data/                  # Data directory (raw, processed, esl, native, tinker)
 knowledge_base/        # Comprehensive documentation (guides, setup, API docs)
+task1_detector_implementation/  # ✅ TASK 1: Detector setup (COMPLETED)
+task2_dataset_curation/         # ✅ TASK 2: Dataset curation (SETUP COMPLETE)
 requirements.txt       # Python dependencies
 environment.yml        # Conda environment (optional)
 LICENSE
@@ -308,6 +313,7 @@ The project uses these main packages (all auto-installed via `requirements.txt`)
 - ✅ **Research roadmap** with priorities
 - ✅ **Implementation verification** report
 - ✅ **Task 1 completion** (see `task1_detector_implementation/` folder)
+- ✅ **Task 2 setup** (see `task2_dataset_curation/` folder and `TASK2_README.md`)
 
 ### 🔨 IN PROGRESS / TODO (Team Tasks)
 
@@ -335,37 +341,48 @@ python test_detectors_standalone.py
 ---
 
 #### Priority 2: Dataset Curation (HIGH - Week 1-2)
-**Status**: Data pipeline ready, need real datasets
+**Status**: ✅ **SETUP COMPLETE** - Scripts ready, execution in progress
 
-**What needs to be done:**
-1. **Curate ESL/Native corpus** for fairness evaluation:
-   - **ESL sources**: TOEFL11, ICNALE, ELLIPSE
-   - **Native sources**: Academic papers, essays
-   - **Target split**: 40% ESL, 60% native
-   - See [`knowledge_base/ESL_FAIRNESS_GUIDE.md`](knowledge_base/ESL_FAIRNESS_GUIDE.md)
+**What has been completed:**
+1. ✅ Created `task2_dataset_curation/` folder with complete tooling
+2. ✅ Conversion script for ChatGPT-Detector-Bias data
+3. ✅ Validation script for data quality checks
+4. ✅ Step-by-step execution guide (QUICK_START.md)
+5. ✅ Integration with existing data pipeline
 
-2. **Prepare JSONL files** with this format:
-   ```json
-   {
-     "ai_text": "AI-generated text here...",
-     "human_reference": "Original human text...",
-     "domain": "academic",
-     "is_esl": true,
-     "metadata": {"source": "TOEFL11"}
-   }
-   ```
-
-3. **Run data preparation**:
+**What needs to be executed:**
+1. **Download ChatGPT-Detector-Bias dataset** (primary ESL/native source):
    ```bash
-   python scripts/prepare_tinker_data.py \
-     --input-paths data/raw/toefl11.jsonl data/raw/icnale.jsonl \
-     --output-dir data/tinker \
-     --train-split 0.8
+   bash scripts/download_datasets.sh
    ```
 
-**Who should do this**: Team member comfortable with data processing  
-**Estimated time**: 2-3 days (includes data collection + preprocessing)  
-**Resources needed**: Access to TOEFL11 corpus (may require permissions)
+2. **Convert to JSONL format** using provided script:
+   ```bash
+   python task2_dataset_curation/scripts/convert_chatgpt_bias_data.py \
+     --input data/raw/ChatGPT-Detector-Bias \
+     --output-esl data/esl/toefl11.jsonl \
+     --output-native data/native/native_academic.jsonl
+   ```
+
+3. **Validate and generate splits**:
+   ```bash
+   python task2_dataset_curation/scripts/validate_datasets.py \
+     --esl-data data/esl/toefl11.jsonl \
+     --native-data data/native/native_academic.jsonl
+
+   python -m stealthrl.data.esl_native_corpus
+   python scripts/prepare_tinker_data.py \
+     --input-paths data/esl/toefl11.jsonl data/native/native_academic.jsonl \
+     --output-dir data/tinker
+   ```
+
+**Documentation**:
+- See [`TASK2_README.md`](TASK2_README.md) for overview
+- See [`task2_dataset_curation/QUICK_START.md`](task2_dataset_curation/QUICK_START.md) for step-by-step guide
+- See [`task2_dataset_curation/`](task2_dataset_curation/) folder for all tools
+
+**Target**: 1000-2000 samples (40% ESL from TOEFL, 60% native academic)
+**Estimated time**: 1-2 hours (mostly download time)
 
 ---
 
