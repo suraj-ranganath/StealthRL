@@ -1,0 +1,92 @@
+Model Type,Experiment,Accuracy,F1,AUC
+Ghostbuster (Depth One),In-Domain (wp),0.948052,0.946524,0.979872
+Ghostbuster (Depth One),In-Domain (reuter),0.995215,0.995215,0.999496
+Ghostbuster (Depth One),In-Domain (essay),0.97733,0.97852,0.985001
+Ghostbuster (Depth One),In-Domain,0.936667,0.936772,0.979032
+Ghostbuster (Depth One),Out-Domain (wp),0.836364,0.813056,0.926055
+Ghostbuster (Depth One),Out-Domain (reuter),0.935407,0.937063,0.983769
+Ghostbuster (Depth One),Out-Domain (essay),0.848866,0.87395,0.962745
+Ghostbuster (Depth One),Out-Domain (claude),0.841725,0.896527,0.957148
+Ghostbuster (Depth One),Out-Domain (gpt_prompt1),0.908762,0.942857,0.975045
+Ghostbuster (Depth One),Out-Domain (gpt_prompt2),0.910431,0.943961,0.974575
+Ghostbuster (Depth One),Out-Domain (gpt_writing),0.899305,0.936558,0.972838
+Ghostbuster (Depth One),Out-Domain (gpt_semantic),0.958275,0.974654,0.985868
+Ghostbuster (Depth Two),In-Domain (wp),0.984416,0.983784,0.998109
+Ghostbuster (Depth Two),In-Domain (reuter),0.995215,0.995215,0.999725
+Ghostbuster (Depth Two),In-Domain (essay),0.997481,0.997625,0.999924
+Ghostbuster (Depth Two),In-Domain,0.983333,0.983471,0.997694
+Ghostbuster (Depth Two),Out-Domain (wp),0.955844,0.952381,0.995461
+Ghostbuster (Depth Two),Out-Domain (reuter),0.95933,0.958838,0.991644
+Ghostbuster (Depth Two),Out-Domain (essay),0.921914,0.931264,0.9904
+Ghostbuster (Depth Two),Out-Domain (claude),0.85758,0.907044,0.987045
+Ghostbuster (Depth Two),Out-Domain (gpt_prompt1),0.991099,0.994656,0.999174
+Ghostbuster (Depth Two),Out-Domain (gpt_prompt2),0.991099,0.994656,0.999431
+Ghostbuster (Depth Two),Out-Domain (gpt_writing),0.99388,0.996332,0.999353
+Ghostbuster (Depth Two),Out-Domain (gpt_semantic),0.994159,0.996499,0.9994
+Ghostbuster (Depth Three),In-Domain (wp),0.984416,0.983784,0.999406
+Ghostbuster (Depth Three),In-Domain (reuter),0.995215,0.995192,0.999657
+Ghostbuster (Depth Three),In-Domain (essay),0.994962,0.995261,0.99972
+Ghostbuster (Depth Three),In-Domain,0.99,0.990066,0.998942
+Ghostbuster (Depth Three),Out-Domain (wp),0.953247,0.949153,0.996407
+Ghostbuster (Depth Three),Out-Domain (reuter),0.978469,0.978622,0.996474
+Ghostbuster (Depth Three),Out-Domain (essay),0.974811,0.976744,0.999491
+Ghostbuster (Depth Three),Out-Domain (claude),0.878999,0.921973,0.986922
+Ghostbuster (Depth Three),Out-Domain (gpt_prompt1),0.989152,0.993468,0.998737
+Ghostbuster (Depth Three),Out-Domain (gpt_prompt2),0.992768,0.995655,0.999135
+Ghostbuster (Depth Three),Out-Domain (gpt_writing),0.994715,0.996829,0.998888
+Ghostbuster (Depth Three),Out-Domain (gpt_semantic),0.995828,0.997498,0.999452
+Ghostbuster (Depth Four),In-Domain (wp),0.979221,0.978261,0.997001
+Ghostbuster (Depth Four),In-Domain (reuter),0.995215,0.995192,0.999886
+Ghostbuster (Depth Four),In-Domain (essay),0.994962,0.995261,0.998803
+Ghostbuster (Depth Four),In-Domain,0.9825,0.982688,0.996741
+Ghostbuster (Depth Four),Out-Domain (wp),0.961039,0.958217,0.994272
+Ghostbuster (Depth Four),Out-Domain (reuter),0.964115,0.9642,0.993681
+Ghostbuster (Depth Four),Out-Domain (essay),0.97733,0.979021,0.997377
+Ghostbuster (N-Gram Only),In-Domain (wp),0.94026,0.936986,0.985951
+Ghostbuster (N-Gram Only),In-Domain (reuter),0.91866,0.917874,0.974085
+Ghostbuster (N-Gram Only),In-Domain (essay),0.962217,0.964871,0.996562
+Ghostbuster (N-Gram Only),In-Domain,0.88,0.88216,0.94893
+Ghostbuster (N-Gram Only),Out-Domain (wp),0.818182,0.785276,0.919328
+Ghostbuster (N-Gram Only),Out-Domain (reuter),0.73445,0.700809,0.806735
+Ghostbuster (N-Gram Only),Out-Domain (essay),0.65995,0.754991,0.921416
+Ghostbuster (N-Gram Only),Out-Domain (claude),0.836161,0.894198,0.932834
+Ghostbuster (N-Gram Only),Out-Domain (gpt_prompt1),0.90904,0.943901,0.963673
+Ghostbuster (N-Gram Only),Out-Domain (gpt_prompt2),0.901252,0.938804,0.958407
+Ghostbuster (N-Gram Only),Out-Domain (gpt_writing),0.901252,0.938804,0.959402
+Ghostbuster (N-Gram Only),Out-Domain (gpt_semantic),0.90904,0.943901,0.961151
+Ghostbuster (N-Gram and Ada),In-Domain (wp),0.994805,0.994624,0.999568
+Ghostbuster (N-Gram and Ada),In-Domain (reuter),0.992823,0.992771,0.999908
+Ghostbuster (N-Gram and Ada),In-Domain (essay),0.997481,0.997625,0.99972
+Ghostbuster (N-Gram and Ada),In-Domain,0.9875,0.987654,0.998267
+Ghostbuster (N-Gram and Ada),Out-Domain (wp),0.914286,0.902655,0.996218
+Ghostbuster (N-Gram and Ada),Out-Domain (reuter),0.973684,0.973747,0.995948
+Ghostbuster (N-Gram and Ada),Out-Domain (essay),0.906801,0.919037,0.998243
+Ghostbuster (N-Gram and Ada),Out-Domain (claude),0.717385,0.796962,0.965743
+Ghostbuster (N-Gram and Ada),Out-Domain (gpt_prompt1),0.984145,0.990441,0.997964
+Ghostbuster (N-Gram and Ada),Out-Domain (gpt_prompt2),0.983866,0.990272,0.998183
+Ghostbuster (N-Gram and Ada),Out-Domain (gpt_writing),0.989986,0.993984,0.998328
+Ghostbuster (N-Gram and Ada),Out-Domain (gpt_semantic),0.989708,0.993816,0.998736
+"Ghostbuster (Depth Three, No Handcrafted)",In-Domain (wp),0.98961,0.989189,0.998595
+"Ghostbuster (Depth Three, No Handcrafted)",In-Domain (reuter),0.990431,0.990431,0.999565
+"Ghostbuster (Depth Three, No Handcrafted)",In-Domain (essay),0.994962,0.995261,0.999796
+"Ghostbuster (Depth Three, No Handcrafted)",In-Domain,0.989167,0.989247,0.998692
+"Ghostbuster (Depth Three, No Handcrafted)",Out-Domain (wp),0.94026,0.934097,0.995218
+"Ghostbuster (Depth Three, No Handcrafted)",Out-Domain (reuter),0.978469,0.97852,0.996108
+"Ghostbuster (Depth Three, No Handcrafted)",Out-Domain (essay),0.972292,0.974478,0.999618
+"Ghostbuster (Depth Three, No Handcrafted)",Out-Domain (claude),0.888734,0.928724,0.987969
+"Ghostbuster (Depth Three, No Handcrafted)",Out-Domain (gpt_prompt1),0.987204,0.99229,0.998831
+"Ghostbuster (Depth Three, No Handcrafted)",Out-Domain (gpt_prompt2),0.991655,0.994985,0.999216
+"Ghostbuster (Depth Three, No Handcrafted)",Out-Domain (gpt_writing),0.99388,0.996327,0.999087
+"Ghostbuster (Depth Three, No Handcrafted)",Out-Domain (gpt_semantic),0.994437,0.996662,0.99959
+Ghostbuster (No Symbolic),In-Domain (wp),0.797403,0.793651,0.884665
+Ghostbuster (No Symbolic),In-Domain (reuter),0.880383,0.878641,0.935784
+Ghostbuster (No Symbolic),In-Domain (essay),0.937028,0.940618,0.988592
+Ghostbuster (No Symbolic),In-Domain,0.803333,0.805281,0.896296
+Ghostbuster (No Symbolic),Out-Domain (wp),0.742857,0.772414,0.869725
+Ghostbuster (No Symbolic),Out-Domain (reuter),0.767943,0.758105,0.851377
+Ghostbuster (No Symbolic),Out-Domain (essay),0.755668,0.771765,0.863305
+Ghostbuster (No Symbolic),Out-Domain (claude),0.807789,0.875428,0.893528
+Ghostbuster (No Symbolic),Out-Domain (gpt_prompt1),0.779138,0.854151,0.868459
+Ghostbuster (No Symbolic),Out-Domain (gpt_prompt2),0.731015,0.816543,0.843016
+Ghostbuster (No Symbolic),Out-Domain (gpt_writing),0.689569,0.782116,0.821094
+Ghostbuster (No Symbolic),Out-Domain (gpt_semantic),0.85007,0.905422,0.914689

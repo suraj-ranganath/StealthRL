@@ -1,0 +1,13 @@
+Model Type,Experiment,Accuracy,F1,AUC
+RoBERTa,In-Domain (wp),0.81039,0.820639,0.853947
+RoBERTa,In-Domain (reuter),0.933014,0.929648,0.992697
+RoBERTa,In-Domain (essay),0.962217,0.964706,0.993863
+RoBERTa,In-Domain,0.903333,0.905691,0.957186
+RoBERTa,Out-Domain (wp),0.974026,0.972376,0.998055
+RoBERTa,Out-Domain (reuter),0.801435,0.832998,0.988233
+RoBERTa,Out-Domain (essay),0.531486,0.693069,0.935803
+RoBERTa,Out-Domain (claude),0.815021,0.87845,0.908494
+RoBERTa,Out-Domain (gpt_prompt1),0.951043,0.97047,0.973395
+RoBERTa,Out-Domain (gpt_prompt2),0.956885,0.974085,0.975836
+RoBERTa,Out-Domain (gpt_writing),0.974965,0.985114,0.979904
+RoBERTa,Out-Domain (gpt_semantic),0.943533,0.965785,0.970273
