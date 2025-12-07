@@ -38,20 +38,6 @@ env/
 .ipynb_checkpoints
 *.ipynb
 
-# Data and outputs
-data/raw/
-data/processed/
-data/downloads/
-data/cache/
-outputs/
-checkpoints/
-logs/
-runs/
-*.csv
-*.jsonl
-*.json
-*.html
-
 # Model files
 *.pt
 *.pth
