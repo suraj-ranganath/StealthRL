@@ -7,6 +7,7 @@ tinker-cookbook  # Tinker Cookbook utilities
 # PyTorch (for reward computation and model utilities)
 torch>=2.0.0
 transformers>=4.30.0
+accelerate>=1.12.0  # Required for device_map in transformers
 
 # Sentence transformers (for semantic similarity)
 sentence-transformers>=2.2.0
