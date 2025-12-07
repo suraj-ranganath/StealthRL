@@ -261,7 +261,7 @@ class GhostbusterDetector(BaseDetector):
     Falls back to roberta-base if specific detector model unavailable.
     """
     
-    def __init__(self, cache: DetectorCache, model_name: str = "roberta-base", device: str = None):
+    def __init__(self, cache: DetectorCache, model_name: str = "roberta-base-openai-detector", device: str = None):
         super().__init__("ghostbuster", cache)
         self.model_name = model_name
         self.device = device or ("cuda" if self._check_cuda() else "cpu")
