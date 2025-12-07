@@ -26,18 +26,19 @@ This folder contains all materials for **TASK 2: Dataset Curation** - preparing 
 ## 📁 Directory Structure
 
 ```
-task2_dataset_curation/
+knowledge_base/task2/                   # Documentation
 ├── README.md                          # This file
-├── TASK2_COMPLETION_REPORT.md         # Final completion report
-├── scripts/
-│   ├── convert_chatgpt_bias_data.py   # Main conversion script
-│   ├── generate_ai_text.py            # AI text generation (if needed)
-│   └── validate_datasets.py           # Dataset validation
-├── notebooks/                          # Exploration notebooks (optional)
-│   └── explore_chatgpt_bias.ipynb
-└── logs/
-    ├── conversion.log                 # Conversion logs
-    └── validation.log                 # Validation results
+├── QUICK_START.md                     # Quick start guide
+└── TASK2_COMPLETION_REPORT.md         # Final completion report
+
+scripts/                                # Scripts (at project root)
+├── convert_chatgpt_bias_data.py       # Main conversion script
+├── generate_ai_text.py                # AI text generation (if needed)
+└── validate_datasets.py               # Dataset validation
+
+logs/                                   # Logs directory
+├── conversion.log                     # Conversion logs
+└── validation.log                     # Validation results
 ```
 
 ---
@@ -71,11 +72,11 @@ cat README.md
 ### Step 3: Convert to Required Format 🔧
 
 ```bash
-python task2_dataset_curation/scripts/convert_chatgpt_bias_data.py \
+python scripts/convert_chatgpt_bias_data.py \
     --input data/raw/ChatGPT-Detector-Bias \
     --output-esl data/esl/toefl11.jsonl \
     --output-native data/native/native_academic.jsonl \
-    --log task2_dataset_curation/logs/conversion.log
+    --log logs/conversion.log
 ```
 
 **Output format:**
@@ -127,10 +128,10 @@ python scripts/prepare_tinker_data.py \
 ### Step 7: Validate 🔍
 
 ```bash
-python task2_dataset_curation/scripts/validate_datasets.py \
+python scripts/validate_datasets.py \
     --esl-data data/esl/toefl11.jsonl \
     --native-data data/native/native_academic.jsonl \
-    --output task2_dataset_curation/logs/validation.log
+    --output logs/validation.log
 ```
 
 ---

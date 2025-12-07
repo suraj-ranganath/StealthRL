@@ -6,7 +6,7 @@ This script extracts ESL (TOEFL) and native writing samples from the
 ChatGPT-Detector-Bias dataset and converts them to the required JSONL format.
 
 Usage:
-    python task2_dataset_curation/scripts/convert_chatgpt_bias_data.py \
+    python scripts/convert_chatgpt_bias_data.py \
         --input data/raw/ChatGPT-Detector-Bias \
         --output-esl data/esl/toefl11.jsonl \
         --output-native data/native/native_academic.jsonl

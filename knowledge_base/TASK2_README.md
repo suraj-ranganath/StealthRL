@@ -6,10 +6,10 @@
 
 ## 📁 Task 2 Organization
 
-All TASK 2 materials are organized in the `task2_dataset_curation/` folder, following the same structure as TASK 1.
+All TASK 2 materials documentation is organized in the `knowledge_base/task2/` folder, with scripts in the main `scripts/` folder.
 
 ```
-task2_dataset_curation/
+knowledge_base/task2/
 ├── README.md                          # Full task overview
 ├── QUICK_START.md                     # ⭐ START HERE - Step-by-step guide
 ├── scripts/
@@ -88,7 +88,7 @@ data/
 
 **Usage**:
 ```bash
-python task2_dataset_curation/scripts/convert_chatgpt_bias_data.py \
+python scripts/convert_chatgpt_bias_data.py \
     --input data/raw/ChatGPT-Detector-Bias \
     --output-esl data/esl/toefl11.jsonl \
     --output-native data/native/native_academic.jsonl
@@ -106,10 +106,10 @@ python task2_dataset_curation/scripts/convert_chatgpt_bias_data.py \
 
 **Usage**:
 ```bash
-python task2_dataset_curation/scripts/validate_datasets.py \
+python scripts/validate_datasets.py \
     --esl-data data/esl/toefl11.jsonl \
     --native-data data/native/native_academic.jsonl \
-    --output task2_dataset_curation/logs/validation.log
+    --output logs/validation.log
 ```
 
 **Checks**:
@@ -150,8 +150,9 @@ python -m stealthrl.tinker.train \
 
 ## 📚 Documentation
 
-- **Quick Start**: `task2_dataset_curation/QUICK_START.md` ⭐
-- **Full README**: `task2_dataset_curation/README.md`
+- **Quick Start**: `knowledge_base/task2/QUICK_START.md` ⭐
+- **Full README**: `knowledge_base/task2/README.md`
+- **Task folder**: `scripts/` (for conversion/validation scripts)
 - **ESL Guide**: `knowledge_base/ESL_FAIRNESS_GUIDE.md`
 - **Team Handoff**: `knowledge_base/TEAM_HANDOFF.md`
 

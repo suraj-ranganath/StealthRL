@@ -73,7 +73,7 @@ find . -iname "*native*"
 cd /Users/nishchaymahor/Documents/Study/291\ -\ Safety\ in\ Gen\ AI/StealthRL/StealthRL
 
 # Run the conversion script
-python task2_dataset_curation/scripts/convert_chatgpt_bias_data.py \
+python scripts/convert_chatgpt_bias_data.py \
     --input data/raw/ChatGPT-Detector-Bias \
     --output-esl data/esl/toefl11.jsonl \
     --output-native data/native/native_academic.jsonl \
@@ -100,7 +100,7 @@ Native ratio:   60.0%
 **If conversion fails:**
 - The script will tell you what files it found
 - You may need to manually inspect the data structure
-- Check `task2_dataset_curation/logs/conversion.log` for details
+- Check `logs/conversion.log` for details
 
 ---
 
@@ -108,13 +108,13 @@ Native ratio:   60.0%
 
 ```bash
 # Run validation script
-python task2_dataset_curation/scripts/validate_datasets.py \
+python scripts/validate_datasets.py \
     --esl-data data/esl/toefl11.jsonl \
     --native-data data/native/native_academic.jsonl \
-    --output task2_dataset_curation/logs/validation.log
+    --output logs/validation.log
 
 # Check validation results
-cat task2_dataset_curation/logs/validation.log
+cat logs/validation.log
 ```
 
 **Expected output:**

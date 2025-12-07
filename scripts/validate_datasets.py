@@ -10,10 +10,10 @@ Checks:
 - Duplicate detection
 
 Usage:
-    python task2_dataset_curation/scripts/validate_datasets.py \
+    python scripts/validate_datasets.py \
         --esl-data data/esl/toefl11.jsonl \
         --native-data data/native/native_academic.jsonl \
-        --output task2_dataset_curation/logs/validation.log
+        --output logs/validation.log
 """
 
 import argparse

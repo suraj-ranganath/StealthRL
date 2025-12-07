@@ -122,9 +122,9 @@ scripts/
 configs/               # YAML/JSON configs for models, training, detectors
 examples/              # Sample scripts and notebooks
 data/                  # Data directory (raw, processed, esl, native, tinker)
-knowledge_base/        # Comprehensive documentation (guides, setup, API docs)
-task1_detector_implementation/  # ✅ TASK 1: Detector setup (COMPLETED)
-task2_dataset_curation/         # ✅ TASK 2: Dataset curation (SETUP COMPLETE)
+knowledge_base/        # Comprehensive documentation (guides, setup, API docs, task reports)
+  ├── task1/           # ✅ TASK 1: Detector implementation docs
+  ├── task2/           # ✅ TASK 2: Dataset curation docs
 requirements.txt       # Python dependencies
 environment.yml        # Conda environment (optional)
 LICENSE
@@ -312,8 +312,8 @@ The project uses these main packages (all auto-installed via `requirements.txt`)
 - ✅ **Setup instructions** (this file + SETUP_AND_RUN.md)
 - ✅ **Research roadmap** with priorities
 - ✅ **Implementation verification** report
-- ✅ **Task 1 completion** (see `task1_detector_implementation/` folder)
-- ✅ **Task 2 setup** (see `task2_dataset_curation/` folder and `TASK2_README.md`)
+- ✅ **Task 1 completion** (see `knowledge_base/task1/` for docs, `scripts/test_detectors*.py` for tests)
+- ✅ **Task 2 setup** (see `knowledge_base/task2/` for docs, `scripts/` for conversion scripts)
 
 ### 🔨 IN PROGRESS / TODO (Team Tasks)
 
@@ -330,12 +330,11 @@ The project uses these main packages (all auto-installed via `requirements.txt`)
 7. ✅ Tested all detectors successfully
 8. ✅ Verified caching works
 
-**Documentation**: See `task1_detector_implementation/` folder for complete details
+**Documentation**: See `knowledge_base/task1/` folder for complete details
 
 **Quick test**:
 ```bash
-cd task1_detector_implementation
-python test_detectors_standalone.py
+python scripts/test_detectors_standalone.py
 ```
 
 ---
@@ -344,10 +343,10 @@ python test_detectors_standalone.py
 **Status**: ✅ **SETUP COMPLETE** - Scripts ready, execution in progress
 
 **What has been completed:**
-1. ✅ Created `task2_dataset_curation/` folder with complete tooling
-2. ✅ Conversion script for ChatGPT-Detector-Bias data
-3. ✅ Validation script for data quality checks
-4. ✅ Step-by-step execution guide (QUICK_START.md)
+1. ✅ Created dataset curation tooling (docs in `knowledge_base/task2/`)
+2. ✅ Conversion script for ChatGPT-Detector-Bias data (`scripts/convert_chatgpt_bias_data.py`)
+3. ✅ Validation script for data quality checks (`scripts/validate_datasets.py`)
+4. ✅ Step-by-step execution guide (see `knowledge_base/task2/QUICK_START.md`)
 5. ✅ Integration with existing data pipeline
 
 **What needs to be executed:**
@@ -358,7 +357,7 @@ python test_detectors_standalone.py
 
 2. **Convert to JSONL format** using provided script:
    ```bash
-   python task2_dataset_curation/scripts/convert_chatgpt_bias_data.py \
+   python scripts/convert_chatgpt_bias_data.py \
      --input data/raw/ChatGPT-Detector-Bias \
      --output-esl data/esl/toefl11.jsonl \
      --output-native data/native/native_academic.jsonl
@@ -366,7 +365,7 @@ python test_detectors_standalone.py
 
 3. **Validate and generate splits**:
    ```bash
-   python task2_dataset_curation/scripts/validate_datasets.py \
+   python scripts/validate_datasets.py \
      --esl-data data/esl/toefl11.jsonl \
      --native-data data/native/native_academic.jsonl
 
@@ -377,9 +376,9 @@ python test_detectors_standalone.py
    ```
 
 **Documentation**:
-- See [`TASK2_README.md`](TASK2_README.md) for overview
-- See [`task2_dataset_curation/QUICK_START.md`](task2_dataset_curation/QUICK_START.md) for step-by-step guide
-- See [`task2_dataset_curation/`](task2_dataset_curation/) folder for all tools
+- See [`knowledge_base/TASK2_README.md`](knowledge_base/TASK2_README.md) for overview
+- See [`knowledge_base/task2/QUICK_START.md`](knowledge_base/task2/QUICK_START.md) for step-by-step guide
+- See [`scripts/`](scripts/) folder for all conversion and validation tools
 
 **Target**: 1000-2000 samples (40% ESL from TOEFL, 60% native academic)
 **Estimated time**: 1-2 hours (mostly download time)
