@@ -314,6 +314,7 @@ The project uses these main packages (all auto-installed via `requirements.txt`)
 - ✅ **Implementation verification** report
 - ✅ **Task 1 completion** (see `task1_detector_implementation/` folder)
 - ✅ **Task 2 setup** (see `task2_dataset_curation/` folder and `TASK2_README.md`)
+- ✅ **Task 3 setup** (see `task3_rl_training/` folder and `TASK3_README.md`)
 
 ### 🔨 IN PROGRESS / TODO (Team Tasks)
 
@@ -387,39 +388,64 @@ python test_detectors_standalone.py
 ---
 
 #### Priority 3: Main RL Training (MEDIUM - Week 2-3)
-**Status**: Infrastructure ready, waiting on detectors + data
+**Status**: ✅ **SETUP COMPLETE** - Ready for execution
 
-**What needs to be done:**
-1. **Full ensemble training** (all 3 detectors):
+**What has been completed:**
+1. ✅ Created `task3_rl_training/` folder with complete tooling
+2. ✅ Pre-flight check script (validates all prerequisites)
+3. ✅ Environment setup script (Tinker API key configuration)
+4. ✅ Training monitoring dashboard
+5. ✅ Step-by-step execution guide (QUICK_START.md)
+
+**What needs to be executed:**
+1. **Configure Tinker API key**:
+   ```bash
+   bash task3_rl_training/scripts/setup_env.sh
+   ```
+
+2. **Run pre-flight check**:
+   ```bash
+   python task3_rl_training/scripts/preflight_check.py
+   ```
+
+3. **Full ensemble training** (all 3 detectors):
    ```bash
    python -m stealthrl.tinker.train \
      --config configs/tinker_stealthrl.yaml \
      --data-path data/tinker \
-     --run-name full_ensemble \
+     --run-name stealthrl_full_ensemble \
      --num-epochs 3
    ```
    - **Expected time**: 2-4 hours on Tinker
-   - **Checkpoint**: Saved to `outputs/runs/full_ensemble/`
+   - **Checkpoint**: Saved to `outputs/runs/stealthrl_full_ensemble/`
 
-2. **Transfer learning experiment**:
+4. **Monitor training**:
+   ```bash
+   python task3_rl_training/scripts/monitor_training.py \
+     --run-name stealthrl_full_ensemble --watch
+   ```
+
+5. **Transfer experiment** (optional):
    ```bash
    python -m stealthrl.tinker.train \
      --config configs/tinker_transfer_in_ensemble.yaml \
      --data-path data/tinker \
      --run-name transfer_experiment
    ```
-   - **Goal**: Train on Fast-DetectGPT + Ghostbuster only
-   - **Evaluate**: Test on held-out Binoculars
 
-3. **Ablation studies** (5 experiments):
+6. **Ablation studies** (optional):
    ```bash
    bash scripts/run_ablations.sh
    ```
-   - **Expected time**: 10-15 hours total (can parallelize)
 
-**Who should do this**: Team member monitoring training  
-**Prerequisites**: Detectors working + real data ready  
+**Documentation**:
+- See [`TASK3_README.md`](TASK3_README.md) for overview
+- See [`task3_rl_training/QUICK_START.md`](task3_rl_training/QUICK_START.md) for detailed guide
+- See [`task3_rl_training/`](task3_rl_training/) folder for all tools
+
+**Prerequisites**: TASK 1 (detectors) + TASK 2 (data) completed
 **Compute**: Tinker credits (DSC 291 sponsored)
+**Estimated time**: 15 min setup + 2-4 hours training
 
 ---
 
