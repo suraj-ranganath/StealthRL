@@ -94,6 +94,10 @@ class TinkerCompositeReward:
             cache_path=detector_cache_path,
         )
         
+        # Pre-warm detector models to avoid lazy loading during training
+        logger.info("Pre-warming detector models...")
+        self.detector_ensemble.prewarm_models()
+        
         # Initialize semantic similarity
         from stealthrl.tinker.semantic import SemanticSimilarity
         self.semantic_sim = SemanticSimilarity(

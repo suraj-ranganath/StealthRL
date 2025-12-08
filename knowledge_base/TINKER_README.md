@@ -152,7 +152,7 @@ training:
   learning_rate: 1.0e-5  # Will be scaled 20-100× for LoRA
   batch_size: 8
   group_size: 4  # GRPO rollouts per prompt
-  num_epochs: 3
+  num_epochs: 2
 
 kl:
   penalty_coef: 0.001  # AuthorMist β
@@ -477,7 +477,7 @@ Reduce batch size or group size:
 ```yaml
 training:
   batch_size: 4  # Reduce from 8
-  group_size: 2  # Reduce from 4
+  group_size: 4  # Reduce from 4
 ```
 
 ## 📚 Additional Resources

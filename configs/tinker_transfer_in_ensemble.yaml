@@ -24,9 +24,9 @@ lora:
 
 training:
   learning_rate: 1.0e-5  # Base LR, will be scaled for LoRA
-  batch_size: 8
+  batch_size: 16
   group_size: 4  # GRPO: 4 rollouts per prompt
-  num_epochs: 3
+  num_epochs: 2
   gradient_accumulation_steps: 1
   max_grad_norm: 1.0
   warmup_steps: 100

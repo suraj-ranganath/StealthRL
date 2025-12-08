@@ -494,7 +494,7 @@ python scripts/test_detectors_standalone.py
 If you have a trained LoRA adapter, you can paraphrase text with:
 
 ```bash
-python examples/paraphrase_example.py \
+python scripts/paraphrase_example.py \
     --input "The quick brown fox jumps over the lazy dog." \
     --model_path checkpoints/stealthrl-lora \
     --output_path outputs/stealthrl_samples.jsonl

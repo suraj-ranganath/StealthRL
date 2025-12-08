@@ -7,12 +7,63 @@ text using sentence transformers (E5 model).
 
 import logging
 import asyncio
+import threading
 from typing import Dict, Any
 
 import torch
 import torch.nn.functional as F
 
 logger = logging.getLogger(__name__)
+
+# Global model cache with thread-safe access (same pattern as detectors)
+_SEMANTIC_MODEL_CACHE: Dict[str, Any] = {}
+_SEMANTIC_CACHE_LOCK = threading.Lock()
+
+
+def load_semantic_model_cached(model_name: str, device: torch.device):
+    """
+    Thread-safe singleton model loading for semantic similarity.
+    
+    Uses double-checked locking pattern to ensure only one model is loaded
+    even with concurrent access from multiple threads.
+    
+    Args:
+        model_name: HuggingFace model name
+        device: Target device
+    
+    Returns:
+        Loaded SentenceTransformer model
+    """
+    cache_key = f"{model_name}_{device}"
+    
+    # First check without lock (fast path)
+    if cache_key in _SEMANTIC_MODEL_CACHE:
+        logger.debug(f"✓ Using cached {model_name} on {device}")
+        return _SEMANTIC_MODEL_CACHE[cache_key]
+    
+    # Acquire lock for loading
+    with _SEMANTIC_CACHE_LOCK:
+        # Double-check: another thread might have loaded it while we waited
+        if cache_key in _SEMANTIC_MODEL_CACHE:
+            logger.debug(f"✓ Using cached {model_name} on {device} (loaded by another thread)")
+            return _SEMANTIC_MODEL_CACHE[cache_key]
+        
+        # Load model (only one thread gets here)
+        from sentence_transformers import SentenceTransformer
+        
+        logger.info(f"🔄 Loading {model_name} for semantic similarity (first time, will be cached)...")
+        
+        # Load without specifying device first (avoids meta tensor issues)
+        model = SentenceTransformer(model_name)
+        
+        # Then move to target device explicitly
+        model = model.to(device)
+        
+        # Cache it
+        _SEMANTIC_MODEL_CACHE[cache_key] = model
+        
+        logger.info(f"✓ {model_name} loaded and cached on {device}")
+        return model
 
 
 class SemanticSimilarity:
@@ -70,12 +121,11 @@ class SemanticSimilarity:
         }
     
     def _load_model(self):
-        """Lazy load the model on first use."""
+        """Lazy load the model on first use using thread-safe cache."""
         if self.model is None:
-            from sentence_transformers import SentenceTransformer
-            
             logger.info(f"Loading {self.model_name} for semantic similarity...")
-            self.model = SentenceTransformer(self.model_name).to(self.device)
+            # Use cached singleton loader (thread-safe)
+            self.model = load_semantic_model_cached(self.model_name, self.device)
             logger.info(f"✓ Semantic similarity model loaded on {self.device}")
     
     def _compute_similarity(self, text1: str, text2: str) -> float:
