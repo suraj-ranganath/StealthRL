@@ -147,9 +147,9 @@ class StealthRLConfig:
     learning_rate: float = 1e-5  # Base LR, will be multiplied by LoRA factor
     
     # GRPO settings
-    batch_size: int = 8  # Number of different prompts per batch
+    batch_size: int = 16  # Number of different prompts per batch. 8 is ideal.
     group_size: int = 4  # Number of rollouts per prompt (for centering)
-    num_epochs: int = 3
+    num_epochs: int = 2
     num_substeps: int = 1  # Gradient accumulation steps
     
     # Sampling settings
@@ -183,11 +183,11 @@ class StealthRLConfig:
     
     # Logging
     log_path: str = "/tmp/stealthrl"
-    log_interval: int = 10  # Log every N batches
+    log_interval: int = 20  # Log every N batches
     eval_interval: int = 100  # Eval every N batches
     save_interval: int = 500  # Save checkpoint every N batches
-    save_every: int = 10  # Save checkpoint every N iterations (10 is good for 100+ iteration runs)
-    eval_every: int = 5  # Run evaluation every N iterations (5 allows frequent monitoring)
+    save_every: int = 500  # Save checkpoint every N iterations (10 is good for 100+ iteration runs)
+    eval_every: int = 100  # Run evaluation every N iterations (5 allows frequent monitoring)
     
     # Debug
     num_groups_to_log: int = 4  # Number of groups to log in detail

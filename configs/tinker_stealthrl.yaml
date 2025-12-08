@@ -7,39 +7,39 @@ model:
 
 # LoRA settings
 lora:
-  rank: 16  # 8-16 recommended for RL (small ranks work well)
-  alpha: null  # If null, uses rank
+  rank: 32  # OPTIMAL for RL: rank=32 (matches full FT performance, Thinking Machines research)
+  alpha: 32  # Standard α=32 (do NOT scale with rank for optimal LR independence)
   dropout: 0.05
-  target_modules: null  # null = all linear layers (recommended)
+  target_modules: null  # null = all linear layers INCLUDING MLP (CRITICAL per LoRA research)
 
 # Training hyperparameters
 training:
-  learning_rate: 1.0e-5  # Base LR (will be scaled 20-100x for LoRA)
-  batch_size: 8  # Number of different prompts per batch
-  group_size: 4  # Number of rollouts per prompt (GRPO)
-  num_epochs: 3
-  num_substeps: 1  # Gradient accumulation
+  learning_rate: 2.8e-4  # CRITICAL: LoRA needs 10x FullFT LR (Thinking Machines: 2.8e-4 for Llama 8B, adjust by sqrt for 4B: ~2.8e-4 * sqrt(2) ≈ 4e-4, but 2.8e-4 conservative)
+  batch_size: 16  # CRITICAL: Keep small (4-8) - LoRA penalized by large batches per research. Made it 16 to save time
+  group_size: 4  # GRPO: 4-16 rollouts per prompt (8 is sweet spot per GRPO research)
+  num_epochs: 2
+  num_substeps: 1  # Gradient accumulation (1 = no accumulation for RL on-policy)
   max_tokens: 512  # Max generation length
 
 # Sampling settings
 sampling:
-  temperature: 1.0  # Higher = more exploration
-  temperature_schedule: "decay"  # "constant" | "decay"
-  temperature_decay: 0.95
-  top_p: 0.9
+  temperature: 1.0  # Standard for RL exploration (keep at 1.0 per GRPO research)
+  temperature_schedule: "constant"  # CRITICAL: Use "constant" for RL (decay hurts exploration)
+  temperature_decay: 0.95  # Not used if constant
+  top_p: 0.95  # Slightly higher for more diversity (0.9-0.95 per research)
 
 # GRPO settings
 grpo:
-  normalize_advantages: true  # Group-normalize advantages
-  advantage_clip: 5.0  # Clip to [-5, 5]
-  reward_clip: null  # Optional reward clipping
+  normalize_advantages: true  # Group-normalize advantages (CRITICAL for GRPO)
+  advantage_clip: 10.0  # Increase to 10.0 (5.0 too conservative per GRPO research)
+  reward_clip: null  # Keep null - let advantages do the work
   remove_constant_reward_groups: true  # Remove degenerate groups
 
 # KL divergence penalty (AuthorMist-inspired)
 kl:
-  penalty_coef: 0.001  # β in L = -E[R] + β*KL(π || π_ref)
-  target: null  # Target KL for adaptive penalty (null = no adaptation)
-  adapt_rate: 0.1  # Adaptation rate
+  penalty_coef: 0.01  # CRITICAL: Increase to 0.01 (0.001 too small, models drift too much per Tinker research)
+  target: null  # Keep null for RL (adaptive KL not recommended for GRPO)
+  adapt_rate: 0.1  # Not used if target=null
 
 # All-negative group handling
 all_negative:

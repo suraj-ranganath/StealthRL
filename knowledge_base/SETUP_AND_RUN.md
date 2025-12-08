@@ -428,7 +428,7 @@ cat .env | grep TINKER_API_KEY
 ```yaml
 training:
   batch_size: 4  # Reduce from 8
-  group_size: 2  # Reduce from 4
+  group_size: 4  # Reduce from 4
 ```
 
 #### Issue: "Detector API timeout"

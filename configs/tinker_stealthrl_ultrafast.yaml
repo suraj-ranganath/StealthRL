@@ -1,0 +1,108 @@
+# ULTRA-FAST CONFIG - 4 Hour Target
+# Optimized for rapid proof-of-concept training
+
+# Model settings
+model:
+  name: "Qwen/Qwen3-4B-Instruct-2507"
+  renderer: "qwen3"
+
+# LoRA settings - Reduced for speed
+lora:
+  rank: 16  # Reduced from 32 → 16 (2x faster training)
+  alpha: 16  # Match rank for standard scaling
+  dropout: 0.05
+  target_modules: null  # All linear layers
+
+# Training hyperparameters - STABLE RL training
+training:
+  learning_rate: 5e-5  # LoRA RL sweet spot (10x smaller than full FT)
+  lr_scheduler_type: "cosine"  # Gradual decay prevents spikes
+  warmup_ratio: 0.1  # Warm up first 10% of training
+  batch_size: 16  # Reduced from 32 for stability
+  group_size: 8  # Increased from 4 for better advantage estimation
+  num_epochs: 1  # CRITICAL: 1 epoch only (3x faster than original)
+  num_substeps: 1
+  max_tokens: 400  # Allow full paraphrases (inputs are 400-800 tokens)
+
+# Sampling settings
+sampling:
+  temperature: 0.8  # Reduced from 1.0 for RL stability
+  temperature_schedule: "constant"
+  temperature_decay: 0.95
+  top_p: 0.9  # Reduced from 0.95
+  do_sample: true
+
+# GRPO settings
+grpo:
+  normalize_advantages: true
+  advantage_clip: 5.0  # Reduced from 10.0 for gentler clipping
+  reward_clip: 10.0  # Add reward clipping to prevent outliers
+  remove_constant_reward_groups: true
+  advantage_normalization: "group"  # Per-group normalization
+
+# KL divergence penalty - ADAPTIVE
+kl:
+  penalty_coef: 0.03  # Increased from 0.01 for stronger drift prevention
+  target: 4.0  # Adaptive KL target for auto-adjustment
+  adapt_rate: 0.1  # Enable dynamic penalty adjustment
+
+# All-negative group handling
+all_negative:
+  min_reward: 0.01
+  downweight: 0.5
+
+# Curriculum learning - DISABLED for speed
+curriculum:
+  enabled: false
+  start_quantile: 0.7
+  end_quantile: 0.0
+  steps: 1000
+
+# Dataset - REDUCED SIZE
+dataset:
+  path: "data/tinker_large"
+  max_train_examples: 800 # CRITICAL: Use only 1000 train samples (4.6x faster)
+  max_test_examples: 150  # Use only 200 test samples for eval
+  split: "train"
+  seed: 42
+
+# Reward configuration - Single detector for speed
+reward:
+  detector_weight: 1.0
+  semantic_weight: 1.0
+  perplexity_weight: 0.5
+  fairness_weight: 0.2
+  
+  detectors:
+    names:
+      - "fast_detectgpt"  # ONLY Fast-DetectGPT (skip others for 2x speed)
+    weights:
+      fast_detectgpt: 1.0
+    device: "cpu"
+  
+  semantic:
+    model_name: "intfloat/e5-small-v2"  # Smaller model (3x faster than e5-large)
+    threshold: 0.85  # Slightly relaxed
+    device: "cpu"
+  
+  perplexity:
+    model_name: "gpt2"
+    ppl_min: 5.0
+    ppl_max: 80.0
+    ppl_target: 30.0
+    device: "cpu"
+  
+  fairness:
+    enabled: true
+    penalty_strength: 0.2
+
+# Logging
+logging:
+  log_path: "outputs/tinker_ultrafast"
+  log_interval: 10
+  eval_interval: 50  # Eval every 50 steps (was 5)
+  save_interval: 100  # Save every 100 steps (more frequent for short run)
+  save_every: 100
+  eval_every: 50
+  num_groups_to_log: 2
+  debug_mode: false

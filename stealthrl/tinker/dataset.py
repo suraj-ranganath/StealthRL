@@ -140,7 +140,9 @@ class StealthRLDatasetBuilder(RLDatasetBuilder):
     reward_config: Dict[str, Any]  # Config for initializing CompositeReward
     convo_prefix: List[renderers.Message] | None | Literal["standard"] = "standard"
     seed: int = 0
-    max_examples: int | None = None  # Optional limit for debugging
+    max_examples: int | None = None  # Optional limit for debugging (applies to both)
+    max_train_examples: int | None = None  # Optional limit for train set only
+    max_test_examples: int | None = None  # Optional limit for test set only
     
     async def __call__(self) -> tuple[RLDataset, RLDataset | None]:
         """
@@ -217,7 +219,16 @@ class StealthRLDatasetBuilder(RLDatasetBuilder):
         examples = []
         with open(file_path, 'r') as f:
             for line_num, line in enumerate(f, 1):
-                if self.max_examples and len(examples) >= self.max_examples:
+                # Check limits: use specific limit if set, otherwise fall back to max_examples
+                limit = None
+                if split == "train" and self.max_train_examples:
+                    limit = self.max_train_examples
+                elif split == "test" and self.max_test_examples:
+                    limit = self.max_test_examples
+                elif self.max_examples:
+                    limit = self.max_examples
+                
+                if limit and len(examples) >= limit:
                     break
                 
                 try:

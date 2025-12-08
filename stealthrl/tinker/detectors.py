@@ -9,11 +9,100 @@ import logging
 import hashlib
 import sqlite3
 import asyncio
-from typing import Dict, List, Any
+import threading
+from typing import Dict, List, Any, Tuple, Optional
 from pathlib import Path
 import time
 
 logger = logging.getLogger(__name__)
+
+# Global model cache with thread locks to prevent race conditions
+_MODEL_CACHE: Dict[str, Tuple] = {}
+_MODEL_LOCKS: Dict[str, threading.Lock] = {}
+_CACHE_LOCK = threading.Lock()
+
+
+def get_model_lock(cache_key: str) -> threading.Lock:
+    """Get or create lock for specific model."""
+    with _CACHE_LOCK:
+        if cache_key not in _MODEL_LOCKS:
+            _MODEL_LOCKS[cache_key] = threading.Lock()
+        return _MODEL_LOCKS[cache_key]
+
+
+def load_model_cached(
+    model_name: str,
+    model_type: str,
+    device: str,
+    num_labels: Optional[int] = None,
+) -> Tuple:
+    """
+    Load model with global caching and thread-safe locking.
+    
+    This prevents race conditions when multiple async tasks try to load
+    the same model simultaneously.
+    
+    Args:
+        model_name: HuggingFace model name
+        model_type: 'causal_lm' or 'sequence_classification'
+        device: Device to load model on ('cuda' or 'cpu')
+        num_labels: Number of labels for classification (if applicable)
+    
+    Returns:
+        (model, tokenizer) tuple
+    """
+    cache_key = f"{model_name}_{model_type}_{device}"
+    
+    # Check cache first (no lock needed for read)
+    if cache_key in _MODEL_CACHE:
+        logger.debug(f"Using cached model: {model_name}")
+        return _MODEL_CACHE[cache_key]
+    
+    # Acquire model-specific lock for loading
+    model_lock = get_model_lock(cache_key)
+    with model_lock:
+        # Double-check after acquiring lock
+        if cache_key in _MODEL_CACHE:
+            logger.debug(f"Using cached model (post-lock check): {model_name}")
+            return _MODEL_CACHE[cache_key]
+        
+        # Load model
+        from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForSequenceClassification
+        import torch
+        
+        logger.info(f"🔄 Loading {model_name} (first time, will be cached)...")
+        
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(model_name)
+            
+            if model_type == "causal_lm":
+                # Load directly to device, avoid device_map to prevent meta tensor issues
+                model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+                ).to(device)
+            else:
+                # Sequence classification
+                kwargs = {}
+                if num_labels is not None:
+                    kwargs['num_labels'] = num_labels
+                model = AutoModelForSequenceClassification.from_pretrained(
+                    model_name,
+                    torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+                    **kwargs
+                ).to(device)
+            
+            model.eval()
+            
+            # Cache the loaded model
+            _MODEL_CACHE[cache_key] = (model, tokenizer)
+            logger.info(f"✓ {model_name} loaded and cached on {device}")
+            
+            return model, tokenizer
+            
+        except Exception as e:
+            logger.error(f"Failed to load {model_name}: {e}")
+            raise
 
 
 class DetectorCache:
@@ -121,7 +210,7 @@ class BaseDetector:
     
     async def predict(self, text: str) -> float:
         """
-        Predict AI probability for text with caching and retry.
+        Predict AI probability for text with caching.
         
         Args:
             text: Input text
@@ -135,24 +224,19 @@ class BaseDetector:
             logger.debug(f"Cache hit for {self.name}: {text[:50]}...")
             return cached_score
         
-        # Compute with retry logic
-        for attempt in range(self.max_retries):
-            try:
-                score = await self._compute_score(text)
-                
-                # Cache result
-                self.cache.set(self.name, text, score)
-                
-                return score
+        # Compute score (model should already be loaded, so no need for retries)
+        try:
+            score = await self._compute_score(text)
             
-            except Exception as e:
-                logger.warning(f"{self.name} attempt {attempt + 1}/{self.max_retries} failed: {e}")
-                if attempt < self.max_retries - 1:
-                    await asyncio.sleep(self.retry_delay * (2 ** attempt))  # Exponential backoff
-                else:
-                    # Return default score on final failure
-                    logger.error(f"{self.name} failed after {self.max_retries} attempts, returning 0.5")
-                    return 0.5
+            # Cache result
+            self.cache.set(self.name, text, score)
+            
+            return score
+        
+        except Exception as e:
+            logger.error(f"{self.name} prediction failed: {e}")
+            # Return neutral score on error
+            return 0.5
     
     async def _compute_score(self, text: str) -> float:
         """
@@ -192,19 +276,14 @@ class FastDetectGPTDetector(BaseDetector):
             return False
     
     def _load_model(self):
-        """Lazy load the model on first use."""
+        """Lazy load the model on first use with singleton caching."""
         if self.model is None:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-            import torch
-            
             logger.info(f"Loading {self.model_name} for Fast-DetectGPT...")
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                device_map=self.device
+            self.model, self.tokenizer = load_model_cached(
+                model_name=self.model_name,
+                model_type="causal_lm",
+                device=self.device,
             )
-            self.model.eval()
             
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -278,33 +357,25 @@ class GhostbusterDetector(BaseDetector):
             return False
     
     def _load_model(self):
-        """Lazy load the model on first use."""
+        """Lazy load the model on first use with singleton caching."""
         if self.model is None:
-            from transformers import AutoModelForSequenceClassification, AutoTokenizer
-            import torch
-            
             logger.info(f"Loading {self.model_name} for Ghostbuster...")
-            
             try:
-                # Try to load a specific AI detection model
-                self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-                self.model = AutoModelForSequenceClassification.from_pretrained(
-                    self.model_name,
-                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                    device_map=self.device
+                self.model, self.tokenizer = load_model_cached(
+                    model_name=self.model_name,
+                    model_type="sequence_classification",
+                    device=self.device,
                 )
             except Exception as e:
                 logger.warning(f"Could not load {self.model_name}, using roberta-base: {e}")
                 # Fallback to base model
-                self.tokenizer = AutoTokenizer.from_pretrained("roberta-base")
-                self.model = AutoModelForSequenceClassification.from_pretrained(
-                    "roberta-base",
+                self.model, self.tokenizer = load_model_cached(
+                    model_name="roberta-base",
+                    model_type="sequence_classification",
+                    device=self.device,
                     num_labels=2,
-                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                    device_map=self.device
                 )
             
-            self.model.eval()
             logger.info(f"✓ Ghostbuster model loaded on {self.device}")
     
     async def _compute_score(self, text: str) -> float:
@@ -387,33 +458,28 @@ class BinocularsDetector(BaseDetector):
             return False
     
     def _load_models(self):
-        """Lazy load both models on first use."""
+        """Lazy load both models on first use with singleton caching."""
         if self.performer is None:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-            import torch
-            
             logger.info(f"Loading Binoculars models: {self.performer_model_name} and {self.observer_model_name}...")
             
-            # Load tokenizer (shared)
-            self.tokenizer = AutoTokenizer.from_pretrained(self.performer_model_name)
+            # Load performer model (smaller) using cached loading
+            self.performer, performer_tokenizer = load_model_cached(
+                model_name=self.performer_model_name,
+                model_type="causal_lm",
+                device=self.device,
+            )
+            
+            # Load observer model (larger) using cached loading
+            self.observer, observer_tokenizer = load_model_cached(
+                model_name=self.observer_model_name,
+                model_type="causal_lm",
+                device=self.device,
+            )
+            
+            # Use performer tokenizer as shared tokenizer
+            self.tokenizer = performer_tokenizer
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
-            
-            # Load performer model (smaller)
-            self.performer = AutoModelForCausalLM.from_pretrained(
-                self.performer_model_name,
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                device_map=self.device
-            )
-            self.performer.eval()
-            
-            # Load observer model (larger)
-            self.observer = AutoModelForCausalLM.from_pretrained(
-                self.observer_model_name,
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                device_map=self.device
-            )
-            self.observer.eval()
             
             logger.info(f"✓ Binoculars models loaded on {self.device}")
     
@@ -483,6 +549,7 @@ class DetectorEnsemble:
         detector_weights: Dict[str, float] | None = None,
         cache_path: str | None = None,
         device: str | None = None,
+        max_concurrent: int = 4,
     ):
         """
         Initialize detector ensemble.
@@ -492,12 +559,17 @@ class DetectorEnsemble:
             detector_weights: Optional custom weights (default: equal weights)
             cache_path: Path to SQLite cache file
             device: Device to run detectors on (cuda/cpu)
+            max_concurrent: Maximum concurrent detector evaluations
         """
         self.detector_names = detector_names
         self.device = device
+        self.max_concurrent = max_concurrent
         
         # Initialize cache
         self.cache = DetectorCache(cache_path)
+        
+        # Create semaphore for rate limiting
+        self._semaphore = asyncio.Semaphore(max_concurrent)
         
         # Initialize detectors
         self.detectors = {}
@@ -523,6 +595,21 @@ class DetectorEnsemble:
         
         logger.info(f"Initialized detector ensemble with {len(self.detectors)} detectors")
         logger.info(f"Weights: {self.weights}")
+    
+    def prewarm_models(self):
+        """Pre-load all detector models to avoid lazy loading during training."""
+        logger.info("🔥 Pre-warming detector models...")
+        for name, detector in self.detectors.items():
+            try:
+                # BinocularsDetector uses _load_models, others use _load_model
+                if hasattr(detector, '_load_models'):
+                    detector._load_models()
+                else:
+                    detector._load_model()
+                logger.info(f"✓ Pre-loaded {name}")
+            except Exception as e:
+                logger.error(f"Failed to pre-load {name}: {e}")
+        logger.info("✓ All detector models pre-warmed and ready")
     
     async def compute(self, text: str) -> Dict[str, Any]:
         """

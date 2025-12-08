@@ -25,9 +25,9 @@ from pathlib import Path
 class ResearchPipeline:
     """Automated research pipeline for StealthRL DSC 291 project."""
     
-    def __init__(self, base_dir: Path):
+    def __init__(self, base_dir: Path, data_dir: Path = None):
         self.base_dir = base_dir
-        self.data_dir = base_dir / "data" / "tinker"
+        self.data_dir = data_dir if data_dir else base_dir / "data" / "tinker_large"
         self.output_dir = base_dir / "outputs"
         self.config_dir = base_dir / "configs"
     
@@ -47,33 +47,30 @@ class ResearchPipeline:
         print(f"\n✓ Completed: {description}")
     
     def stage_data_prep(self):
-        """Stage 1: Prepare datasets."""
+        """Stage 1: Verify dataset exists."""
         print("\n" + "="*60)
-        print("STAGE 1: DATA PREPARATION")
+        print("STAGE 1: DATA VERIFICATION")
         print("="*60)
         
-        # Check if data already exists
-        if (self.data_dir / "train.jsonl").exists():
-            response = input("\nData already exists. Regenerate? (y/N): ")
-            if response.lower() != 'y':
-                print("Skipping data preparation.")
-                return
+        # Check if data exists
+        train_file = self.data_dir / "train.jsonl"
+        test_file = self.data_dir / "test.jsonl"
         
-        # Prepare Tinker-format data
-        self.run_command(
-            [
-                "python", "scripts/prepare_tinker_data.py",
-                "--synthetic",
-                "--num-train", "1000",
-                "--num-test", "200",
-                "--output-dir", str(self.data_dir),
-            ],
-            "Preparing Tinker-format datasets"
-        )
+        if not train_file.exists() or not test_file.exists():
+            print(f"\n❌ Error: Dataset not found at {self.data_dir}")
+            print("Expected files:")
+            print(f"  - {train_file}")
+            print(f"  - {test_file}")
+            sys.exit(1)
         
-        print("\n✓ Data preparation complete")
-        print(f"  Train: {self.data_dir}/train.jsonl")
-        print(f"  Test:  {self.data_dir}/test.jsonl")
+        # Count samples
+        import subprocess
+        train_count = int(subprocess.check_output(["wc", "-l", str(train_file)]).split()[0])
+        test_count = int(subprocess.check_output(["wc", "-l", str(test_file)]).split()[0])
+        
+        print(f"\n✓ Dataset verified at {self.data_dir}")
+        print(f"  Train: {train_count} samples")
+        print(f"  Test:  {test_count} samples")
     
     def stage_training(self):
         """Stage 2: Train models."""
@@ -271,10 +268,17 @@ def main():
         default=Path.cwd(),
         help="Base directory of StealthRL project"
     )
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=None,
+        help="Data directory (default: base_dir/data/tinker_large)"
+    )
     
     args = parser.parse_args()
     
-    pipeline = ResearchPipeline(args.base_dir)
+    data_dir = args.data_dir if args.data_dir else args.base_dir / "data" / "tinker_large"
+    pipeline = ResearchPipeline(args.base_dir, data_dir)
     
     if args.stage == "all":
         pipeline.run_full_pipeline()

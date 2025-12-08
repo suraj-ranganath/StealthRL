@@ -7,11 +7,71 @@ both too-low (LLM-like) and too-high (incoherent) perplexity.
 
 import logging
 import asyncio
-from typing import Dict, Any
+import threading
+from typing import Dict, Any, Tuple
 
 import torch
 
 logger = logging.getLogger(__name__)
+
+# Global model cache with thread-safe access (same pattern as detectors/semantic)
+_PERPLEXITY_MODEL_CACHE: Dict[str, Tuple[Any, Any]] = {}
+_PERPLEXITY_CACHE_LOCK = threading.Lock()
+
+
+def load_perplexity_model_cached(model_name: str, device: torch.device):
+    """
+    Thread-safe singleton model loading for perplexity computation.
+    
+    Uses double-checked locking pattern to ensure only one model is loaded
+    even with concurrent access from multiple threads.
+    
+    Args:
+        model_name: HuggingFace model name
+        device: Target device
+    
+    Returns:
+        Tuple of (model, tokenizer)
+    """
+    cache_key = f"{model_name}_{device}"
+    
+    # First check without lock (fast path)
+    if cache_key in _PERPLEXITY_MODEL_CACHE:
+        logger.debug(f"✓ Using cached {model_name} on {device}")
+        return _PERPLEXITY_MODEL_CACHE[cache_key]
+    
+    # Acquire lock for loading
+    with _PERPLEXITY_CACHE_LOCK:
+        # Double-check: another thread might have loaded it while we waited
+        if cache_key in _PERPLEXITY_MODEL_CACHE:
+            logger.debug(f"✓ Using cached {model_name} on {device} (loaded by another thread)")
+            return _PERPLEXITY_MODEL_CACHE[cache_key]
+        
+        # Load model (only one thread gets here)
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        
+        logger.info(f"🔄 Loading {model_name} for perplexity (first time, will be cached)...")
+        
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        
+        # Load without device_map to avoid meta tensor issues
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            torch_dtype=torch.float16 if device.type == "cuda" else torch.float32,
+        )
+        
+        # Move to device explicitly
+        model = model.to(device)
+        model.eval()
+        
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        
+        # Cache it
+        _PERPLEXITY_MODEL_CACHE[cache_key] = (model, tokenizer)
+        
+        logger.info(f"✓ {model_name} loaded and cached on {device}")
+        return model, tokenizer
 
 
 class PerplexityReward:
@@ -81,22 +141,11 @@ class PerplexityReward:
         }
     
     def _load_model(self):
-        """Lazy load the model on first use."""
+        """Lazy load the model on first use using thread-safe cache."""
         if self.model is None:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-            
             logger.info(f"Loading {self.model_name} for perplexity computation...")
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                device_map=self.device
-            )
-            self.model.eval()
-            
-            if self.tokenizer.pad_token is None:
-                self.tokenizer.pad_token = self.tokenizer.eos_token
-            
+            # Use cached singleton loader (thread-safe)
+            self.model, self.tokenizer = load_perplexity_model_cached(self.model_name, self.device)
             logger.info(f"✓ Perplexity model loaded on {self.device}")
     
     def _compute_perplexity(self, text: str) -> float:
