@@ -20,6 +20,14 @@ _SEMANTIC_MODEL_CACHE: Dict[str, Any] = {}
 _SEMANTIC_CACHE_LOCK = threading.Lock()
 
 
+def _default_device() -> torch.device:
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
 def load_semantic_model_cached(model_name: str, device: torch.device):
     """
     Thread-safe singleton model loading for semantic similarity.
@@ -91,10 +99,7 @@ class SemanticSimilarity:
         self.threshold = threshold
         
         # Set device
-        if device:
-            self.device = torch.device(device)
-        else:
-            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device(device) if device else _default_device()
         
         # Initialize model
         self.model = None  # Lazy load on first use

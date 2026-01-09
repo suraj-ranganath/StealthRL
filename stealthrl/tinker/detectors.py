@@ -22,6 +22,18 @@ _MODEL_LOCKS: Dict[str, threading.Lock] = {}
 _CACHE_LOCK = threading.Lock()
 
 
+def _default_device() -> str:
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return "cuda"
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            return "mps"
+    except Exception:
+        pass
+    return "cpu"
+
+
 def get_model_lock(cache_key: str) -> threading.Lock:
     """Get or create lock for specific model."""
     with _CACHE_LOCK:
@@ -262,18 +274,10 @@ class FastDetectGPTDetector(BaseDetector):
     def __init__(self, cache: DetectorCache, model_name: str = "gpt2", device: str = None):
         super().__init__("fast_detectgpt", cache)
         self.model_name = model_name
-        self.device = device or ("cuda" if self._check_cuda() else "cpu")
+        self.device = device or _default_device()
         self.model = None
         self.tokenizer = None
         logger.info(f"Initialized Fast-DetectGPT detector with {model_name} on {self.device}")
-    
-    def _check_cuda(self):
-        """Check if CUDA is available."""
-        try:
-            import torch
-            return torch.cuda.is_available()
-        except:
-            return False
     
     def _load_model(self):
         """Lazy load the model on first use with singleton caching."""
@@ -343,18 +347,10 @@ class GhostbusterDetector(BaseDetector):
     def __init__(self, cache: DetectorCache, model_name: str = "roberta-base-openai-detector", device: str = None):
         super().__init__("ghostbuster", cache)
         self.model_name = model_name
-        self.device = device or ("cuda" if self._check_cuda() else "cpu")
+        self.device = device or _default_device()
         self.model = None
         self.tokenizer = None
         logger.info(f"Initialized Ghostbuster detector with {model_name} on {self.device}")
-    
-    def _check_cuda(self):
-        """Check if CUDA is available."""
-        try:
-            import torch
-            return torch.cuda.is_available()
-        except:
-            return False
     
     def _load_model(self):
         """Lazy load the model on first use with singleton caching."""
@@ -443,19 +439,11 @@ class BinocularsDetector(BaseDetector):
         super().__init__("binoculars", cache)
         self.performer_model_name = performer_model
         self.observer_model_name = observer_model
-        self.device = device or ("cuda" if self._check_cuda() else "cpu")
+        self.device = device or _default_device()
         self.performer = None
         self.observer = None
         self.tokenizer = None
         logger.info(f"Initialized Binoculars detector with {performer_model} and {observer_model} on {self.device}")
-    
-    def _check_cuda(self):
-        """Check if CUDA is available."""
-        try:
-            import torch
-            return torch.cuda.is_available()
-        except:
-            return False
     
     def _load_models(self):
         """Lazy load both models on first use with singleton caching."""
@@ -562,7 +550,7 @@ class DetectorEnsemble:
             max_concurrent: Maximum concurrent detector evaluations
         """
         self.detector_names = detector_names
-        self.device = device
+        self.device = device or _default_device()
         self.max_concurrent = max_concurrent
         
         # Initialize cache
@@ -575,11 +563,11 @@ class DetectorEnsemble:
         self.detectors = {}
         for name in detector_names:
             if name == "fast_detectgpt":
-                self.detectors[name] = FastDetectGPTDetector(self.cache, device=device)
+                self.detectors[name] = FastDetectGPTDetector(self.cache, device=self.device)
             elif name == "ghostbuster":
-                self.detectors[name] = GhostbusterDetector(self.cache, device=device)
+                self.detectors[name] = GhostbusterDetector(self.cache, device=self.device)
             elif name == "binoculars":
-                self.detectors[name] = BinocularsDetector(self.cache, device=device)
+                self.detectors[name] = BinocularsDetector(self.cache, device=self.device)
             else:
                 logger.warning(f"Unknown detector: {name}, skipping")
         
