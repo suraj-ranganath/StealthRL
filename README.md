@@ -566,7 +566,7 @@ This section explains how to use StealthRL for training, evaluation, and visuali
 
 StealthRL supports three training modes based on your needs:
 
-**Note on configs**: `python -m stealthrl.tinker.train` currently reads CLI flags only. The `--config` flag is a placeholder and is not parsed yet. YAML configs are consumed by `scripts/train_ultrafast.py` (ultrafast) and serve as templates for other runs. Use `--group-size` to control rollouts per prompt.
+**Config loading**: `python -m stealthrl.tinker.train` now reads YAML via `--config`. CLI flags override config values when they differ from the CLI defaults. Use `--group-size` to control rollouts per prompt.
 
 #### Option A: Ultra-Fast Training (2-4 hours, proof-of-concept)
 
@@ -903,10 +903,10 @@ python -m stealthrl.tinker.train --data-path data/test --run-name test --num-epo
 # Ultra-fast proof-of-concept (3.5 hours, YAML-driven)
 python scripts/train_ultrafast.py
 
-# Full production training (6-8 hours, template; --config not parsed yet)
+# Full production training (6-8 hours)
 python -m stealthrl.tinker.train --config configs/tinker_stealthrl.yaml --data-path data/tinker_large --run-name production
 
-# Transfer experiment (3-4 hours, template; --config not parsed yet)
+# Transfer experiment (3-4 hours)
 python -m stealthrl.tinker.train --config configs/tinker_transfer_in_ensemble.yaml --data-path data/tinker_large --run-name transfer
 
 # Evaluate trained model
@@ -923,7 +923,7 @@ python scripts/run_esl_eval.py --eval-data data/processed/esl_native_test.jsonl 
 
 ## 📁 Configuration Files
 
-StealthRL includes YAML configuration templates in `configs/`. Today, `scripts/train_ultrafast.py` reads YAML directly; `stealthrl.tinker.train` still uses CLI flags and does not parse `--config` yet.
+StealthRL includes YAML configuration templates in `configs/`. Both `scripts/train_ultrafast.py` and `stealthrl.tinker.train` read YAML configs.
 
 ### Available Configurations
 
