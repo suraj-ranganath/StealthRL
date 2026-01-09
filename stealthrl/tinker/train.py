@@ -151,6 +151,13 @@ class StealthRLConfig:
     group_size: int = 4  # Number of rollouts per prompt (for centering)
     num_epochs: int = 2
     num_substeps: int = 1  # Gradient accumulation steps
+
+    # Parallel training mode
+    training_mode: str = "sync"  # "sync" | "stream_minibatch" | "async"
+    async_max_steps_off_policy: int = 1  # Async only: max steps off-policy
+    async_groups_per_batch: int | None = None  # Async only: override groups per batch
+    stream_groups_per_batch: int | None = None  # Stream only: override groups per batch
+    stream_num_minibatches: int = 2  # Stream only: minibatches per substep
     
     # Sampling settings
     max_tokens: int = 512  # Max tokens per generation
@@ -293,17 +300,27 @@ class StealthRLTrainer:
                 )
             )
         
-        # Run training (using Tinker's do_sync_training)
-        # Based on Tinker source: do_sync_training iterates for i_batch in range(start_batch, end_batch)
-        # It calls dataset.get_batch(i_batch) directly (NOT i_batch % num_batches)
-        # Therefore: num_batches must equal end_batch to avoid IndexError
+        # Run training (sync, streaming, or async off-policy)
+        # Based on Tinker source: training loops iterate for i_batch in range(start_batch, end_batch)
+        # and call dataset.get_batch(i_batch) directly (NOT i_batch % num_batches).
+        # Therefore: num_batches must equal end_batch to avoid IndexError.
         num_train_batches = len(train_dataset)
         total_iterations = num_train_batches * self.config.num_epochs
         
         logger.info(f"Starting training: {total_iterations} iterations across {self.config.num_epochs} epoch(s)")
         logger.info(f"Dataset size: {num_train_batches} batches per epoch")
-        
-        await rl_train.do_sync_training(
+
+        if tinker_config.async_config is not None:
+            training_func = rl_train.do_async_training
+            logger.info("Training mode: async (off-policy, pipelined)")
+        elif tinker_config.stream_minibatch_config is not None:
+            training_func = rl_train.do_sync_training_with_stream_minibatch
+            logger.info("Training mode: stream_minibatch (pipelined sampling/training)")
+        else:
+            training_func = rl_train.do_sync_training
+            logger.info("Training mode: sync (on-policy)")
+
+        await training_func(
             start_batch=0,
             end_batch=total_iterations,  # Exclusive upper bound (like Python range)
             num_batches=total_iterations,  # Must equal end_batch to avoid IndexError
@@ -410,7 +427,49 @@ To use this model later:
         logger.info(f"LoRA LR scaling factor: {lora_lr_factor:.1f}x")
         logger.info(f"Scaled LR: {scaled_lr:.2e}")
         
+        training_mode = self.config.training_mode
+        if training_mode not in {"sync", "stream_minibatch", "async"}:
+            raise ValueError(
+                f"Unknown training_mode '{training_mode}'. "
+                "Expected: sync | stream_minibatch | async."
+            )
+
+        groups_per_batch_default = getattr(dataset, "batch_size", self.config.batch_size)
+        async_config = None
+        stream_minibatch_config = None
+        if training_mode == "async":
+            if not hasattr(rl_train, "AsyncConfig"):
+                raise RuntimeError(
+                    "Async training requested, but tinker_cookbook AsyncConfig is not available. "
+                    "Please upgrade tinker_cookbook."
+                )
+            groups_per_batch = self.config.async_groups_per_batch or groups_per_batch_default
+            async_config = rl_train.AsyncConfig(
+                max_steps_off_policy=self.config.async_max_steps_off_policy,
+                groups_per_batch=groups_per_batch,
+            )
+        elif training_mode == "stream_minibatch":
+            if not hasattr(rl_train, "StreamMinibatchConfig"):
+                raise RuntimeError(
+                    "Stream minibatch training requested, but tinker_cookbook StreamMinibatchConfig "
+                    "is not available. Please upgrade tinker_cookbook."
+                )
+            groups_per_batch = self.config.stream_groups_per_batch or groups_per_batch_default
+            num_minibatches = max(1, min(self.config.stream_num_minibatches, groups_per_batch))
+            if num_minibatches != self.config.stream_num_minibatches:
+                logger.warning(
+                    "stream_num_minibatches=%s exceeds groups_per_batch=%s; clamping to %s",
+                    self.config.stream_num_minibatches,
+                    groups_per_batch,
+                    num_minibatches,
+                )
+            stream_minibatch_config = rl_train.StreamMinibatchConfig(
+                groups_per_batch=groups_per_batch,
+                num_minibatches=num_minibatches,
+            )
+
         # Build Tinker config
+        save_every = self.config.save_every if self.config.save_every > 0 else 10**9
         tinker_config = rl_train.Config(
             model_name=self.config.model_name,
             learning_rate=scaled_lr,
@@ -422,8 +481,10 @@ To use this model later:
             dataset_builder=self.config.dataset_builder,
             remove_constant_reward_groups=self.config.remove_constant_reward_groups,
             log_path=self.config.log_path,
-            save_every=self.config.save_every,
+            save_every=save_every,
             eval_every=self.config.eval_every,
+            async_config=async_config,
+            stream_minibatch_config=stream_minibatch_config,
         )
         
         return tinker_config
@@ -568,9 +629,41 @@ async def main():
     parser.add_argument("--output-dir", type=str, default="outputs/runs", help="Base output directory for runs")
     parser.add_argument("--num-epochs", type=int, default=3, help="Number of training epochs")
     parser.add_argument("--batch-size", type=int, default=8, help="Batch size")
+    parser.add_argument("--group-size", type=int, default=4, help="Group size (rollouts per prompt)")
     parser.add_argument("--run-name", type=str, help="Custom run name (default: auto-generated with timestamp)")
     parser.add_argument("--save-every", type=int, default=10, help="Save checkpoint every N iterations (default: 10)")
     parser.add_argument("--eval-every", type=int, default=5, help="Run evaluation every N iterations (default: 5)")
+    parser.add_argument(
+        "--training-mode",
+        type=str,
+        choices=["sync", "stream_minibatch", "async"],
+        default="sync",
+        help="Training mode for Tinker (default: sync)",
+    )
+    parser.add_argument(
+        "--async-max-steps-off-policy",
+        type=int,
+        default=1,
+        help="Async mode: max steps off-policy before discarding trajectories",
+    )
+    parser.add_argument(
+        "--async-groups-per-batch",
+        type=int,
+        default=None,
+        help="Async mode: override groups per batch (default: batch size)",
+    )
+    parser.add_argument(
+        "--stream-groups-per-batch",
+        type=int,
+        default=None,
+        help="Stream mode: override groups per batch (default: batch size)",
+    )
+    parser.add_argument(
+        "--stream-num-minibatches",
+        type=int,
+        default=2,
+        help="Stream mode: minibatches per substep (default: 2)",
+    )
     args = parser.parse_args()
     
     # Load environment variables from .env file
@@ -594,7 +687,9 @@ async def main():
         "data_path": args.data_path,
         "num_epochs": args.num_epochs,
         "batch_size": args.batch_size,
+        "group_size": args.group_size,
         "config_file": args.config,
+        "training_mode": args.training_mode,
         "status": "running",
     }
     with open(output_dir / "run_metadata.json", "w") as f:
@@ -632,7 +727,7 @@ async def main():
     dataset_builder = StealthRLDatasetBuilder(
         data_path=args.data_path,
         batch_size=args.batch_size,
-        group_size=4,
+        group_size=args.group_size,
         model_name_for_tokenizer="Qwen/Qwen3-4B-Instruct-2507",
         renderer_name="qwen3",
         reward_config={
@@ -649,13 +744,18 @@ async def main():
         lora_rank=16,
         learning_rate=1e-5,
         batch_size=args.batch_size,
-        group_size=4,
+        group_size=args.group_size,
         num_epochs=args.num_epochs,
         kl_penalty_coef=0.001,
         dataset_builder=dataset_builder,
         log_path=str(output_dir),  # Save metrics to output directory
         save_every=args.save_every,
         eval_every=args.eval_every,
+        training_mode=args.training_mode,
+        async_max_steps_off_policy=args.async_max_steps_off_policy,
+        async_groups_per_batch=args.async_groups_per_batch,
+        stream_groups_per_batch=args.stream_groups_per_batch,
+        stream_num_minibatches=args.stream_num_minibatches,
     )
     
     logger.info(f"Output directory: {output_dir}")

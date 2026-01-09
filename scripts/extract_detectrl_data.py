@@ -37,19 +37,62 @@ def is_suitable_for_training(sample):
     if word_count < 50:
         return False
     
-    # Accept academic and creative writing domains
+    # Accept academic, writing, and summary/review style domains
     data_type = sample.get('data_type', '')
-    accepted_domains = ['abstract', 'arxiv', 'essay', 'writing', 'story', 'article', 'review']
+    accepted_domains = [
+        'abstract',
+        'arxiv',
+        'essay',
+        'writing',
+        'story',
+        'article',
+        'review',
+        'document',
+        'content',
+        'xsum',
+        'yelp',
+        'summary',
+        'news',
+    ]
     
     return any(domain in data_type.lower() for domain in accepted_domains)
 
 
-def extract_pairs_from_detectrl(detectrl_dir, max_samples=5000, seed=42):
+def _collect_detectrl_files(task_dirs):
+    """Collect DetectRL files to use across multiple task directories."""
+    include_patterns = [
+        'multi_domains_*_train.json',
+        'multi_domains_*_test.json',
+        'multi_llms_*_train.json',
+        'multi_llms_*_test.json',
+    ]
+    exclude_keywords = ['attack', 'attacks', 'perturbation', 'paraphrase', 'prompt_attacks', 'data_mixing']
+
+    files = []
+    for task_dir in task_dirs:
+        task_path = Path(task_dir)
+        if not task_path.exists():
+            print(f"⚠️  Task dir not found: {task_dir}")
+            continue
+        for pattern in include_patterns:
+            files.extend(task_path.glob(pattern))
+
+    filtered = []
+    for path in files:
+        name = path.name.lower()
+        if any(keyword in name for keyword in exclude_keywords):
+            continue
+        filtered.append(path)
+
+    return sorted(set(filtered))
+
+
+def extract_pairs_from_detectrl(task_dirs, max_samples=5000, seed=42):
     """
     Extract human-AI pairs from DetectRL.
     
     Args:
-        detectrl_dir: Path to DetectRL/Benchmark/Tasks/Task1
+        task_dirs: List of DetectRL task directories to scan
         max_samples: Maximum number of pairs to extract
         seed: Random seed for reproducibility
     
@@ -57,15 +100,8 @@ def extract_pairs_from_detectrl(detectrl_dir, max_samples=5000, seed=42):
         List of dicts with 'human_text', 'ai_text', 'metadata'
     """
     random.seed(seed)
-    detectrl_path = Path(detectrl_dir)
-    
-    # Focus on academic domains and avoid attack datasets
-    preferred_files = [
-        'multi_domains_arxiv_train.json',
-        'multi_domains_arxiv_test.json',
-        'multi_domains_writing_prompt_train.json',
-        'multi_domains_writing_prompt_test.json',
-    ]
+    # Focus on multi-domain and multi-LLM files, avoid explicit attack datasets
+    preferred_files = _collect_detectrl_files(task_dirs)
     
     all_pairs = []
     stats = defaultdict(int)
@@ -73,11 +109,8 @@ def extract_pairs_from_detectrl(detectrl_dir, max_samples=5000, seed=42):
     print(f"Extracting from DetectRL...")
     print("=" * 60)
     
-    for filename in preferred_files:
-        filepath = detectrl_path / filename
-        if not filepath.exists():
-            print(f"⚠️  Skipping {filename} (not found)")
-            continue
+    for filepath in preferred_files:
+        filename = filepath.name
         
         data = load_detectrl_file(filepath)
         print(f"\nProcessing {filename}...")
@@ -150,7 +183,13 @@ def main():
     parser.add_argument(
         '--detectrl-dir',
         default='data/raw/DetectRL/Benchmark/Tasks/Task1',
-        help='Path to DetectRL Task1 directory'
+        help='Path to DetectRL Task1 directory (ignored if --task-dirs is set)'
+    )
+    parser.add_argument(
+        '--task-dirs',
+        nargs='+',
+        default=None,
+        help='Optional list of DetectRL task directories to scan'
     )
     parser.add_argument(
         '--output',
@@ -173,8 +212,9 @@ def main():
     args = parser.parse_args()
     
     # Extract pairs
+    task_dirs = args.task_dirs if args.task_dirs else [args.detectrl_dir]
     pairs = extract_pairs_from_detectrl(
-        args.detectrl_dir,
+        task_dirs,
         max_samples=args.max_samples,
         seed=args.seed
     )

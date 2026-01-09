@@ -116,3 +116,11 @@ logging:
   save_interval: 500  # Save every N batches
   num_groups_to_log: 4  # Detailed logs
   debug_mode: false
+
+# Parallel training (Tinker async/stream)
+parallel:
+  mode: "stream_minibatch"  # sync | stream_minibatch | async
+  stream_minibatch:
+    num_minibatches: 4  # Pipelined minibatches per substep
+  async:
+    max_steps_off_policy: 2

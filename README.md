@@ -566,6 +566,8 @@ This section explains how to use StealthRL for training, evaluation, and visuali
 
 StealthRL supports three training modes based on your needs:
 
+**Note on configs**: `python -m stealthrl.tinker.train` currently reads CLI flags only. The `--config` flag is a placeholder and is not parsed yet. YAML configs are consumed by `scripts/train_ultrafast.py` (ultrafast) and serve as templates for other runs. Use `--group-size` to control rollouts per prompt.
+
 #### Option A: Ultra-Fast Training (2-4 hours, proof-of-concept)
 
 **Use case**: Quick iteration, testing pipeline, proof-of-concept results
@@ -640,6 +642,41 @@ python -m stealthrl.tinker.train \
 - `configs/tinker_stealthrl.yaml` - Full production (recommended for research)
 - `configs/tinker_transfer_in_ensemble.yaml` - Transfer experiment
 - `configs/ablations/*.yaml` - 5 ablation studies
+
+#### Parallelized Tinker Training (Async/Stream)
+
+Tinker performs best when requests are pipelined. Use the async or stream-minibatch modes to overlap sampling and optimization.
+
+**CLI flags (recommended for large runs):**
+```bash
+# Pipelined on-policy training (streamed minibatches)
+python -m stealthrl.tinker.train \
+  --config configs/tinker_stealthrl.yaml \
+  --data-path data/tinker_large \
+  --run-name full_ensemble_stream \
+  --training-mode stream_minibatch \
+  --stream-num-minibatches 4
+```
+
+```bash
+# Async off-policy training (use small max_steps_off_policy)
+python -m stealthrl.tinker.train \
+  --config configs/tinker_stealthrl.yaml \
+  --data-path data/tinker_large \
+  --run-name full_ensemble_async \
+  --training-mode async \
+  --async-max-steps-off-policy 2
+```
+
+**YAML (used by `scripts/train_ultrafast.py`):**
+```yaml
+parallel:
+  mode: "stream_minibatch"  # sync | stream_minibatch | async
+  stream_minibatch:
+    num_minibatches: 4
+  async:
+    max_steps_off_policy: 2
+```
 
 ### 2. Evaluation
 
@@ -863,13 +900,13 @@ tensorboard --logdir outputs/runs/full_ensemble_run/tensorboard --port 6006
 python scripts/prepare_tinker_data.py --synthetic --num-train 10 --output-dir data/test
 python -m stealthrl.tinker.train --data-path data/test --run-name test --num-epochs 1 --batch-size 2
 
-# Ultra-fast proof-of-concept (3.5 hours)
-python -m stealthrl.tinker.train --config configs/tinker_stealthrl_ultrafast.yaml --data-path data/tinker_large --run-name ultrafast
+# Ultra-fast proof-of-concept (3.5 hours, YAML-driven)
+python scripts/train_ultrafast.py
 
-# Full production training (6-8 hours)
+# Full production training (6-8 hours, template; --config not parsed yet)
 python -m stealthrl.tinker.train --config configs/tinker_stealthrl.yaml --data-path data/tinker_large --run-name production
 
-# Transfer experiment (3-4 hours)
+# Transfer experiment (3-4 hours, template; --config not parsed yet)
 python -m stealthrl.tinker.train --config configs/tinker_transfer_in_ensemble.yaml --data-path data/tinker_large --run-name transfer
 
 # Evaluate trained model
@@ -886,7 +923,7 @@ python scripts/run_esl_eval.py --eval-data data/processed/esl_native_test.jsonl 
 
 ## 📁 Configuration Files
 
-StealthRL uses YAML configuration files for all training settings. This enables zero-code experimentation—just modify YAML files to change hyperparameters, detectors, or reward weights.
+StealthRL includes YAML configuration templates in `configs/`. Today, `scripts/train_ultrafast.py` reads YAML directly; `stealthrl.tinker.train` still uses CLI flags and does not parse `--config` yet.
 
 ### Available Configurations
 
@@ -1340,6 +1377,18 @@ results/esl_fairness/
 - ✅ **Implementation verification** report
 - ✅ **Task 1 completion** (see `knowledge_base/task1/` for docs, `scripts/test_detectors*.py` for tests)
 - ✅ **Task 2 setup** (see `knowledge_base/task2/` for docs, `scripts/` for conversion scripts)
+
+### Build a Combined Dataset (No Duplicates, Target ESL Ratio)
+
+This script combines ESL and native sources without duplication and downsamples native data to hit a target ESL percentage.
+
+```bash
+python scripts/build_full_dataset.py \
+  --raw-dir data/raw \
+  --output-dir data/tinker_full_esl40_nodup \
+  --esl-percent 40 \
+  --detectrl-max 20000
+```
 
 ### 🔨 NEXT: Full Production Training Run
 
