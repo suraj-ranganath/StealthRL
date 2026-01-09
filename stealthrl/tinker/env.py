@@ -152,6 +152,14 @@ class StealthEnv(Env):
             "perplexity": reward_result.get("perplexity", 0.0),
             "text_length": len(paraphrase_text),
         }
+        for key in (
+            "time/reward/total",
+            "time/reward/detector",
+            "time/reward/semantic",
+            "time/reward/perplexity",
+        ):
+            if key in reward_result:
+                metrics[key] = reward_result[key]
         
         return StepResult(
             reward=total_reward,

@@ -7,6 +7,7 @@ multi-objective rewards during RL training.
 """
 
 import logging
+import time
 from typing import Dict, Any
 import torch
 
@@ -176,25 +177,33 @@ class TinkerCompositeReward:
                 "length_penalty": 1.0,
             }
         
+        start_time = time.perf_counter()
+
         # Compute detector ensemble score
+        detector_start = time.perf_counter()
         detector_result = await self.detector_ensemble.compute(paraphrase_text)
+        detector_time = time.perf_counter() - detector_start
         detector_prob = detector_result["ensemble_prob"]  # P(AI | text)
         
         # R_det = 1 - P(AI) (higher is better = more human-like)
         detector_reward_raw = 1.0 - detector_prob
         
         # Compute semantic similarity
+        semantic_start = time.perf_counter()
         semantic_result = await self.semantic_sim.compute(
             text1=original_text,
             text2=paraphrase_text,
         )
+        semantic_time = time.perf_counter() - semantic_start
         semantic_sim = semantic_result["similarity"]
         
         # R_sem = max(0, sim - threshold) after normalization
         semantic_reward_raw = max(0.0, semantic_sim - self.semantic_min) if semantic_sim >= self.semantic_min else 0.0
         
         # Compute perplexity reward
+        perplexity_start = time.perf_counter()
         ppl_result = await self.ppl_reward.compute(paraphrase_text)
+        perplexity_time = time.perf_counter() - perplexity_start
         perplexity = ppl_result["perplexity"]
         ppl_reward_raw = ppl_result["reward"]
         
@@ -223,6 +232,8 @@ class TinkerCompositeReward:
             self.fairness_weight * fairness_penalty
         )
         
+        total_time = time.perf_counter() - start_time
+
         return {
             "total_reward": total_reward,
             "detector_reward": detector_reward,
@@ -233,6 +244,10 @@ class TinkerCompositeReward:
             "semantic_sim": semantic_sim,
             "perplexity": perplexity,
             "is_esl": float(is_esl),
+            "time/reward/total": total_time,
+            "time/reward/detector": detector_time,
+            "time/reward/semantic": semantic_time,
+            "time/reward/perplexity": perplexity_time,
         }
     
     def _normalize_detector(self, score: float) -> float:
