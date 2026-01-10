@@ -33,6 +33,46 @@ from torch.utils.tensorboard import SummaryWriter
 logger = logging.getLogger(__name__)
 
 
+def _enable_overlap_optim_step_requests() -> None:
+    """Overlap forward_backward and optim_step requests for better throughput."""
+    if getattr(rl_train, "_overlap_patch_applied", False):
+        return
+
+    async def train_step_overlap(
+        data_D: List[tinker.Datum],
+        training_client: tinker.TrainingClient,
+        learning_rate: float,
+        num_substeps: int,
+        loss_fn: Any,
+    ) -> List[torch.Tensor]:
+        batches_md = rl_train.split_list(data_D, min(num_substeps, len(data_D)))
+        training_logprobs_D: list[torch.Tensor] = []
+        for batch_d in batches_md:
+            fwd_bwd_future = await training_client.forward_backward_async(
+                list(map(rl_train.remove_mask, batch_d)),
+                loss_fn=loss_fn,
+            )
+            adam_params = tinker.AdamParams(
+                learning_rate=learning_rate,
+                beta1=0.9,
+                beta2=0.95,
+                eps=1e-8,
+            )
+            optim_future = await training_client.optim_step_async(adam_params)
+
+            fwd_bwd_result = await fwd_bwd_future.result_async()
+            for output in fwd_bwd_result.loss_fn_outputs:
+                training_logprobs_D.append(output["logprobs"].to_torch())
+
+            await optim_future.result_async()
+
+        return training_logprobs_D
+
+    rl_train.train_step = train_step_overlap
+    rl_train._overlap_patch_applied = True
+    logger.info("Enabled overlapped forward_backward/optim_step submissions.")
+
+
 class TensorBoardLogger:
     """Logger that writes to both JSON file and TensorBoard."""
     
@@ -955,6 +995,11 @@ async def main():
     logger.info(f"Output directory: {output_dir}")
     logger.info(f"Metrics will be saved to: {output_dir}/metrics.jsonl")
     logger.info(f"HTML logs will be saved to: {output_dir}/")
+
+    if training_mode in {"sync", "async"}:
+        _enable_overlap_optim_step_requests()
+    else:
+        logger.info("Stream minibatch mode: forward_backward/optim_step overlap not applied.")
     
     # Initialize trainer
     trainer = StealthRLTrainer(

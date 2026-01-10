@@ -668,6 +668,20 @@ python -m stealthrl.tinker.train \
   --async-max-steps-off-policy 2
 ```
 
+```bash
+# Full training with async (higher throughput)
+python -m stealthrl.tinker.train \
+  --config configs/tinker_stealthrl.yaml \
+  --data-path data/tinker_full_esl40_nodup \
+  --run-name esl40_full_async \
+  --num-epochs 5 \
+  --batch-size 64 \
+  --group-size 16 \
+  --training-mode async \
+  --async-groups-per-batch 64 \
+  --async-max-steps-off-policy 2
+```
+
 **YAML (used by `scripts/train_ultrafast.py`):**
 ```yaml
 parallel:
@@ -1388,6 +1402,18 @@ python scripts/build_full_dataset.py \
   --output-dir data/tinker_full_esl40_nodup \
   --esl-percent 40 \
   --detectrl-max 20000
+```
+
+**Common options:**
+```bash
+python scripts/build_full_dataset.py \
+  --raw-dir data/raw \
+  --output-dir data/tinker_full_esl40_nodup \
+  --esl-percent 40 \
+  --train-split 0.8 \
+  --max-total 25000 \
+  --detectrl-tasks Task1 Task2 \
+  --seed 42
 ```
 
 ### 🔨 NEXT: Full Production Training Run
