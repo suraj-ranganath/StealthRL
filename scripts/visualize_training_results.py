@@ -448,10 +448,20 @@ def generate_summary_stats(df: pd.DataFrame, output_dir: Path):
 
 def main():
     """Main visualization pipeline."""
-    # Path to metrics file
-    metrics_path = Path(__file__).parent.parent / "outputs" / "tinker_ultrafast" / "run_20251207_212110" / "metrics.jsonl"
-    output_dir = metrics_path.parent / "visualizations"
-    output_dir.mkdir(exist_ok=True)
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate training visualizations")
+    parser.add_argument(
+        "--run-dir",
+        type=str,
+        required=True,
+        help="Path to run directory containing metrics.jsonl",
+    )
+    args = parser.parse_args()
+
+    metrics_path = Path(args.run_dir) / "metrics.jsonl"
+    output_dir = Path(args.run_dir) / "visualizations"
+    output_dir.mkdir(parents=True, exist_ok=True)
     
     print("="*70)
     print("STEALTHRL TRAINING VISUALIZATION")
