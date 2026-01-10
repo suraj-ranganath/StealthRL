@@ -69,6 +69,8 @@ class StealthEnv(Env):
         self.renderer = renderer
         self.reward_fn = reward_fn
         self.convo_prefix = convo_prefix or []
+        self.last_paraphrase_text = ""
+        self.last_parse_success = False
         
     @property
     def stop_condition(self) -> StopCondition:
@@ -116,53 +118,16 @@ class StealthEnv(Env):
         message, parse_success = self.renderer.parse_response(action)
         paraphrase_text = message["content"]
         
-        # If parsing failed, return negative reward
-        if not parse_success or not paraphrase_text.strip():
-            return StepResult(
-                reward=-1.0,
-                episode_done=True,
-                next_observation=tinker.ModelInput.empty(),
-                next_stop_condition=self.stop_condition,
-                metrics={
-                    "parse_success": 0.0,
-                    "reward/total": -1.0,
-                },
-            )
-        
-        # Compute composite reward using reward function
-        reward_result = await self.reward_fn.compute(
-            original_text=self.ai_text,
-            paraphrase_text=paraphrase_text,
-            human_reference=self.human_reference,
-            domain=self.domain,
-            is_esl=self.is_esl,
-        )
-        
-        # Extract total reward and component metrics
-        total_reward = reward_result["total_reward"]
+        self.last_paraphrase_text = paraphrase_text
+        self.last_parse_success = bool(parse_success and paraphrase_text.strip())
+
         metrics = {
-            "parse_success": 1.0,
-            "reward/total": total_reward,
-            "reward/detector": reward_result.get("detector_reward", 0.0),
-            "reward/semantic": reward_result.get("semantic_reward", 0.0),
-            "reward/perplexity": reward_result.get("perplexity_reward", 0.0),
-            "reward/fairness": reward_result.get("fairness_reward", 0.0),
-            "detector_prob": reward_result.get("detector_prob", 0.5),
-            "semantic_sim": reward_result.get("semantic_sim", 0.0),
-            "perplexity": reward_result.get("perplexity", 0.0),
-            "text_length": len(paraphrase_text),
+            "parse_success": 1.0 if self.last_parse_success else 0.0,
+            "text_length": len(paraphrase_text) if self.last_parse_success else 0,
         }
-        for key in (
-            "time/reward/total",
-            "time/reward/detector",
-            "time/reward/semantic",
-            "time/reward/perplexity",
-        ):
-            if key in reward_result:
-                metrics[key] = reward_result[key]
-        
+
         return StepResult(
-            reward=total_reward,
+            reward=0.0,
             episode_done=True,
             next_observation=tinker.ModelInput.empty(),
             next_stop_condition=self.stop_condition,
@@ -213,4 +178,90 @@ class StealthEnvGroupBuilder(EnvGroupBuilder):
         could be used for comparing multiple paraphrases, but we
         leave this at 0 for now.
         """
-        return [(0.0, {}) for _ in trajectory_group]
+        results: List[tuple[float, Metrics]] = []
+        valid_indices: List[int] = []
+        originals: List[str] = []
+        paraphrases: List[str] = []
+        references: List[str] = []
+        domains: List[str] = []
+        esl_flags: List[bool] = []
+
+        for idx, env in enumerate(env_group):
+            env_obj = env
+            paraphrase_text = getattr(env_obj, "last_paraphrase_text", "")
+            parse_success = getattr(env_obj, "last_parse_success", False)
+            if not parse_success or not paraphrase_text.strip():
+                results.append(
+                    (
+                        -1.0,
+                        {
+                            "reward/total": -1.0,
+                            "reward/detector": 0.0,
+                            "reward/semantic": 0.0,
+                            "reward/perplexity": 0.0,
+                            "reward/fairness": 0.0,
+                            "detector_prob": 0.5,
+                            "semantic_sim": 0.0,
+                            "perplexity": 0.0,
+                            "text_length": 0,
+                        },
+                    )
+                )
+                continue
+
+            valid_indices.append(idx)
+            originals.append(env_obj.ai_text)
+            paraphrases.append(paraphrase_text)
+            references.append(env_obj.human_reference)
+            domains.append(env_obj.domain)
+            esl_flags.append(env_obj.is_esl)
+            results.append((0.0, {}))
+
+        if valid_indices:
+            if hasattr(self.reward_fn, "compute_batch"):
+                reward_results = await self.reward_fn.compute_batch(
+                    original_texts=originals,
+                    paraphrase_texts=paraphrases,
+                    human_references=references,
+                    domains=domains,
+                    is_esl_flags=esl_flags,
+                )
+            else:
+                reward_results = []
+                for original, paraphrase, reference, domain, is_esl in zip(
+                    originals, paraphrases, references, domains, esl_flags, strict=True
+                ):
+                    reward_results.append(
+                        await self.reward_fn.compute(
+                            original_text=original,
+                            paraphrase_text=paraphrase,
+                            human_reference=reference,
+                            domain=domain,
+                            is_esl=is_esl,
+                        )
+                    )
+
+            for idx, reward_result in zip(valid_indices, reward_results, strict=True):
+                total_reward = reward_result["total_reward"]
+                metrics = {
+                    "reward/total": total_reward,
+                    "reward/detector": reward_result.get("detector_reward", 0.0),
+                    "reward/semantic": reward_result.get("semantic_reward", 0.0),
+                    "reward/perplexity": reward_result.get("perplexity_reward", 0.0),
+                    "reward/fairness": reward_result.get("fairness_reward", 0.0),
+                    "detector_prob": reward_result.get("detector_prob", 0.5),
+                    "semantic_sim": reward_result.get("semantic_sim", 0.0),
+                    "perplexity": reward_result.get("perplexity", 0.0),
+                    "text_length": reward_result.get("text_length", 0),
+                }
+                for key in (
+                    "time/reward/total",
+                    "time/reward/detector",
+                    "time/reward/semantic",
+                    "time/reward/perplexity",
+                ):
+                    if key in reward_result:
+                        metrics[key] = reward_result[key]
+                results[idx] = (total_reward, metrics)
+
+        return results

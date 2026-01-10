@@ -144,6 +144,11 @@ class PerplexityReward:
             "reward": reward,
             "in_range": float(self.ppl_min <= perplexity <= self.ppl_max),
         }
+
+    async def compute_batch(self, texts: list[str]) -> Dict[str, Any]:
+        """Compute perplexity reward for a batch of texts."""
+        results = await asyncio.to_thread(self._compute_perplexity_batch, texts)
+        return results
     
     def _load_model(self):
         """Lazy load the model on first use using thread-safe cache."""
@@ -184,6 +189,60 @@ class PerplexityReward:
         except Exception as e:
             logger.error(f"Perplexity computation error: {e}")
             return self.ppl_target  # Return target on error
+
+    def _compute_perplexity_batch(self, texts: list[str]) -> Dict[str, Any]:
+        """Compute perplexity for a batch of texts."""
+        self._load_model()
+        if not texts:
+            return {"perplexities": [], "rewards": [], "in_range": []}
+
+        try:
+            with torch.no_grad():
+                encodings = self.tokenizer(
+                    texts,
+                    return_tensors="pt",
+                    truncation=True,
+                    padding=True,
+                    max_length=512,
+                ).to(self.device)
+                input_ids = encodings["input_ids"]
+                attention_mask = encodings["attention_mask"]
+
+                outputs = self.model(**encodings)
+                logits = outputs.logits[:, :-1, :]
+                labels = input_ids[:, 1:]
+                mask = attention_mask[:, 1:].float()
+
+                vocab_size = logits.size(-1)
+                loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
+                token_losses = loss_fct(
+                    logits.reshape(-1, vocab_size),
+                    labels.reshape(-1),
+                ).reshape(labels.size())
+
+                token_losses = token_losses * mask
+                token_counts = mask.sum(dim=1).clamp(min=1.0)
+                loss_per_sample = token_losses.sum(dim=1) / token_counts
+                perplexities = torch.exp(loss_per_sample).tolist()
+
+            rewards = [self._perplexity_to_reward(ppl) for ppl in perplexities]
+            in_range = [float(self.ppl_min <= ppl <= self.ppl_max) for ppl in perplexities]
+            return {
+                "perplexities": perplexities,
+                "rewards": rewards,
+                "in_range": in_range,
+            }
+
+        except Exception as e:
+            logger.error(f"Perplexity batch computation error: {e}")
+            perplexities = [self._compute_perplexity(text) for text in texts]
+            rewards = [self._perplexity_to_reward(ppl) for ppl in perplexities]
+            in_range = [float(self.ppl_min <= ppl <= self.ppl_max) for ppl in perplexities]
+            return {
+                "perplexities": perplexities,
+                "rewards": rewards,
+                "in_range": in_range,
+            }
     
     def _perplexity_to_reward(self, perplexity: float) -> float:
         """

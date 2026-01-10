@@ -629,6 +629,14 @@ class DetectorEnsemble:
             "ensemble_prob": ensemble_prob,
             "detector_scores": scores_dict,
         }
+
+    async def compute_batch(self, texts: List[str]) -> List[Dict[str, Any]]:
+        """Compute ensemble scores for a batch of texts."""
+        async def _compute_one(text: str) -> Dict[str, Any]:
+            async with self._semaphore:
+                return await self.compute(text)
+
+        return await asyncio.gather(*[_compute_one(text) for text in texts])
     
     def close(self):
         """Close cache connection."""

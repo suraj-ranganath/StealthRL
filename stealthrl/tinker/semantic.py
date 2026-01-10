@@ -124,6 +124,11 @@ class SemanticSimilarity:
             "similarity": similarity,
             "above_threshold": float(similarity >= self.threshold),
         }
+
+    async def compute_batch(self, texts1: list[str], texts2: list[str]) -> Dict[str, Any]:
+        """Compute semantic similarity for a batch of text pairs."""
+        similarities = await asyncio.to_thread(self._compute_similarity_batch, texts1, texts2)
+        return {"similarities": similarities}
     
     def _load_model(self):
         """Lazy load the model on first use using thread-safe cache."""
@@ -160,3 +165,18 @@ class SemanticSimilarity:
         except Exception as e:
             logger.error(f"Semantic similarity error: {e}")
             return 0.5  # Return neutral score on error
+
+    def _compute_similarity_batch(self, texts1: list[str], texts2: list[str]) -> list[float]:
+        """Compute cosine similarity for a batch of text pairs."""
+        self._load_model()
+        if len(texts1) != len(texts2):
+            raise ValueError("texts1 and texts2 must have the same length")
+
+        try:
+            embeddings1 = self.model.encode(texts1, convert_to_tensor=True)
+            embeddings2 = self.model.encode(texts2, convert_to_tensor=True)
+            similarities = F.cosine_similarity(embeddings1, embeddings2).tolist()
+            return [float((sim + 1.0) / 2.0) for sim in similarities]
+        except Exception as e:
+            logger.error(f"Semantic similarity batch error: {e}")
+            return [0.5 for _ in texts1]

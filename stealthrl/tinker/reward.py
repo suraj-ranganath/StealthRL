@@ -249,6 +249,117 @@ class TinkerCompositeReward:
             "time/reward/semantic": semantic_time,
             "time/reward/perplexity": perplexity_time,
         }
+
+    async def compute_batch(
+        self,
+        original_texts: list[str],
+        paraphrase_texts: list[str],
+        human_references: list[str],
+        domains: list[str],
+        is_esl_flags: list[bool],
+    ) -> list[Dict[str, Any]]:
+        """Compute composite rewards for a batch of paraphrases."""
+        start_time = time.perf_counter()
+
+        results: list[Dict[str, Any]] = []
+        valid_indices: list[int] = []
+        valid_originals: list[str] = []
+        valid_paraphrases: list[str] = []
+        valid_esl_flags: list[bool] = []
+
+        for idx, (original, paraphrase) in enumerate(zip(original_texts, paraphrase_texts, strict=True)):
+            para_len = len(paraphrase.split())
+            orig_len = len(original.split())
+            if para_len < 10 or (orig_len > 0 and para_len > 3 * orig_len):
+                results.append(
+                    {
+                        "total_reward": -0.5,
+                        "detector_reward": 0.0,
+                        "semantic_reward": 0.0,
+                        "perplexity_reward": 0.0,
+                        "fairness_reward": 0.0,
+                        "detector_prob": 0.5,
+                        "semantic_sim": 0.0,
+                        "perplexity": 0.0,
+                        "is_esl": float(is_esl_flags[idx]),
+                        "length_penalty": 1.0,
+                        "text_length": len(paraphrase),
+                    }
+                )
+            else:
+                results.append({})
+                valid_indices.append(idx)
+                valid_originals.append(original)
+                valid_paraphrases.append(paraphrase)
+                valid_esl_flags.append(is_esl_flags[idx])
+
+        if not valid_indices:
+            return results
+
+        detector_start = time.perf_counter()
+        detector_results = await self.detector_ensemble.compute_batch(valid_paraphrases)
+        detector_time = time.perf_counter() - detector_start
+
+        semantic_start = time.perf_counter()
+        semantic_results = await self.semantic_sim.compute_batch(valid_originals, valid_paraphrases)
+        semantic_time = time.perf_counter() - semantic_start
+        semantic_sims = semantic_results["similarities"]
+
+        perplexity_start = time.perf_counter()
+        perplexity_results = await self.ppl_reward.compute_batch(valid_paraphrases)
+        perplexity_time = time.perf_counter() - perplexity_start
+        perplexities = perplexity_results["perplexities"]
+        ppl_rewards_raw = perplexity_results["rewards"]
+
+        total_time = time.perf_counter() - start_time
+
+        for idx, detector_result in enumerate(detector_results):
+            detector_prob = detector_result["ensemble_prob"]
+            detector_reward_raw = 1.0 - detector_prob
+
+            semantic_sim = semantic_sims[idx]
+            semantic_reward_raw = max(0.0, semantic_sim - self.semantic_min) if semantic_sim >= self.semantic_min else 0.0
+
+            ppl_reward_raw = ppl_rewards_raw[idx]
+            perplexity = perplexities[idx]
+
+            fairness_penalty = detector_prob if valid_esl_flags[idx] else 0.0
+
+            if self.normalize_terms:
+                detector_reward = self._normalize_detector(detector_reward_raw)
+                semantic_reward = self._normalize_semantic(semantic_reward_raw)
+                ppl_reward = self._normalize_quality(ppl_reward_raw)
+            else:
+                detector_reward = detector_reward_raw
+                semantic_reward = semantic_reward_raw
+                ppl_reward = ppl_reward_raw
+
+            total_reward = (
+                self.detector_weight * detector_reward +
+                self.semantic_weight * semantic_reward +
+                self.perplexity_weight * ppl_reward -
+                self.fairness_weight * fairness_penalty
+            )
+
+            result = {
+                "total_reward": total_reward,
+                "detector_reward": detector_reward,
+                "semantic_reward": semantic_reward,
+                "perplexity_reward": ppl_reward,
+                "fairness_reward": -fairness_penalty,
+                "detector_prob": detector_prob,
+                "semantic_sim": semantic_sim,
+                "perplexity": perplexity,
+                "is_esl": float(valid_esl_flags[idx]),
+                "time/reward/total": total_time,
+                "time/reward/detector": detector_time,
+                "time/reward/semantic": semantic_time,
+                "time/reward/perplexity": perplexity_time,
+                "text_length": len(valid_paraphrases[idx]),
+            }
+            results[valid_indices[idx]] = result
+
+        return results
     
     def _normalize_detector(self, score: float) -> float:
         """
