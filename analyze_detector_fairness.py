@@ -19,10 +19,6 @@ from typing import Dict, List, Tuple
 
 from stealthrl.tinker.detectors import DetectorEnsemble, _default_device
 
-try:
-    from tqdm import tqdm
-except Exception:  # pragma: no cover - optional dependency
-    tqdm = None
 
 logger = logging.getLogger(__name__)
 
@@ -127,24 +123,13 @@ async def _score_texts(
     ensemble: DetectorEnsemble,
     batch_size: int,
     log_every: int,
-    label: str,
-    show_progress: bool,
 ) -> Dict[str, List[float]]:
     scores: Dict[str, List[float]] = {"ensemble": []}
     for name in ensemble.detectors:
         scores[name] = []
 
     total_batches = (len(texts) + batch_size - 1) // batch_size
-    batches = range(0, len(texts), batch_size)
-    if show_progress and tqdm is not None:
-        batches = tqdm(
-            batches,
-            total=total_batches,
-            desc=f"Scoring {label}",
-            unit="batch",
-        )
-
-    for i in batches:
+    for i in range(0, len(texts), batch_size):
         batch = texts[i:i + batch_size]
         results = await ensemble.compute_batch(batch)
         for res in results:
@@ -213,22 +198,8 @@ async def _run(args: argparse.Namespace) -> Dict[str, Dict[str, Dict[str, float 
             text_field,
         )
 
-        esl_scores = await _score_texts(
-            esl_texts,
-            ensemble,
-            args.batch_size,
-            args.log_every,
-            label=f"ESL ({text_field})",
-            show_progress=args.progress,
-        )
-        native_scores = await _score_texts(
-            native_texts,
-            ensemble,
-            args.batch_size,
-            args.log_every,
-            label=f"native ({text_field})",
-            show_progress=args.progress,
-        )
+        esl_scores = await _score_texts(esl_texts, ensemble, args.batch_size, args.log_every)
+        native_scores = await _score_texts(native_texts, ensemble, args.batch_size, args.log_every)
 
         field_results: Dict[str, Dict[str, float | int | None]] = {}
         for key in esl_scores:
@@ -276,7 +247,6 @@ def main() -> None:
     parser.add_argument("--cache-path", type=str, default=None, help="SQLite cache path")
     parser.add_argument("--prewarm", action="store_true", help="Preload detector models")
     parser.add_argument("--log-every", type=int, default=0, help="Log every N batches")
-    parser.add_argument("--progress", action="store_true", help="Show tqdm progress bars")
     parser.add_argument("--output-json", type=str, default=None, help="Write summary JSON to file")
     args = parser.parse_args()
 

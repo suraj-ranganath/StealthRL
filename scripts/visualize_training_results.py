@@ -345,6 +345,12 @@ def plot_reward_decomposition(df: pd.DataFrame, output_dir: Path):
 
 def plot_stability_metrics(df: pd.DataFrame, output_dir: Path):
     """Plot training stability and convergence metrics."""
+    time_col = None
+    for candidate in ("time/total", "time/training_loop/total", "time/train"):
+        if candidate in df.columns:
+            time_col = candidate
+            break
+
     fig, axes = plt.subplots(2, 2, figsize=(16, 12))
     fig.suptitle('Training Stability & Convergence Analysis', 
                  fontsize=20, fontweight='bold')
@@ -380,11 +386,22 @@ def plot_stability_metrics(df: pd.DataFrame, output_dir: Path):
     
     # 4. Training time per step
     ax = axes[1, 1]
-    ax.plot(df['step'], df['time/total'], 'red', linewidth=2)
-    ax.set_xlabel('Training Step', fontsize=14)
-    ax.set_ylabel('Time (seconds)', fontsize=14)
-    ax.set_title('Iteration Time\n(includes generation + training)', fontsize=16)
-    ax.grid(True, alpha=0.3)
+    if time_col:
+        ax.plot(df['step'], df[time_col], 'red', linewidth=2)
+        ax.set_xlabel('Training Step', fontsize=14)
+        ax.set_ylabel('Time (seconds)', fontsize=14)
+        ax.set_title('Iteration Time\n(includes generation + training)', fontsize=16)
+        ax.grid(True, alpha=0.3)
+    else:
+        ax.axis('off')
+        ax.text(
+            0.5,
+            0.5,
+            "No time metrics found",
+            ha="center",
+            va="center",
+            fontsize=14,
+        )
     
     plt.tight_layout()
     plt.savefig(output_dir / 'stability_metrics.png', dpi=300, bbox_inches='tight')
@@ -394,6 +411,12 @@ def plot_stability_metrics(df: pd.DataFrame, output_dir: Path):
 
 def generate_summary_stats(df: pd.DataFrame, output_dir: Path):
     """Generate summary statistics table."""
+    time_col = None
+    for candidate in ("time/total", "time/training_loop/total", "time/train"):
+        if candidate in df.columns:
+            time_col = candidate
+            break
+
     summary = {
         'Metric': [],
         'Initial': [],
@@ -439,7 +462,10 @@ def generate_summary_stats(df: pd.DataFrame, output_dir: Path):
         f.write(summary_df.to_string(index=False))
         f.write("\n\n")
         f.write(f"Total Training Steps: {len(df)}\n")
-        f.write(f"Total Training Time: {df['time/total'].sum() / 3600:.2f} hours\n")
+        if time_col:
+            f.write(f"Total Training Time: {df[time_col].sum() / 3600:.2f} hours\n")
+        else:
+            f.write("Total Training Time: n/a (time metric missing)\n")
         f.write(f"Final Learning Rate: {df['optim/lr'].iloc[-1]}\n")
     
     print(f"✓ Saved summary statistics to {output_dir / 'training_summary.csv'}")
