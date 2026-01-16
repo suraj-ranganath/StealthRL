@@ -93,6 +93,13 @@ Artifacts:
 - `outputs/runs/data/esl_fast_detect_gpt/visualizations/training_summary.csv`
 - `outputs/runs/data/esl_fast_detect_gpt/visualizations/training_summary.txt`
 
+Preview graphs:
+
+![Training curves](outputs/runs/data/esl_fast_detect_gpt/visualizations/training_curves.png)
+![Pareto frontiers](outputs/runs/data/esl_fast_detect_gpt/visualizations/pareto_frontiers.png)
+![Reward decomposition](outputs/runs/data/esl_fast_detect_gpt/visualizations/reward_decomposition.png)
+![Stability metrics](outputs/runs/data/esl_fast_detect_gpt/visualizations/stability_metrics.png)
+
 Key metrics (112 steps):
 - Total reward: 0.4038 → 0.5565 (best 2.2486, mean 0.3999)
 - Detector evasion: -0.2056 → -0.1845 (best 1.8287)
