@@ -85,13 +85,20 @@ def load_model_cached(
         logger.info(f"🔄 Loading {model_name} (first time, will be cached)...")
         
         try:
-            tokenizer = AutoTokenizer.from_pretrained(model_name)
+            # Check if model requires trust_remote_code (Falcon models)
+            trust_remote_code = "falcon" in model_name.lower()
+            
+            tokenizer = AutoTokenizer.from_pretrained(
+                model_name,
+                trust_remote_code=trust_remote_code
+            )
             
             if model_type == "causal_lm":
                 # Load directly to device, avoid device_map to prevent meta tensor issues
                 model = AutoModelForCausalLM.from_pretrained(
                     model_name,
                     torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+                    trust_remote_code=trust_remote_code
                 ).to(device)
             else:
                 # Sequence classification
@@ -101,6 +108,7 @@ def load_model_cached(
                 model = AutoModelForSequenceClassification.from_pretrained(
                     model_name,
                     torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+                    trust_remote_code=trust_remote_code,
                     **kwargs
                 ).to(device)
             
@@ -269,20 +277,41 @@ class FastDetectGPTDetector(BaseDetector):
     
     Uses log-probability curvature to detect AI-generated text.
     Lower perplexity and flatter curvature suggest AI generation.
+    
+    Supported models:
+    - gpt2: Lightweight (500MB), fastest
+    - gpt-neo-2.7B: EleutherAI/gpt-neo-2.7B (default in Fast-DetectGPT)
+    - falcon-7b: tiiuae/falcon-7b (best accuracy per Fast-DetectGPT paper)
     """
+    
+    # Model name mappings (short name -> HuggingFace path)
+    MODEL_PATHS = {
+        "gpt2": "gpt2",
+        "gpt-neo-2.7B": "EleutherAI/gpt-neo-2.7B",
+        "falcon-7b": "tiiuae/falcon-7b",
+    }
     
     def __init__(self, cache: DetectorCache, model_name: str = "gpt2", device: str = None):
         super().__init__("fast_detectgpt", cache)
-        self.model_name = model_name
+        
+        # Resolve model name to full path
+        if model_name in self.MODEL_PATHS:
+            self.model_name = self.MODEL_PATHS[model_name]
+            self.model_short_name = model_name
+        else:
+            # Allow custom model paths
+            self.model_name = model_name
+            self.model_short_name = model_name
+        
         self.device = device or _default_device()
         self.model = None
         self.tokenizer = None
-        logger.info(f"Initialized Fast-DetectGPT detector with {model_name} on {self.device}")
+        logger.info(f"Initialized Fast-DetectGPT detector with {self.model_short_name} on {self.device}")
     
     def _load_model(self):
         """Lazy load the model on first use with singleton caching."""
         if self.model is None:
-            logger.info(f"Loading {self.model_name} for Fast-DetectGPT...")
+            logger.info(f"Loading {self.model_short_name} for Fast-DetectGPT...")
             self.model, self.tokenizer = load_model_cached(
                 model_name=self.model_name,
                 model_type="causal_lm",
@@ -292,7 +321,11 @@ class FastDetectGPTDetector(BaseDetector):
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
             
-            logger.info(f"✓ Fast-DetectGPT model loaded on {self.device}")
+            # Set trust_remote_code for Falcon models
+            if "falcon" in self.model_name.lower():
+                self.tokenizer.trust_remote_code = True
+            
+            logger.info(f"✓ {self.model_short_name} loaded on {self.device}")
     
     async def _compute_score(self, text: str) -> float:
         """
@@ -538,6 +571,11 @@ class DetectorEnsemble:
         cache_path: str | None = None,
         device: str | None = None,
         max_concurrent: int = 4,
+        # Detector-specific model options
+        fast_detectgpt_model: str = "gpt2",
+        ghostbuster_model: str = "roberta-base",
+        binoculars_performer: str = "gpt2",
+        binoculars_observer: str = "gpt2-medium",
     ):
         """
         Initialize detector ensemble.
@@ -548,6 +586,10 @@ class DetectorEnsemble:
             cache_path: Path to SQLite cache file
             device: Device to run detectors on (cuda/cpu)
             max_concurrent: Maximum concurrent detector evaluations
+            fast_detectgpt_model: Model for Fast-DetectGPT ("gpt2", "gpt-neo-2.7B", "falcon-7b")
+            ghostbuster_model: Model for Ghostbuster ("roberta-base", "roberta-base-openai-detector")
+            binoculars_performer: Performer model for Binoculars
+            binoculars_observer: Observer model for Binoculars
         """
         self.detector_names = detector_names
         self.device = device or _default_device()
@@ -559,15 +601,28 @@ class DetectorEnsemble:
         # Create semaphore for rate limiting
         self._semaphore = asyncio.Semaphore(max_concurrent)
         
-        # Initialize detectors
+        # Initialize detectors with specified models
         self.detectors = {}
         for name in detector_names:
             if name == "fast_detectgpt":
-                self.detectors[name] = FastDetectGPTDetector(self.cache, device=self.device)
+                self.detectors[name] = FastDetectGPTDetector(
+                    self.cache,
+                    model_name=fast_detectgpt_model,
+                    device=self.device
+                )
             elif name == "ghostbuster":
-                self.detectors[name] = GhostbusterDetector(self.cache, device=self.device)
+                self.detectors[name] = GhostbusterDetector(
+                    self.cache,
+                    model_name=ghostbuster_model,
+                    device=self.device
+                )
             elif name == "binoculars":
-                self.detectors[name] = BinocularsDetector(self.cache, device=self.device)
+                self.detectors[name] = BinocularsDetector(
+                    self.cache,
+                    performer_model=binoculars_performer,
+                    observer_model=binoculars_observer,
+                    device=self.device
+                )
             else:
                 logger.warning(f"Unknown detector: {name}, skipping")
         

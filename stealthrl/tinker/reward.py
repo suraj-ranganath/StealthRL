@@ -40,6 +40,12 @@ class TinkerCompositeReward:
         detector_weights: Dict[str, float] | None = None,
         detector_cache_path: str | None = None,
         
+        # Detector model selection (NEW)
+        fast_detectgpt_model: str = "gpt2",
+        ghostbuster_model: str = "roberta-base",
+        binoculars_performer: str = "gpt2",
+        binoculars_observer: str = "gpt2-medium",
+        
         # Semantic config
         semantic_model: str = "intfloat/e5-large-v2",
         semantic_threshold: float = 0.90,
@@ -70,6 +76,10 @@ class TinkerCompositeReward:
             detector_names: List of detector names to use
             detector_weights: Optional custom weights for each detector
             detector_cache_path: Path to SQLite cache for detector scores
+            fast_detectgpt_model: Model for Fast-DetectGPT ("gpt2", "gpt-neo-2.7B", "falcon-7b")
+            ghostbuster_model: Model for Ghostbuster
+            binoculars_performer: Performer model for Binoculars
+            binoculars_observer: Observer model for Binoculars
             semantic_model: E5 model for semantic similarity
             semantic_threshold: Minimum acceptable semantic similarity
             ppl_model: Model for perplexity computation
@@ -93,6 +103,10 @@ class TinkerCompositeReward:
             detector_names=detector_names,
             detector_weights=detector_weights,
             cache_path=detector_cache_path,
+            fast_detectgpt_model=fast_detectgpt_model,
+            ghostbuster_model=ghostbuster_model,
+            binoculars_performer=binoculars_performer,
+            binoculars_observer=binoculars_observer,
         )
         
         # Pre-warm detector models to avoid lazy loading during training

@@ -893,6 +893,16 @@ async def main():
         reward_cfg["detector_weights"] = detectors_config.get("weights", None)
         if detectors_config.get("cache_path"):
             reward_cfg["detector_cache_path"] = detectors_config.get("cache_path")
+        
+        # Pass through detector-specific model options
+        if detectors_config.get("fast_detectgpt_model"):
+            reward_cfg["fast_detectgpt_model"] = detectors_config.get("fast_detectgpt_model")
+        if detectors_config.get("ghostbuster_model"):
+            reward_cfg["ghostbuster_model"] = detectors_config.get("ghostbuster_model")
+        if detectors_config.get("binoculars_performer"):
+            reward_cfg["binoculars_performer"] = detectors_config.get("binoculars_performer")
+        if detectors_config.get("binoculars_observer"):
+            reward_cfg["binoculars_observer"] = detectors_config.get("binoculars_observer")
 
     semantic_config = reward_config.get("semantic", {})
     semantic_model = semantic_config.get("model_name") or semantic_config.get("model")

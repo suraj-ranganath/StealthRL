@@ -69,6 +69,13 @@ reward:
     weights:  # Optional custom weights (null = equal)
       fast_detectgpt: 0.5
       ghostbuster: 0.5
+    
+    # Detector-specific settings
+    fast_detectgpt_model: "gpt-neo-2.7B"  # Options: "gpt2" (500MB, fast), "gpt-neo-2.7B" (5.5GB, default), "falcon-7b" (14GB, best)
+    ghostbuster_model: "roberta-base"  # Options: "roberta-base" (fallback), "roberta-base-openai-detector" (trained)
+    binoculars_performer: "gpt2"  # Options: "gpt2", "gpt2-medium"
+    binoculars_observer: "gpt2-medium"  # Options: "gpt2", "gpt2-medium"
+    
     cache_path: "cache/detectors.db"
   
   # Semantic similarity (E5)
