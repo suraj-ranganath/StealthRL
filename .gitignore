@@ -78,3 +78,17 @@ htmlcov/
 
 # Documentation
 docs/_build/
+
+# Model caches (too large)
+cache/.locks/
+cache/models--*/
+
+# Datasets (too large)
+data/mage/
+data/tinker/
+
+# Large markdown files generated during exploration
+DETECTOR_BASELINE.md
+DETECTOR_INTEGRATION_SUMMARY.md
+DETECTOR_VALIDATION_RESULTS.md
+RL_DATA_FLOW_ANALYSIS.md
