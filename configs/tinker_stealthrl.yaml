@@ -55,11 +55,10 @@ curriculum:
 
 # Reward function configuration
 reward:
-  # Weights (α, β, γ, δ)
+  # Weights (α, β, γ)
   detector_weight: 1.0  # α: Detector evasion
   semantic_weight: 1.0  # β: Semantic similarity
-  perplexity_weight: 0.5  # γ: Fluency
-  fairness_weight: 0.2  # δ: ESL fairness
+  perplexity_weight: 0.5  # γ: Fluency (removed fairness penalty)
   
   # Detector ensemble (VALIDATED DETECTORS - Jan 2026)
   detectors:
@@ -111,8 +110,10 @@ reward:
 
 # Dataset settings
 dataset:
-  path: "data/tinker"
-  max_examples: null  # Optional limit for debugging
+  path: "data/mage"  # MAGE dataset (60K+, 14 domains, HuggingFace format)
+  max_examples: null  # Limit total examples per split (null=unlimited, set to 200-1000 for testing)
+  max_train_examples: null  # Optional: limit only train split
+  max_test_examples: null   # Optional: limit only test split
   seed: 42
   few_shot: "standard"  # "standard" | null | custom
 

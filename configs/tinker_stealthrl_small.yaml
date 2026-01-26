@@ -1,0 +1,131 @@
+# StealthRL Training Configuration - Small/Test Run (200 examples)
+# Use this for quick testing and debugging
+
+# Model settings
+model:
+  name: "Qwen/Qwen3-4B-Instruct-2507"
+  renderer: "qwen3"
+
+# LoRA settings
+lora:
+  rank: 32
+  alpha: 32
+  dropout: 0.05
+  target_modules: null
+
+# Training hyperparameters (same as full, just fewer epochs for quick test)
+training:
+  learning_rate: 2.8e-4
+  batch_size: 16
+  group_size: 4
+  num_epochs: 1  # Single epoch for quick test
+  num_substeps: 1
+  max_tokens: 512
+
+# Sampling settings
+sampling:
+  temperature: 1.0
+  temperature_schedule: "constant"
+  temperature_decay: 0.95
+  top_p: 0.95
+
+# GRPO settings
+grpo:
+  normalize_advantages: true
+  advantage_clip: 10.0
+  reward_clip: null
+  remove_constant_reward_groups: true
+
+# KL divergence penalty
+kl:
+  penalty_coef: 0.01
+  target: null
+  adapt_rate: 0.1
+
+# All-negative group handling
+all_negative:
+  min_reward: 0.01
+  downweight: 0.5
+
+# Curriculum learning
+curriculum:
+  enabled: false
+  start_quantile: 0.7
+  end_quantile: 0.0
+  steps: 1000
+
+# Reward function configuration
+reward:
+  # Weights (α, β, γ)
+  detector_weight: 1.0
+  semantic_weight: 1.0
+  perplexity_weight: 0.5
+  
+  # Component toggles (disable for quick testing)
+  enable_semantic: false  # DISABLED for quick testing - no broken pipe errors
+  enable_perplexity: false  # DISABLED for quick testing - focus on detector only
+  detectors:
+    names:
+      - "roberta_openai"
+      - "fast_detectgpt"
+    weights:
+      roberta_openai: 0.6
+      fast_detectgpt: 0.4
+    
+    fast_detectgpt_model: "gpt-neo-2.7B"
+    roberta_openai_model: "roberta-large-openai-detector"
+    ghostbuster_model: "roberta-base"
+    binoculars_performer: "gpt2"
+    binoculars_observer: "gpt2-medium"
+    
+    cache_path: "cache/detectors.db"
+  
+  # Semantic similarity
+  semantic:
+    model: "intfloat/e5-large-v2"
+    threshold: 0.90
+  
+  # BERTScore (optional)
+  bertscore:
+    enabled: false
+    model_type: "roberta-large"
+    batch_size: 16
+    num_layers: null
+  
+  # Perplexity
+  perplexity:
+    model: "gpt2"
+    min: 5.0
+    max: 80.0
+    target: 30.0
+  
+  # Normalization
+  normalization:
+    enabled: true
+    detector_zscore: true
+    semantic_min: 0.90
+    quality_min: 0.80
+
+# Dataset settings - LIMITED FOR TESTING
+dataset:
+  path: "data/mage"
+  max_examples: 200  # LIMIT TO 200 EXAMPLES FOR QUICK TEST
+  seed: 42
+  few_shot: "standard"
+
+# Logging
+logging:
+  path: "outputs/tinker"
+  interval: 10
+  eval_interval: 100
+  save_interval: 500
+  num_groups_to_log: 4
+  debug_mode: true  # Enable debug logging
+
+# Parallel training
+parallel:
+  mode: "stream_minibatch"
+  stream_minibatch:
+    num_minibatches: 4
+  async:
+    max_steps_off_policy: 2
