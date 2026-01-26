@@ -316,16 +316,25 @@ class TinkerCompositeReward:
         detector_results = await self.detector_ensemble.compute_batch(valid_paraphrases)
         detector_time = time.perf_counter() - detector_start
 
-        semantic_start = time.perf_counter()
-        semantic_results = await self.semantic_sim.compute_batch(valid_originals, valid_paraphrases)
-        semantic_time = time.perf_counter() - semantic_start
-        semantic_sims = semantic_results["similarities"]
+        # Compute semantic similarity only if enabled
+        semantic_time = 0.0
+        semantic_sims = [1.0] * len(valid_paraphrases)  # Default: perfect similarity
+        if self.enable_semantic and self.semantic_sim is not None:
+            semantic_start = time.perf_counter()
+            semantic_results = await self.semantic_sim.compute_batch(valid_originals, valid_paraphrases)
+            semantic_time = time.perf_counter() - semantic_start
+            semantic_sims = semantic_results["similarities"]
 
-        perplexity_start = time.perf_counter()
-        perplexity_results = await self.ppl_reward.compute_batch(valid_paraphrases)
-        perplexity_time = time.perf_counter() - perplexity_start
-        perplexities = perplexity_results["perplexities"]
-        ppl_rewards_raw = perplexity_results["rewards"]
+        # Compute perplexity only if enabled
+        perplexity_time = 0.0
+        perplexities = [30.0] * len(valid_paraphrases)  # Default: target perplexity
+        ppl_rewards_raw = [1.0] * len(valid_paraphrases)  # Default: perfect score
+        if self.enable_perplexity and self.ppl_reward is not None:
+            perplexity_start = time.perf_counter()
+            perplexity_results = await self.ppl_reward.compute_batch(valid_paraphrases)
+            perplexity_time = time.perf_counter() - perplexity_start
+            perplexities = perplexity_results["perplexities"]
+            ppl_rewards_raw = perplexity_results["rewards"]
 
         total_time = time.perf_counter() - start_time
 

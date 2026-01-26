@@ -884,6 +884,8 @@ async def main():
         "detector_weight": float(reward_config.get("detector_weight", 1.0)),
         "semantic_weight": float(reward_config.get("semantic_weight", 1.0)),
         "perplexity_weight": float(reward_config.get("perplexity_weight", 0.5)),
+        "enable_semantic": bool(reward_config.get("enable_semantic", True)),
+        "enable_perplexity": bool(reward_config.get("enable_perplexity", True)),
     }
 
     detectors_config = reward_config.get("detectors", {})
