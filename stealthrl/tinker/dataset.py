@@ -30,27 +30,28 @@ logger = logging.getLogger(__name__)
 @dataclass
 class StealthRLExample:
     """
-    Single StealthRL training example.
+    Single StealthRL training example (DEFENSIVE MODE).
     
     Attributes:
-        ai_text: AI-generated text to paraphrase
-        human_reference: Human-written reference for similarity baseline
-        domain: Text domain (academic, informal, news, etc.)
-        is_esl: Whether text exhibits ESL characteristics
-        metadata: Additional metadata (model family, detector scores, etc.)
+        ai_text: AI-generated text (kept for compatibility)
+        human_reference: Human-written text to paraphrase (INPUT)
+        domain: Text domain (inferred from source)
+        metadata: Additional metadata (source, etc.)
+    
+    DEFENSIVE USE CASE: Model learns to paraphrase human text to avoid false positives.
     """
     ai_text: str
     human_reference: str
     domain: str
-    is_esl: bool
     metadata: Dict[str, Any]
 
 
 class StealthRLDataset(RLDataset):
     """
-    RLDataset for StealthRL training.
+    RLDataset for StealthRL training (DEFENSIVE MODE).
     
     Manages batching of StealthRL examples and creation of environment groups.
+    Model learns to paraphrase human text to avoid false positive detection.
     """
     
     def __init__(
@@ -109,7 +110,6 @@ class StealthRLDataset(RLDataset):
                 ai_text=example.ai_text,
                 human_reference=example.human_reference,
                 domain=example.domain,
-                is_esl=example.is_esl,
                 renderer=self.renderer,
                 reward_fn=self.reward_fn,
                 num_envs=self.group_size,
@@ -198,28 +198,42 @@ class StealthRLDatasetBuilder(RLDatasetBuilder):
     
     def _load_examples(self, split: Literal["train", "test"]) -> List[StealthRLExample]:
         """
-        Load examples from JSONL file.
+        Load examples from data source (supports both JSONL files and HuggingFace datasets).
         
-        Expected format:
+        For JSONL format (Tinker):
         {
             "ai_text": "...",
             "human_reference": "...",
             "domain": "academic"|"informal"|"news",
-            "is_esl": true|false,
             "metadata": {...}
         }
+        
+        For MAGE dataset (HuggingFace):
+        - Loaded from data/mage/test split
+        - Has columns: [text, label, src]
+        - label: 1=human, 0=AI
+        - src: source identifier (e.g., "eli5_human", "gpt3_machine")
         """
         data_path = Path(self.data_path)
+        
+        # Try JSONL first (Tinker format)
         file_path = data_path / f"{split}.jsonl"
+        if file_path.exists():
+            return self._load_jsonl_examples(file_path, split)
         
-        if not file_path.exists():
-            logger.warning(f"Data file not found: {file_path}")
-            return []
+        # Try HuggingFace dataset (MAGE format)
+        if data_path.name == "mage":
+            return self._load_mage_examples(split)
         
+        logger.warning(f"No data found for path: {data_path}")
+        return []
+    
+    def _load_jsonl_examples(self, file_path: Path, split: str) -> List[StealthRLExample]:
+        """Load examples from JSONL file (Tinker format)."""
         examples = []
         with open(file_path, 'r') as f:
             for line_num, line in enumerate(f, 1):
-                # Check limits: use specific limit if set, otherwise fall back to max_examples
+                # Check limits
                 limit = None
                 if split == "train" and self.max_train_examples:
                     limit = self.max_train_examples
@@ -237,7 +251,6 @@ class StealthRLDatasetBuilder(RLDatasetBuilder):
                         ai_text=data["ai_text"],
                         human_reference=data.get("human_reference", ""),
                         domain=data.get("domain", "unknown"),
-                        is_esl=data.get("is_esl", False),
                         metadata=data.get("metadata", {}),
                     )
                     examples.append(example)
@@ -245,6 +258,84 @@ class StealthRLDatasetBuilder(RLDatasetBuilder):
                     logger.warning(f"Failed to parse line {line_num} in {file_path}: {e}")
         
         return examples
+    
+    def _load_mage_examples(self, split: str) -> List[StealthRLExample]:
+        """Load examples from MAGE HuggingFace dataset."""
+        try:
+            from datasets import load_from_disk
+        except ImportError:
+            logger.error("datasets package required for MAGE loading. Install with: pip install datasets")
+            return []
+        
+        try:
+            # MAGE is typically in data/mage/test (single test split)
+            ds = load_from_disk('data/mage/test')
+            examples = []
+            
+            # Determine limit
+            limit = None
+            if split == "train" and self.max_train_examples:
+                limit = self.max_train_examples
+            elif split == "test" and self.max_test_examples:
+                limit = self.max_test_examples
+            elif self.max_examples:
+                limit = self.max_examples
+            
+            # Extract domain from src field
+            # Format: "eli5_human", "gpt3_davinci_002", etc.
+            def extract_domain(src: str) -> str:
+                # Take everything before first underscore or up to first number
+                import re
+                match = re.match(r'([a-z_]+)', src)
+                if match:
+                    base = match.group(1).rstrip('_')
+                    # Map known domains
+                    domain_map = {
+                        'eli5': 'informal',
+                        'hswag': 'reasoning',
+                        'xsum': 'news',
+                        'roct': 'reading',
+                        'wp': 'creative',
+                        'yelp': 'review',
+                        'sci_gen': 'academic',
+                        'tldr': 'news',
+                        'squad': 'reading',
+                        'cmv': 'social',
+                        'cnn': 'news',
+                        'imdb': 'review',
+                        'pubmed': 'academic',
+                        'dialogsum': 'dialogue',
+                    }
+                    return domain_map.get(base, base)
+                return 'unknown'
+            
+            for i, item in enumerate(ds):
+                if limit and len(examples) >= limit:
+                    break
+                
+                # MAGE format: {text, label, src}
+                # label: 1=human, 0=AI
+                text = item.get('text', '')
+                label = item.get('label', 0)
+                src = item.get('src', 'unknown')
+                
+                # Only use human-written text for DEFENSIVE training
+                if label == 1:
+                    # Create synthetic AI text as placeholder (not used in DEFENSIVE mode)
+                    example = StealthRLExample(
+                        ai_text="[PLACEHOLDER - NOT USED IN DEFENSIVE MODE]",
+                        human_reference=text,
+                        domain=extract_domain(src),
+                        metadata={'source': src, 'original_label': int(label)},
+                    )
+                    examples.append(example)
+            
+            logger.info(f"Loaded {len(examples)} human examples from MAGE dataset")
+            return examples
+            
+        except Exception as e:
+            logger.error(f"Failed to load MAGE dataset: {e}")
+            return []
     
     @staticmethod
     def _standard_fewshot_prefix() -> List[renderers.Message]:

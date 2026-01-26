@@ -897,6 +897,8 @@ async def main():
         # Pass through detector-specific model options
         if detectors_config.get("fast_detectgpt_model"):
             reward_cfg["fast_detectgpt_model"] = detectors_config.get("fast_detectgpt_model")
+        if detectors_config.get("roberta_openai_model"):
+            reward_cfg["roberta_openai_model"] = detectors_config.get("roberta_openai_model")
         if detectors_config.get("ghostbuster_model"):
             reward_cfg["ghostbuster_model"] = detectors_config.get("ghostbuster_model")
         if detectors_config.get("binoculars_performer"):

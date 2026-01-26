@@ -22,9 +22,8 @@ class TinkerCompositeReward:
     - R_det: Detector evasion (weighted ensemble)
     - R_sem: Semantic similarity (E5 encoder)
     - R_ppl: Fluency/perplexity (frozen LM)
-    - R_fair: ESL fairness penalty
     
-    Total: R = α*R_det + β*R_sem + γ*R_ppl + δ*R_fair
+    Total: R = α*R_det + β*R_sem + γ*R_ppl
     """
     
     def __init__(
@@ -33,15 +32,15 @@ class TinkerCompositeReward:
         detector_weight: float = 1.0,
         semantic_weight: float = 1.0,
         perplexity_weight: float = 0.5,
-        fairness_weight: float = 0.2,
         
         # Detector config
         detector_names: list[str] = ["fast_detectgpt", "ghostbuster"],
         detector_weights: Dict[str, float] | None = None,
         detector_cache_path: str | None = None,
         
-        # Detector model selection (NEW)
-        fast_detectgpt_model: str = "gpt2",
+        # Detector model selection (VALIDATED MODELS - Jan 2026)
+        fast_detectgpt_model: str = "gpt-neo-2.7B",  # AUROC: 0.691
+        roberta_openai_model: str = "roberta-large-openai-detector",  # AUROC: 0.891
         ghostbuster_model: str = "roberta-base",
         binoculars_performer: str = "gpt2",
         binoculars_observer: str = "gpt2-medium",
@@ -56,9 +55,6 @@ class TinkerCompositeReward:
         ppl_max: float = 80.0,
         ppl_target: float = 30.0,
         
-        # Fairness config
-        fairness_mode: str = "esl_penalty",
-        
         # Normalization config (from Session 4 refinements)
         normalize_terms: bool = True,
         detector_zscore: bool = True,
@@ -72,11 +68,11 @@ class TinkerCompositeReward:
             detector_weight: Weight for detector evasion term (α)
             semantic_weight: Weight for semantic similarity term (β)
             perplexity_weight: Weight for perplexity term (γ)
-            fairness_weight: Weight for fairness term (δ)
             detector_names: List of detector names to use
             detector_weights: Optional custom weights for each detector
             detector_cache_path: Path to SQLite cache for detector scores
             fast_detectgpt_model: Model for Fast-DetectGPT ("gpt2", "gpt-neo-2.7B", "falcon-7b")
+            roberta_openai_model: Model for RoBERTa OpenAI detector (validated: "roberta-large-openai-detector")
             ghostbuster_model: Model for Ghostbuster
             binoculars_performer: Performer model for Binoculars
             binoculars_observer: Observer model for Binoculars
@@ -86,7 +82,6 @@ class TinkerCompositeReward:
             ppl_min: Minimum perplexity for normalization
             ppl_max: Maximum perplexity for normalization
             ppl_target: Target perplexity (human-like)
-            fairness_mode: Fairness computation mode
             normalize_terms: Whether to normalize reward terms
             detector_zscore: Whether to z-score normalize detector scores
             semantic_min: Minimum semantic similarity threshold
@@ -95,7 +90,6 @@ class TinkerCompositeReward:
         self.detector_weight = detector_weight
         self.semantic_weight = semantic_weight
         self.perplexity_weight = perplexity_weight
-        self.fairness_weight = fairness_weight
         
         # Initialize detector ensemble
         from stealthrl.tinker.detectors import DetectorEnsemble
@@ -104,6 +98,7 @@ class TinkerCompositeReward:
             detector_weights=detector_weights,
             cache_path=detector_cache_path,
             fast_detectgpt_model=fast_detectgpt_model,
+            roberta_openai_model=roberta_openai_model,
             ghostbuster_model=ghostbuster_model,
             binoculars_performer=binoculars_performer,
             binoculars_observer=binoculars_observer,
@@ -129,9 +124,7 @@ class TinkerCompositeReward:
             ppl_target=ppl_target,
         )
         
-        # Fairness config
-        self.fairness_mode = fairness_mode
-        
+
         # Normalization config
         self.normalize_terms = normalize_terms
         self.detector_zscore = detector_zscore
@@ -145,7 +138,7 @@ class TinkerCompositeReward:
         
         logger.info(f"Initialized TinkerCompositeReward with weights: "
                    f"det={detector_weight}, sem={semantic_weight}, "
-                   f"ppl={perplexity_weight}, fair={fairness_weight}")
+                   f"ppl={perplexity_weight}")
     
     async def compute(
         self,
@@ -153,7 +146,6 @@ class TinkerCompositeReward:
         paraphrase_text: str,
         human_reference: str,
         domain: str,
-        is_esl: bool,
     ) -> Dict[str, Any]:
         """
         Compute composite reward for a paraphrase.
@@ -163,7 +155,7 @@ class TinkerCompositeReward:
             paraphrase_text: Generated paraphrase
             human_reference: Human reference text
             domain: Text domain
-            is_esl: Whether text is ESL-style
+
         
         Returns:
             Dictionary with total_reward and component metrics
@@ -175,7 +167,6 @@ class TinkerCompositeReward:
                 "detector_reward": 0.0,
                 "semantic_reward": 0.0,
                 "perplexity_reward": 0.0,
-                "fairness_reward": 0.0,
             }
         
         # Length check (reject too short/long)
@@ -221,13 +212,6 @@ class TinkerCompositeReward:
         perplexity = ppl_result["perplexity"]
         ppl_reward_raw = ppl_result["reward"]
         
-        # Compute fairness penalty (per-sample for ESL)
-        if is_esl:
-            # F' = detector_prob * 1[ESL] (penalize high detection on ESL)
-            fairness_penalty = detector_prob
-        else:
-            fairness_penalty = 0.0
-        
         # Apply normalization if enabled
         if self.normalize_terms:
             detector_reward = self._normalize_detector(detector_reward_raw)
@@ -242,8 +226,7 @@ class TinkerCompositeReward:
         total_reward = (
             self.detector_weight * detector_reward +
             self.semantic_weight * semantic_reward +
-            self.perplexity_weight * ppl_reward -
-            self.fairness_weight * fairness_penalty
+            self.perplexity_weight * ppl_reward
         )
         
         total_time = time.perf_counter() - start_time
@@ -253,11 +236,9 @@ class TinkerCompositeReward:
             "detector_reward": detector_reward,
             "semantic_reward": semantic_reward,
             "perplexity_reward": ppl_reward,
-            "fairness_reward": -fairness_penalty,
             "detector_prob": detector_prob,
             "semantic_sim": semantic_sim,
             "perplexity": perplexity,
-            "is_esl": float(is_esl),
             "time/reward/total": total_time,
             "time/reward/detector": detector_time,
             "time/reward/semantic": semantic_time,
@@ -270,7 +251,6 @@ class TinkerCompositeReward:
         paraphrase_texts: list[str],
         human_references: list[str],
         domains: list[str],
-        is_esl_flags: list[bool],
     ) -> list[Dict[str, Any]]:
         """Compute composite rewards for a batch of paraphrases."""
         start_time = time.perf_counter()
@@ -279,7 +259,6 @@ class TinkerCompositeReward:
         valid_indices: list[int] = []
         valid_originals: list[str] = []
         valid_paraphrases: list[str] = []
-        valid_esl_flags: list[bool] = []
 
         for idx, (original, paraphrase) in enumerate(zip(original_texts, paraphrase_texts, strict=True)):
             para_len = len(paraphrase.split())
@@ -291,11 +270,9 @@ class TinkerCompositeReward:
                         "detector_reward": 0.0,
                         "semantic_reward": 0.0,
                         "perplexity_reward": 0.0,
-                        "fairness_reward": 0.0,
                         "detector_prob": 0.5,
                         "semantic_sim": 0.0,
                         "perplexity": 0.0,
-                        "is_esl": float(is_esl_flags[idx]),
                         "length_penalty": 1.0,
                         "text_length": len(paraphrase),
                     }
@@ -305,7 +282,6 @@ class TinkerCompositeReward:
                 valid_indices.append(idx)
                 valid_originals.append(original)
                 valid_paraphrases.append(paraphrase)
-                valid_esl_flags.append(is_esl_flags[idx])
 
         if not valid_indices:
             return results
@@ -337,8 +313,6 @@ class TinkerCompositeReward:
             ppl_reward_raw = ppl_rewards_raw[idx]
             perplexity = perplexities[idx]
 
-            fairness_penalty = detector_prob if valid_esl_flags[idx] else 0.0
-
             if self.normalize_terms:
                 detector_reward = self._normalize_detector(detector_reward_raw)
                 semantic_reward = self._normalize_semantic(semantic_reward_raw)
@@ -351,8 +325,7 @@ class TinkerCompositeReward:
             total_reward = (
                 self.detector_weight * detector_reward +
                 self.semantic_weight * semantic_reward +
-                self.perplexity_weight * ppl_reward -
-                self.fairness_weight * fairness_penalty
+                self.perplexity_weight * ppl_reward
             )
 
             result = {
@@ -360,11 +333,9 @@ class TinkerCompositeReward:
                 "detector_reward": detector_reward,
                 "semantic_reward": semantic_reward,
                 "perplexity_reward": ppl_reward,
-                "fairness_reward": -fairness_penalty,
                 "detector_prob": detector_prob,
                 "semantic_sim": semantic_sim,
                 "perplexity": perplexity,
-                "is_esl": float(valid_esl_flags[idx]),
                 "time/reward/total": total_time,
                 "time/reward/detector": detector_time,
                 "time/reward/semantic": semantic_time,

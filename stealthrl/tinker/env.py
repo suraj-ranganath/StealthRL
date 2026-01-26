@@ -28,16 +28,15 @@ logger = logging.getLogger(__name__)
 
 class StealthEnv(Env):
     """
-    RL environment for StealthRL text paraphrasing.
+    RL environment for StealthRL text paraphrasing (DEFENSIVE MODE).
     
-    The agent receives an AI-generated text and metadata (domain, ESL flag),
-    then generates a paraphrase. The reward is computed using:
-    - R_det: Detector evasion (weighted ensemble of detectors)
-    - R_sem: Semantic similarity to original (E5 encoder)
+    The agent receives human-written text and learns to paraphrase
+    it to avoid false positive detection as AI-generated. The reward is computed using:
+    - R_det: Detector evasion (lower detector scores = more human-like)
+    - R_sem: Semantic similarity to original human text (E5 encoder)
     - R_ppl: Fluency/perplexity (frozen LM, penalize extremes)
-    - R_fair: ESL fairness penalty
     
-    Total reward: R = α*R_det + β*R_sem + γ*R_ppl + δ*R_fair
+    Total reward: R = α*R_det + β*R_sem + γ*R_ppl
     """
     
     def __init__(
@@ -45,27 +44,27 @@ class StealthEnv(Env):
         ai_text: str,
         human_reference: str,
         domain: str,
-        is_esl: bool,
         renderer: renderers.Renderer,
         reward_fn,  # Will be CompositeReward instance
         convo_prefix: List[renderers.Message] | None = None,
     ):
         """
-        Initialize StealthRL environment.
+        Initialize StealthRL environment (DEFENSIVE MODE).
         
         Args:
-            ai_text: The AI-generated text to paraphrase
-            human_reference: Human-written reference text (for similarity baseline)
+            ai_text: AI-generated text (kept for potential negative examples, not used in prompt)
+            human_reference: Human-written text to paraphrase (INPUT - this is what model sees)
             domain: Domain of text (academic, informal, etc.)
-            is_esl: Whether text is ESL-style (for fairness evaluation)
+
             renderer: Tinker renderer for formatting prompts
             reward_fn: Composite reward function instance
             convo_prefix: Optional conversation prefix (few-shot examples)
+        
+        DEFENSIVE USE CASE: Model learns to paraphrase human text to avoid false positives.
         """
         self.ai_text = ai_text
         self.human_reference = human_reference
         self.domain = domain
-        self.is_esl = is_esl
         self.renderer = renderer
         self.reward_fn = reward_fn
         self.convo_prefix = convo_prefix or []
@@ -81,8 +80,8 @@ class StealthEnv(Env):
         """
         Return initial observation with prompt.
         
-        The prompt instructs the model to paraphrase the AI text while
-        maintaining semantic meaning and quality.
+        The prompt instructs the model to paraphrase the HUMAN text while
+        maintaining semantic meaning and quality, to help avoid false positive detection.
         """
         # Build prompt with instruction and AI text
         prompt_messages = self.convo_prefix + [
@@ -96,11 +95,11 @@ class StealthEnv(Env):
         return observation, self.stop_condition
     
     def _build_paraphrase_prompt(self) -> str:
-        """Build the paraphrase instruction prompt."""
+        """Build the paraphrase instruction prompt (uses HUMAN text as input)."""
         return (
             f"Please paraphrase the following text while maintaining its meaning "
             f"and ensuring it reads naturally:\n\n"
-            f"{self.ai_text}\n\n"
+            f"{self.human_reference}\n\n"
             f"Paraphrased text:"
         )
     
@@ -147,7 +146,6 @@ class StealthEnvGroupBuilder(EnvGroupBuilder):
     ai_text: str
     human_reference: str
     domain: str
-    is_esl: bool
     renderer: renderers.Renderer
     reward_fn: Any  # CompositeReward instance
     num_envs: int
@@ -160,7 +158,6 @@ class StealthEnvGroupBuilder(EnvGroupBuilder):
                 ai_text=self.ai_text,
                 human_reference=self.human_reference,
                 domain=self.domain,
-                is_esl=self.is_esl,
                 renderer=self.renderer,
                 reward_fn=self.reward_fn,
                 convo_prefix=self.convo_prefix,
@@ -184,7 +181,6 @@ class StealthEnvGroupBuilder(EnvGroupBuilder):
         paraphrases: List[str] = []
         references: List[str] = []
         domains: List[str] = []
-        esl_flags: List[bool] = []
 
         for idx, env in enumerate(env_group):
             env_obj = env
@@ -199,7 +195,6 @@ class StealthEnvGroupBuilder(EnvGroupBuilder):
                             "reward/detector": 0.0,
                             "reward/semantic": 0.0,
                             "reward/perplexity": 0.0,
-                            "reward/fairness": 0.0,
                             "detector_prob": 0.5,
                             "semantic_sim": 0.0,
                             "perplexity": 0.0,
@@ -210,11 +205,10 @@ class StealthEnvGroupBuilder(EnvGroupBuilder):
                 continue
 
             valid_indices.append(idx)
-            originals.append(env_obj.ai_text)
+            originals.append(env_obj.human_reference)  # DEFENSIVE: Compare to human text
             paraphrases.append(paraphrase_text)
-            references.append(env_obj.human_reference)
+            references.append(env_obj.ai_text)  # ai_text now acts as negative example (optional)
             domains.append(env_obj.domain)
-            esl_flags.append(env_obj.is_esl)
             results.append((0.0, {}))
 
         if valid_indices:
@@ -224,12 +218,11 @@ class StealthEnvGroupBuilder(EnvGroupBuilder):
                     paraphrase_texts=paraphrases,
                     human_references=references,
                     domains=domains,
-                    is_esl_flags=esl_flags,
                 )
             else:
                 reward_results = []
-                for original, paraphrase, reference, domain, is_esl in zip(
-                    originals, paraphrases, references, domains, esl_flags, strict=True
+                for original, paraphrase, reference, domain in zip(
+                    originals, paraphrases, references, domains, strict=True
                 ):
                     reward_results.append(
                         await self.reward_fn.compute(
@@ -237,7 +230,6 @@ class StealthEnvGroupBuilder(EnvGroupBuilder):
                             paraphrase_text=paraphrase,
                             human_reference=reference,
                             domain=domain,
-                            is_esl=is_esl,
                         )
                     )
 
@@ -248,7 +240,6 @@ class StealthEnvGroupBuilder(EnvGroupBuilder):
                     "reward/detector": reward_result.get("detector_reward", 0.0),
                     "reward/semantic": reward_result.get("semantic_reward", 0.0),
                     "reward/perplexity": reward_result.get("perplexity_reward", 0.0),
-                    "reward/fairness": reward_result.get("fairness_reward", 0.0),
                     "detector_prob": reward_result.get("detector_prob", 0.5),
                     "semantic_sim": reward_result.get("semantic_sim", 0.0),
                     "perplexity": reward_result.get("perplexity", 0.0),

@@ -273,15 +273,18 @@ class BaseDetector:
 
 class FastDetectGPTDetector(BaseDetector):
     """
-    Fast-DetectGPT detector using curvature-based detection.
+    Fast-DetectGPT detector using official implementation.
     
-    Uses log-probability curvature to detect AI-generated text.
-    Lower perplexity and flatter curvature suggest AI generation.
+    Uses sampling discrepancy (curvature-based detection) from the official
+    Fast-DetectGPT paper: https://github.com/baoguangsheng/fast-detect-gpt
     
     Supported models:
     - gpt2: Lightweight (500MB), fastest
     - gpt-neo-2.7B: EleutherAI/gpt-neo-2.7B (default in Fast-DetectGPT)
     - falcon-7b: tiiuae/falcon-7b (best accuracy per Fast-DetectGPT paper)
+    
+    The detector uses sampling discrepancy analytic method which is much faster
+    than the original DetectGPT perturbation-based approach (340x speedup).
     """
     
     # Model name mappings (short name -> HuggingFace path)
@@ -292,8 +295,6 @@ class FastDetectGPTDetector(BaseDetector):
     }
     
     def __init__(self, cache: DetectorCache, model_name: str = "gpt2", device: str = None):
-        super().__init__("fast_detectgpt", cache)
-        
         # Resolve model name to full path
         if model_name in self.MODEL_PATHS:
             self.model_name = self.MODEL_PATHS[model_name]
@@ -303,15 +304,50 @@ class FastDetectGPTDetector(BaseDetector):
             self.model_name = model_name
             self.model_short_name = model_name
         
+        # Include model name in cache key to prevent cross-model cache pollution
+        super().__init__(f"fast_detectgpt_{self.model_short_name}", cache)
+        
         self.device = device or _default_device()
         self.model = None
         self.tokenizer = None
         logger.info(f"Initialized Fast-DetectGPT detector with {self.model_short_name} on {self.device}")
     
+    @staticmethod
+    def _get_sampling_discrepancy_analytic(logits_ref, logits_score, labels):
+        """
+        Official Fast-DetectGPT analytic sampling discrepancy criterion.
+        From: https://github.com/baoguangsheng/fast-detect-gpt
+        
+        This is the core algorithm that makes Fast-DetectGPT 340x faster than DetectGPT.
+        """
+        import torch
+        
+        assert logits_ref.shape[0] == 1
+        assert logits_score.shape[0] == 1
+        assert labels.shape[0] == 1
+        
+        # Handle vocabulary size mismatch
+        if logits_ref.size(-1) != logits_score.size(-1):
+            vocab_size = min(logits_ref.size(-1), logits_score.size(-1))
+            logits_ref = logits_ref[:, :, :vocab_size]
+            logits_score = logits_score[:, :, :vocab_size]
+        
+        labels = labels.unsqueeze(-1) if labels.ndim == logits_score.ndim - 1 else labels
+        lprobs_score = torch.log_softmax(logits_score, dim=-1)
+        probs_ref = torch.softmax(logits_ref, dim=-1)
+        log_likelihood = lprobs_score.gather(dim=-1, index=labels).squeeze(-1)
+        mean_ref = (probs_ref * lprobs_score).sum(dim=-1)
+        var_ref = (probs_ref * torch.square(lprobs_score)).sum(dim=-1) - torch.square(mean_ref)
+        discrepancy = (log_likelihood.sum(dim=-1) - mean_ref.sum(dim=-1)) / var_ref.sum(dim=-1).sqrt()
+        discrepancy = discrepancy.mean()
+        return discrepancy.item()
+    
     def _load_model(self):
-        """Lazy load the model on first use with singleton caching."""
+        """Lazy load the model using our cached models with official Fast-DetectGPT algorithm."""
         if self.model is None:
             logger.info(f"Loading {self.model_short_name} for Fast-DetectGPT...")
+            
+            # Use our existing model cache (models already downloaded!)
             self.model, self.tokenizer = load_model_cached(
                 model_name=self.model_name,
                 model_type="causal_lm",
@@ -320,10 +356,6 @@ class FastDetectGPTDetector(BaseDetector):
             
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
-            
-            # Set trust_remote_code for Falcon models
-            if "falcon" in self.model_name.lower():
-                self.tokenizer.trust_remote_code = True
             
             logger.info(f"✓ {self.model_short_name} loaded on {self.device}")
     
@@ -336,14 +368,121 @@ class FastDetectGPTDetector(BaseDetector):
         return await asyncio.to_thread(self._compute_score_sync, text)
     
     def _compute_score_sync(self, text: str) -> float:
-        """Synchronous computation of Fast-DetectGPT score."""
+        """Synchronous computation using official Fast-DetectGPT algorithm."""
         import torch
         
         # Load model if not already loaded
         self._load_model()
         
         try:
-            # Tokenize
+            # Tokenize text (official Fast-DetectGPT method)
+            tokenized = self.tokenizer(
+                text,
+                truncation=True,
+                return_tensors="pt",
+                padding=True,
+                return_token_type_ids=False
+            ).to(self.device)
+            
+            labels = tokenized.input_ids[:, 1:]
+            
+            # Compute logits using the model
+            with torch.no_grad():
+                logits = self.model(**tokenized).logits[:, :-1]
+                
+                # For white-box setting, use same model for sampling and scoring
+                # Calculate sampling discrepancy (official Fast-DetectGPT criterion)
+                crit = self._get_sampling_discrepancy_analytic(logits, logits, labels)
+                
+                # Convert criterion to probability [0, 1]
+                # Positive criterion -> AI-generated (high score)
+                # Negative criterion -> Human-written (low score)
+                # 
+                # Scale the criterion for better separation
+                # Typical range: -3 to +3 for the criterion
+                # Use sigmoid with scaling to map to [0, 1]
+                scaled_crit = crit * 0.5  # Scale down to avoid saturation
+                score = torch.sigmoid(torch.tensor(scaled_crit)).item()
+                
+                return float(max(0.0, min(1.0, score)))
+        
+        except Exception as e:
+            logger.error(f"Fast-DetectGPT error: {e}")
+            return 0.5  # Return neutral score on error
+
+
+class RoBERTaOpenAIDetector(BaseDetector):
+    """
+    RoBERTa-based OpenAI detector for AI-generated text.
+    
+    Uses fine-tuned RoBERTa models from OpenAI specifically trained
+    for detecting GPT-2 and GPT-3 generated text.
+    
+    Supported models:
+    - roberta-base-openai-detector: Smaller, faster (125M params)
+    - roberta-large-openai-detector: Larger, more accurate (355M params)
+    """
+    
+    MODEL_PATHS = {
+        "roberta-base-openai-detector": "roberta-base-openai-detector",
+        "roberta-large-openai-detector": "roberta-large-openai-detector",
+    }
+    
+    def __init__(self, cache: DetectorCache, model_name: str = "roberta-large-openai-detector", device: str = None):
+        # Resolve model name
+        if model_name in self.MODEL_PATHS:
+            self.model_name = self.MODEL_PATHS[model_name]
+            self.model_short_name = model_name
+        else:
+            self.model_name = model_name
+            self.model_short_name = model_name
+        
+        super().__init__(f"roberta_openai_{self.model_short_name}", cache)
+        self.device = device or _default_device()
+        self.model = None
+        self.tokenizer = None
+        logger.info(f"Initialized RoBERTa OpenAI detector with {self.model_short_name} on {self.device}")
+    
+    def _load_model(self):
+        """Lazy load the fine-tuned RoBERTa model."""
+        if self.model is None:
+            logger.info(f"Loading {self.model_short_name} for RoBERTa OpenAI detector...")
+            
+            from transformers import AutoTokenizer, AutoModelForSequenceClassification
+            import torch
+            
+            try:
+                # Load from HuggingFace
+                self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+                self.model = AutoModelForSequenceClassification.from_pretrained(
+                    self.model_name,
+                    cache_dir="cache"
+                )
+                self.model.to(self.device)
+                self.model.eval()
+                
+                logger.info(f"✓ {self.model_short_name} loaded on {self.device}")
+            except Exception as e:
+                logger.error(f"Failed to load {self.model_name}: {e}")
+                raise
+    
+    async def _compute_score(self, text: str) -> float:
+        """
+        Compute RoBERTa OpenAI detector score.
+        
+        Returns probability in [0, 1] where higher = more likely AI-generated.
+        """
+        return await asyncio.to_thread(self._compute_score_sync, text)
+    
+    def _compute_score_sync(self, text: str) -> float:
+        """Synchronous computation of RoBERTa score."""
+        import torch
+        
+        # Load model if not already loaded
+        self._load_model()
+        
+        try:
+            # Tokenize with truncation
             inputs = self.tokenizer(
                 text,
                 return_tensors="pt",
@@ -352,20 +491,22 @@ class FastDetectGPTDetector(BaseDetector):
                 padding=True
             ).to(self.device)
             
-            # Compute log probability
+            # Get prediction
             with torch.no_grad():
-                outputs = self.model(**inputs, labels=inputs["input_ids"])
-                loss = outputs.loss.item()
+                outputs = self.model(**inputs)
+                logits = outputs.logits
                 
-                # Lower loss (higher probability) suggests AI-generated
-                # Map loss to probability using sigmoid
-                # Typical human text: loss ~3-5, AI text: loss ~2-3
-                score = torch.sigmoid(torch.tensor((4.0 - loss) * 0.5)).item()
+                # Apply softmax to get probabilities
+                probs = torch.softmax(logits, dim=-1)
+                
+                # The roberta-*-openai-detector models output: [Fake/AI, Real/Human]
+                # We want probability of AI-generated (class 0 for these models)
+                score = probs[0, 0].item()
                 
                 return float(max(0.0, min(1.0, score)))
         
         except Exception as e:
-            logger.error(f"Fast-DetectGPT error: {e}")
+            logger.error(f"RoBERTa OpenAI detector error: {e}")
             return 0.5  # Return neutral score on error
 
 
@@ -573,6 +714,7 @@ class DetectorEnsemble:
         max_concurrent: int = 4,
         # Detector-specific model options
         fast_detectgpt_model: str = "gpt2",
+        roberta_openai_model: str = "roberta-large-openai-detector",
         ghostbuster_model: str = "roberta-base",
         binoculars_performer: str = "gpt2",
         binoculars_observer: str = "gpt2-medium",
@@ -587,6 +729,7 @@ class DetectorEnsemble:
             device: Device to run detectors on (cuda/cpu)
             max_concurrent: Maximum concurrent detector evaluations
             fast_detectgpt_model: Model for Fast-DetectGPT ("gpt2", "gpt-neo-2.7B", "falcon-7b")
+            roberta_openai_model: Model for RoBERTa OpenAI detector ("roberta-large-openai-detector")
             ghostbuster_model: Model for Ghostbuster ("roberta-base", "roberta-base-openai-detector")
             binoculars_performer: Performer model for Binoculars
             binoculars_observer: Observer model for Binoculars
@@ -594,6 +737,7 @@ class DetectorEnsemble:
         self.detector_names = detector_names
         self.device = device or _default_device()
         self.max_concurrent = max_concurrent
+        self.roberta_openai_model = roberta_openai_model
         
         # Initialize cache
         self.cache = DetectorCache(cache_path)
@@ -608,6 +752,13 @@ class DetectorEnsemble:
                 self.detectors[name] = FastDetectGPTDetector(
                     self.cache,
                     model_name=fast_detectgpt_model,
+                    device=self.device
+                )
+            elif name == "roberta_openai":
+                # RoBERTa-large-openai-detector (VALIDATED: AUROC 0.891)
+                self.detectors[name] = RoBERTaOpenAIDetector(
+                    self.cache,
+                    model_name=getattr(self, 'roberta_openai_model', 'roberta-large-openai-detector'),
                     device=self.device
                 )
             elif name == "ghostbuster":
