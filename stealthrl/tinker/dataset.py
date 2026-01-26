@@ -268,8 +268,15 @@ class StealthRLDatasetBuilder(RLDatasetBuilder):
             return []
         
         try:
-            # MAGE is typically in data/mage/test (single test split)
-            ds = load_from_disk('data/mage/test')
+            # Map training split to MAGE split
+            # MAGE has: train (319K), validation (57K), test (61K)
+            mage_split = {
+                "train": "train",
+                "test": "validation",  # Use validation for eval (smaller than test, balanced)
+            }.get(split, split)
+            
+            # Load from appropriate split
+            ds = load_from_disk(f'data/mage/{mage_split}')
             examples = []
             
             # Determine limit
@@ -319,18 +326,17 @@ class StealthRLDatasetBuilder(RLDatasetBuilder):
                 label = item.get('label', 0)
                 src = item.get('src', 'unknown')
                 
-                # Only use human-written text for DEFENSIVE training
-                if label == 1:
-                    # Create synthetic AI text as placeholder (not used in DEFENSIVE mode)
+                # Use AI-generated text for RL training (optimize for evasion)
+                if label == 0:
                     example = StealthRLExample(
-                        ai_text="[PLACEHOLDER - NOT USED IN DEFENSIVE MODE]",
-                        human_reference=text,
+                        ai_text=text,
+                        human_reference=text,  # Will be used in reward for similarity
                         domain=extract_domain(src),
                         metadata={'source': src, 'original_label': int(label)},
                     )
                     examples.append(example)
             
-            logger.info(f"Loaded {len(examples)} human examples from MAGE dataset")
+            logger.info(f"Loaded {len(examples)} AI-generated examples from MAGE dataset")
             return examples
             
         except Exception as e:

@@ -117,18 +117,55 @@ class SemanticSimilarity:
         Returns:
             Dictionary with similarity score and metrics
         """
-        # Run in thread pool to avoid blocking
-        similarity = await asyncio.to_thread(self._compute_similarity, text1, text2)
-        
-        return {
-            "similarity": similarity,
-            "above_threshold": float(similarity >= self.threshold),
-        }
+        try:
+            # Load model if not already loaded
+            self._load_model()
+            
+            # Encode texts (run synchronously, model is already on correct device)
+            embeddings = self.model.encode([text1, text2], convert_to_tensor=True)
+            
+            # Compute cosine similarity
+            similarity = F.cosine_similarity(embeddings[0:1], embeddings[1:2]).item()
+            
+            # Map [-1, 1] to [0, 1]
+            similarity_normalized = (similarity + 1.0) / 2.0
+            
+            return {
+                "similarity": similarity_normalized,
+                "above_threshold": float(similarity_normalized >= self.threshold),
+            }
+        except Exception as e:
+            logger.error(f"Semantic similarity batch error: {e}")
+            # Return neutral score on error (don't fail training)
+            return {
+                "similarity": 0.5,
+                "above_threshold": 0.0,
+            }
 
     async def compute_batch(self, texts1: list[str], texts2: list[str]) -> Dict[str, Any]:
         """Compute semantic similarity for a batch of text pairs."""
-        similarities = await asyncio.to_thread(self._compute_similarity_batch, texts1, texts2)
-        return {"similarities": similarities}
+        try:
+            if len(texts1) != len(texts2):
+                raise ValueError("texts1 and texts2 must have the same length")
+            
+            # Load model if not already loaded
+            self._load_model()
+            
+            # Encode texts
+            embeddings1 = self.model.encode(texts1, convert_to_tensor=True)
+            embeddings2 = self.model.encode(texts2, convert_to_tensor=True)
+            
+            # Compute cosine similarities
+            similarities = F.cosine_similarity(embeddings1, embeddings2).tolist()
+            
+            # Map [-1, 1] to [0, 1]
+            similarities_normalized = [float((sim + 1.0) / 2.0) for sim in similarities]
+            
+            return {"similarities": similarities_normalized}
+        except Exception as e:
+            logger.error(f"Semantic similarity batch error: {e}")
+            # Return neutral scores on error
+            return {"similarities": [0.5 for _ in texts1]}
     
     def _load_model(self):
         """Lazy load the model on first use using thread-safe cache."""
@@ -137,46 +174,3 @@ class SemanticSimilarity:
             # Use cached singleton loader (thread-safe)
             self.model = load_semantic_model_cached(self.model_name, self.device)
             logger.info(f"✓ Semantic similarity model loaded on {self.device}")
-    
-    def _compute_similarity(self, text1: str, text2: str) -> float:
-        """
-        Compute cosine similarity (synchronous).
-        
-        Args:
-            text1: First text
-            text2: Second text
-        
-        Returns:
-            Cosine similarity [0, 1]
-        """
-        # Load model if not already loaded
-        self._load_model()
-        
-        try:
-            # Encode texts
-            embeddings = self.model.encode([text1, text2], convert_to_tensor=True)
-            
-            # Compute cosine similarity
-            similarity = F.cosine_similarity(embeddings[0:1], embeddings[1:2]).item()
-            
-            # Map [-1, 1] to [0, 1]
-            return (similarity + 1.0) / 2.0
-        
-        except Exception as e:
-            logger.error(f"Semantic similarity error: {e}")
-            return 0.5  # Return neutral score on error
-
-    def _compute_similarity_batch(self, texts1: list[str], texts2: list[str]) -> list[float]:
-        """Compute cosine similarity for a batch of text pairs."""
-        self._load_model()
-        if len(texts1) != len(texts2):
-            raise ValueError("texts1 and texts2 must have the same length")
-
-        try:
-            embeddings1 = self.model.encode(texts1, convert_to_tensor=True)
-            embeddings2 = self.model.encode(texts2, convert_to_tensor=True)
-            similarities = F.cosine_similarity(embeddings1, embeddings2).tolist()
-            return [float((sim + 1.0) / 2.0) for sim in similarities]
-        except Exception as e:
-            logger.error(f"Semantic similarity batch error: {e}")
-            return [0.5 for _ in texts1]

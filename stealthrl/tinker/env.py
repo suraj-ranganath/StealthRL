@@ -80,8 +80,8 @@ class StealthEnv(Env):
         """
         Return initial observation with prompt.
         
-        The prompt instructs the model to paraphrase the HUMAN text while
-        maintaining semantic meaning and quality, to help avoid false positive detection.
+        The prompt instructs the model to paraphrase the AI text while
+        maintaining semantic meaning and quality, to evade detection.
         """
         # Build prompt with instruction and AI text
         prompt_messages = self.convo_prefix + [
@@ -95,11 +95,11 @@ class StealthEnv(Env):
         return observation, self.stop_condition
     
     def _build_paraphrase_prompt(self) -> str:
-        """Build the paraphrase instruction prompt (uses HUMAN text as input)."""
+        """Build the paraphrase instruction prompt (uses AI text as input)."""
         return (
             f"Please paraphrase the following text while maintaining its meaning "
             f"and ensuring it reads naturally:\n\n"
-            f"{self.human_reference}\n\n"
+            f"{self.ai_text}\n\n"
             f"Paraphrased text:"
         )
     

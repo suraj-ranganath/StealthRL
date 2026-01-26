@@ -884,7 +884,6 @@ async def main():
         "detector_weight": float(reward_config.get("detector_weight", 1.0)),
         "semantic_weight": float(reward_config.get("semantic_weight", 1.0)),
         "perplexity_weight": float(reward_config.get("perplexity_weight", 0.5)),
-        "fairness_weight": float(reward_config.get("fairness_weight", 0.2)),
     }
 
     detectors_config = reward_config.get("detectors", {})
@@ -926,10 +925,6 @@ async def main():
         reward_cfg["ppl_max"] = float(ppl_max)
     if ppl_target is not None:
         reward_cfg["ppl_target"] = float(ppl_target)
-
-    fairness_config = reward_config.get("fairness", {})
-    if fairness_config.get("mode"):
-        reward_cfg["fairness_mode"] = fairness_config.get("mode")
 
     normalization_config = reward_config.get("normalization", {})
     if normalization_config:

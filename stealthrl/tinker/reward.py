@@ -33,6 +33,10 @@ class TinkerCompositeReward:
         semantic_weight: float = 1.0,
         perplexity_weight: float = 0.5,
         
+        # Component enable/disable flags (NEW)
+        enable_semantic: bool = True,
+        enable_perplexity: bool = True,
+        
         # Detector config
         detector_names: list[str] = ["fast_detectgpt", "ghostbuster"],
         detector_weights: Dict[str, float] | None = None,
@@ -91,6 +95,10 @@ class TinkerCompositeReward:
         self.semantic_weight = semantic_weight
         self.perplexity_weight = perplexity_weight
         
+        # Component enable/disable flags
+        self.enable_semantic = enable_semantic
+        self.enable_perplexity = enable_perplexity
+        
         # Initialize detector ensemble
         from stealthrl.tinker.detectors import DetectorEnsemble
         self.detector_ensemble = DetectorEnsemble(
@@ -108,21 +116,25 @@ class TinkerCompositeReward:
         logger.info("Pre-warming detector models...")
         self.detector_ensemble.prewarm_models()
         
-        # Initialize semantic similarity
-        from stealthrl.tinker.semantic import SemanticSimilarity
-        self.semantic_sim = SemanticSimilarity(
-            model_name=semantic_model,
-            threshold=semantic_threshold,
-        )
+        # Initialize semantic similarity (only if enabled)
+        self.semantic_sim = None
+        if enable_semantic:
+            from stealthrl.tinker.semantic import SemanticSimilarity
+            self.semantic_sim = SemanticSimilarity(
+                model_name=semantic_model,
+                threshold=semantic_threshold,
+            )
         
-        # Initialize perplexity
-        from stealthrl.tinker.perplexity import PerplexityReward
-        self.ppl_reward = PerplexityReward(
-            model_name=ppl_model,
-            ppl_min=ppl_min,
-            ppl_max=ppl_max,
-            ppl_target=ppl_target,
-        )
+        # Initialize perplexity (only if enabled)
+        self.ppl_reward = None
+        if enable_perplexity:
+            from stealthrl.tinker.perplexity import PerplexityReward
+            self.ppl_reward = PerplexityReward(
+                model_name=ppl_model,
+                ppl_min=ppl_min,
+                ppl_max=ppl_max,
+                ppl_target=ppl_target,
+            )
         
 
         # Normalization config
@@ -193,24 +205,30 @@ class TinkerCompositeReward:
         # R_det = 1 - P(AI) (higher is better = more human-like)
         detector_reward_raw = 1.0 - detector_prob
         
-        # Compute semantic similarity
-        semantic_start = time.perf_counter()
-        semantic_result = await self.semantic_sim.compute(
-            text1=original_text,
-            text2=paraphrase_text,
-        )
-        semantic_time = time.perf_counter() - semantic_start
-        semantic_sim = semantic_result["similarity"]
+        # Compute semantic similarity (only if enabled)
+        semantic_sim = 1.0  # Default to perfect if disabled
+        semantic_reward_raw = 1.0
+        semantic_time = 0.0
+        if self.enable_semantic and self.semantic_sim is not None:
+            semantic_start = time.perf_counter()
+            semantic_result = await self.semantic_sim.compute(
+                text1=original_text,
+                text2=paraphrase_text,
+            )
+            semantic_time = time.perf_counter() - semantic_start
+            semantic_sim = semantic_result["similarity"]
+            semantic_reward_raw = max(0.0, semantic_sim - self.semantic_min) if semantic_sim >= self.semantic_min else 0.0
         
-        # R_sem = max(0, sim - threshold) after normalization
-        semantic_reward_raw = max(0.0, semantic_sim - self.semantic_min) if semantic_sim >= self.semantic_min else 0.0
-        
-        # Compute perplexity reward
-        perplexity_start = time.perf_counter()
-        ppl_result = await self.ppl_reward.compute(paraphrase_text)
-        perplexity_time = time.perf_counter() - perplexity_start
-        perplexity = ppl_result["perplexity"]
-        ppl_reward_raw = ppl_result["reward"]
+        # Compute perplexity reward (only if enabled)
+        perplexity = 30.0  # Default to target if disabled
+        ppl_reward_raw = 1.0
+        perplexity_time = 0.0
+        if self.enable_perplexity and self.ppl_reward is not None:
+            perplexity_start = time.perf_counter()
+            ppl_result = await self.ppl_reward.compute(paraphrase_text)
+            perplexity_time = time.perf_counter() - perplexity_start
+            perplexity = ppl_result["perplexity"]
+            ppl_reward_raw = ppl_result["reward"]
         
         # Apply normalization if enabled
         if self.normalize_terms:
@@ -231,19 +249,27 @@ class TinkerCompositeReward:
         
         total_time = time.perf_counter() - start_time
 
-        return {
+        # Build return dict - only include computed metrics, not defaults
+        result = {
             "total_reward": total_reward,
             "detector_reward": detector_reward,
-            "semantic_reward": semantic_reward,
-            "perplexity_reward": ppl_reward,
             "detector_prob": detector_prob,
-            "semantic_sim": semantic_sim,
-            "perplexity": perplexity,
             "time/reward/total": total_time,
             "time/reward/detector": detector_time,
-            "time/reward/semantic": semantic_time,
-            "time/reward/perplexity": perplexity_time,
         }
+        
+        # Only include semantic/perplexity metrics if enabled (don't waste GPU during training)
+        if self.enable_semantic:
+            result["semantic_reward"] = semantic_reward
+            result["semantic_sim"] = semantic_sim
+            result["time/reward/semantic"] = semantic_time
+        
+        if self.enable_perplexity:
+            result["perplexity_reward"] = ppl_reward
+            result["perplexity"] = perplexity
+            result["time/reward/perplexity"] = perplexity_time
+        
+        return result
 
     async def compute_batch(
         self,
@@ -331,17 +357,22 @@ class TinkerCompositeReward:
             result = {
                 "total_reward": total_reward,
                 "detector_reward": detector_reward,
-                "semantic_reward": semantic_reward,
-                "perplexity_reward": ppl_reward,
                 "detector_prob": detector_prob,
-                "semantic_sim": semantic_sim,
-                "perplexity": perplexity,
                 "time/reward/total": total_time,
                 "time/reward/detector": detector_time,
-                "time/reward/semantic": semantic_time,
-                "time/reward/perplexity": perplexity_time,
                 "text_length": len(valid_paraphrases[idx]),
             }
+            
+            # Only include semantic/perplexity metrics if enabled
+            if self.enable_semantic:
+                result["semantic_reward"] = semantic_reward
+                result["semantic_sim"] = semantic_sim
+                result["time/reward/semantic"] = semantic_time
+            
+            if self.enable_perplexity:
+                result["perplexity_reward"] = ppl_reward
+                result["perplexity"] = perplexity
+                result["time/reward/perplexity"] = perplexity_time
             results[valid_indices[idx]] = result
 
         return results
