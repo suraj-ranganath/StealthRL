@@ -69,6 +69,12 @@ reward:
       roberta_openai: 0.6  # 60% weight (superior accuracy + speed)
       fast_detectgpt: 0.4  # 40% weight (different detection method, reduces correlation)
     
+    # Batch sizes for detector inference (higher = faster but more GPU memory)
+    # RoBERTa is memory efficient and can handle larger batches
+    roberta_batch_size: 128  # RoBERTa-large can handle 128+ on most GPUs
+    # Fast-DetectGPT uses gpt-neo-2.7B which needs more memory
+    fast_detectgpt_batch_size: 32  # Reduce if OOM, increase if you have VRAM
+    
     # Detector-specific settings
     fast_detectgpt_model: "gpt-neo-2.7B"  # VALIDATED: AUROC 0.691 on 5000 samples
     roberta_openai_model: "roberta-large-openai-detector"  # VALIDATED: AUROC 0.891 on 200 samples
@@ -110,7 +116,7 @@ reward:
 
 # Dataset settings
 dataset:
-  path: "data/tinker"  # Use Tinker dataset (compatible with both local and server)
+  path: "data/mage"  # MAGE dataset (60K+, 14 domains, HuggingFace format)
   max_examples: null  # Limit total examples per split (null=unlimited, set to 200-1000 for testing)
   max_train_examples: null  # Optional: limit only train split
   max_test_examples: null   # Optional: limit only test split

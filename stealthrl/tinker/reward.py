@@ -50,6 +50,10 @@ class TinkerCompositeReward:
         binoculars_performer: str = "gpt2",
         binoculars_observer: str = "gpt2-medium",
         
+        # Batch sizes for detector inference
+        roberta_batch_size: int = 128,
+        fast_detectgpt_batch_size: int = 32,
+        
         # Semantic config
         semantic_model: str = "intfloat/e5-large-v2",
         semantic_threshold: float = 0.90,
@@ -99,7 +103,8 @@ class TinkerCompositeReward:
         # Component enable/disable flags
         self.enable_semantic = enable_semantic
         self.enable_perplexity = enable_perplexity
-        self.detector_batch_size = detector_batch_size
+        self.roberta_batch_size = roberta_batch_size
+        self.fast_detectgpt_batch_size = fast_detectgpt_batch_size
         
         # Initialize detector ensemble
         from stealthrl.tinker.detectors import DetectorEnsemble
@@ -112,6 +117,8 @@ class TinkerCompositeReward:
             ghostbuster_model=ghostbuster_model,
             binoculars_performer=binoculars_performer,
             binoculars_observer=binoculars_observer,
+            roberta_batch_size=roberta_batch_size,
+            fast_detectgpt_batch_size=fast_detectgpt_batch_size,
         )
         
         # Pre-warm detector models to avoid lazy loading during training

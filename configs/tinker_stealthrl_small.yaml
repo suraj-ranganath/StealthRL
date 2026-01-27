@@ -72,8 +72,11 @@ reward:
       roberta_openai: 0.6
       fast_detectgpt: 0.4
     
-    # Batch size for detector inference (higher = faster but more GPU memory)
-    batch_size: 64  # RoBERTa can handle 64+, Fast-DetectGPT benefits less
+    # Batch sizes for detector inference (higher = faster but more GPU memory)
+    # RoBERTa is memory efficient and can handle larger batches
+    roberta_batch_size: 128  # RoBERTa-large can handle 128+ on most GPUs
+    # Fast-DetectGPT uses gpt-neo-2.7B which needs more memory
+    fast_detectgpt_batch_size: 32  # Reduce if OOM, increase if you have VRAM
     
     fast_detectgpt_model: "gpt-neo-2.7B"
     roberta_openai_model: "roberta-large-openai-detector"

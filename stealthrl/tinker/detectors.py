@@ -841,7 +841,8 @@ class DetectorEnsemble:
         ghostbuster_model: str = "roberta-base",
         binoculars_performer: str = "gpt2",
         binoculars_observer: str = "gpt2-medium",
-        batch_size: int = 32,  # Batch size for GPU inference
+        roberta_batch_size: int = 128,  # Batch size for RoBERTa (memory efficient)
+        fast_detectgpt_batch_size: int = 32,  # Batch size for Fast-DetectGPT (larger model)
     ):
         """
         Initialize detector ensemble.
@@ -863,7 +864,8 @@ class DetectorEnsemble:
         self.device = device or _default_device()
         self.max_concurrent = max_concurrent
         self.roberta_openai_model = roberta_openai_model
-        self.batch_size = batch_size
+        self.roberta_batch_size = roberta_batch_size
+        self.fast_detectgpt_batch_size = fast_detectgpt_batch_size
         
         # Initialize cache
         self.cache = DetectorCache(cache_path)
@@ -973,10 +975,18 @@ class DetectorEnsemble:
         all_detector_scores = {}
         
         for detector_name, detector in self.detectors.items():
-            # Use batch method if available (RoBERTa, Ghostbuster)
+            # Use batch method if available (RoBERTa, Fast-DetectGPT)
             if hasattr(detector, 'detect_batch'):
-                logger.debug(f"Using batch processing for {detector_name} ({len(texts)} texts)")
-                scores = await detector.detect_batch(texts, batch_size=self.batch_size)
+                # Use detector-specific batch size
+                if 'roberta' in detector_name.lower():
+                    batch_size = self.roberta_batch_size
+                elif 'fast' in detector_name.lower() or 'detectgpt' in detector_name.lower():
+                    batch_size = self.fast_detectgpt_batch_size
+                else:
+                    batch_size = 32  # Default for other detectors
+                
+                logger.debug(f"Using batch processing for {detector_name} ({len(texts)} texts, batch_size={batch_size})")
+                scores = await detector.detect_batch(texts, batch_size=batch_size)
                 all_detector_scores[detector_name] = scores
             else:
                 # Fallback: concurrent processing for detectors without batch support
