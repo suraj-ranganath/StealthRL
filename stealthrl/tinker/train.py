@@ -18,122 +18,19 @@ import asyncio
 import time
 import json
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Sequence
-from dataclasses import dataclass, asdict, field
+from typing import Dict, Any, List
+from dataclasses import dataclass, asdict
 
 import torch
 import chz
 import tinker
 from tinker_cookbook.rl import train as rl_train
-from tinker_cookbook.rl.types import RLDatasetBuilder, EnvGroupBuilder, TrajectoryGroup, Env
-from tinker_cookbook.completers import TokenCompleter, StopCondition, TokensWithLogprobs
+from tinker_cookbook.rl.types import RLDatasetBuilder
 from tinker_cookbook.tokenizer_utils import get_tokenizer
 from tinker_cookbook.utils import ml_log
-from tinker_cookbook.utils import logtree
 from torch.utils.tensorboard import SummaryWriter
 
 logger = logging.getLogger(__name__)
-
-
-# ============================================================================
-# Optimized Sampling (2-4x speedup using sample_async with num_samples)
-# ============================================================================
-
-@dataclass
-class OptimizedTinkerTokenCompleter(TokenCompleter):
-    """
-    Optimized TokenCompleter using sample_async(num_samples=group_size).
-    
-    Instead of calling sample_async(num_samples=1) 8 times, this calls it
-    ONCE with num_samples=8, sharing KV cache and decoding in parallel.
-    
-    Expected speedup: 2-4x (60s → 15-30s for 2048 texts).
-    """
-    
-    sampling_client: tinker.SamplingClient
-    max_tokens: int
-    group_size: int
-    temperature: float = 1.0
-    _samples_cache: Optional[List[TokensWithLogprobs]] = field(default=None, init=False, repr=False)
-    _cache_index: int = field(default=0, init=False, repr=False)
-    
-    async def __call__(
-        self, model_input: tinker.ModelInput, stop: StopCondition
-    ) -> TokensWithLogprobs:
-        """Sample action - batches all group samples on first call."""
-        
-        # First call: generate all samples together
-        if self._samples_cache is None:
-            sample_result = await self.sampling_client.sample_async(
-                prompt=model_input,
-                num_samples=self.group_size,  # All rollouts in one call!
-                sampling_params=tinker.SamplingParams(
-                    stop=stop,
-                    max_tokens=self.max_tokens,
-                    temperature=self.temperature,
-                ),
-            )
-            
-            # Cache all samples
-            self._samples_cache = []
-            for sequence in sample_result.sequences:
-                tokens = sequence.tokens
-                logprobs = sequence.logprobs
-                assert logprobs is not None, "Logprobs required for GRPO"
-                self._samples_cache.append(
-                    TokensWithLogprobs(tokens=tokens, maybe_logprobs=logprobs)
-                )
-            
-            self._cache_index = 0
-        
-        # Return next cached sample
-        sample = self._samples_cache[self._cache_index]
-        self._cache_index += 1
-        return sample
-
-
-@logtree.scope_header_decorator
-async def do_group_rollout_and_filter_constant_reward_optimized(
-    sampling_client: tinker.SamplingClient,
-    env_group_builder: EnvGroupBuilder,
-    max_tokens: int,
-    temperature: float,
-    do_remove_constant_reward_groups: bool,
-    enable_logging: bool = True,
-) -> Optional[TrajectoryGroup]:
-    """
-    Optimized replacement using sample_async(num_samples=group_size).
-    
-    This is a minimal wrapper that just replaces TinkerTokenCompleter
-    with OptimizedTinkerTokenCompleter and delegates to do_group_rollout.
-    """
-    # Get group size
-    envs_G = await env_group_builder.make_envs()
-    group_size = len(envs_G)
-    
-    # Use optimized policy that batches all samples in one API call
-    policy = OptimizedTinkerTokenCompleter(
-        sampling_client=sampling_client,
-        max_tokens=max_tokens,
-        temperature=temperature,
-        group_size=group_size,
-    )
-    
-    # Reset cache for this group
-    policy._samples_cache = None
-    policy._cache_index = 0
-    
-    # Use the original do_group_rollout (it handles the rest)
-    with logtree.optional_enable_logging(enable_logging):
-        trajectory_group = await rl_train.do_group_rollout(env_group_builder, policy)
-    
-    # Filter constant rewards
-    trajectory_groups = [trajectory_group]
-    if do_remove_constant_reward_groups:
-        trajectory_groups = rl_train.remove_constant_reward_groups(trajectory_groups)
-    if len(trajectory_groups) == 0:
-        return None
-    return trajectory_groups[0]
 
 
 def _enable_overlap_optim_step_requests() -> None:
@@ -381,20 +278,8 @@ class StealthRLTrainer:
         # Initialize tokenizer
         self.tokenizer = get_tokenizer(config.model_name)
         
-        # Enable optimized sampling (2-4x speedup)
-        # Replace default TinkerTokenCompleter with OptimizedTinkerTokenCompleter
-        try:
-            rl_train._original_do_group_rollout_and_filter_constant_reward = (
-                rl_train.do_group_rollout_and_filter_constant_reward
-            )
-            rl_train.do_group_rollout_and_filter_constant_reward = (
-                do_group_rollout_and_filter_constant_reward_optimized
-            )
-            logger.info("✓ Optimized sampling enabled: sample_async(num_samples=group_size)")
-            logger.info("  Expected speedup: 2-4x faster (60s → 15-30s)")
-        except Exception as e:
-            logger.warning(f"⚠ Could not enable optimized sampling: {e}")
-            logger.warning(f"⚠ Failed to enable optimized sampling: {e}")
+        # Use default Tinker sampling logic (see docs: training_client.sample / sample_async).
+        logger.info("Using default Tinker sampling (no custom monkey patches).")
         
         # Statistics tracking
         self.step = 0

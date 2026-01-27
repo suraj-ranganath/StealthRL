@@ -61,9 +61,10 @@ reward:
   semantic_weight: 1.0
   perplexity_weight: 0.5
   
-  # Component toggles (disable for quick testing)
-  enable_semantic: false  # DISABLED for quick testing - no broken pipe errors
-  enable_perplexity: false  # DISABLED for quick testing - focus on detector only
+  # Component toggles - DISABLE expensive computations for speed
+  enable_semantic: false
+  enable_perplexity: false
+  
   detectors:
     names:
       - "roberta_openai"
