@@ -24,7 +24,8 @@ try:
     )
     from tinker_cookbook.logtree import logtree
     TINKER_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    logger.debug(f"Tinker import failed: {e}")
     TINKER_AVAILABLE = False
 
 
