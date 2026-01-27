@@ -93,59 +93,6 @@ class OptimizedTinkerTokenCompleter(TokenCompleter):
 
 
 @logtree.scope_header_decorator
-async def do_group_rollout_optimized(
-    env_group_builder: EnvGroupBuilder,
-    policy: TokenCompleter,
-) -> TrajectoryGroup:
-    """Modified do_group_rollout with cache reset for OptimizedTinkerTokenCompleter."""
-    
-    envs_G: Sequence[Env] = await env_group_builder.make_envs()
-    
-    # Reset cache for new group
-    if isinstance(policy, OptimizedTinkerTokenCompleter):
-        policy._samples_cache = None
-        policy._cache_index = 0
-    
-    # Do rollouts (policy batches sampling on first call)
-    trajectories_G = await asyncio.gather(*[
-        rl_train.do_single_rollout(policy, env) for env in envs_G
-    ])
-    
-    # Compute rewards
-    rewards_and_metrics_G = await env_group_builder.compute_group_rewards(trajectories_G, envs_G)
-    rewards_G, metrics_G = zip(*rewards_and_metrics_G, strict=True)
-    
-    # Log trajectories
-    with logtree.scope_header("Trajectory Summary"):
-        for i, (traj, final_reward) in enumerate(zip(trajectories_G, rewards_G, strict=True)):
-            rows = []
-            step_reward_sum = 0.0
-            for t_idx, t in enumerate(traj.transitions):
-                step_reward_sum += t.reward
-                rows.append({
-                    "step": t_idx,
-                    "ob_len": t.ob.length,
-                    "ac_len": len(t.ac.tokens),
-                    "reward": f"{t.reward:.3f}",
-                })
-            rows.append({
-                "step": "final",
-                "ob_len": traj.final_ob.length,
-                "ac_len": "-",
-                "reward": f"{final_reward:.3f}",
-            })
-            rows.append({
-                "step": "total",
-                "ob_len": "-",
-                "ac_len": "-",
-                "reward": f"{step_reward_sum + final_reward:.3f}",
-            })
-            logtree.table(rows, caption=f"Trajectory {i}")
-    
-    return TrajectoryGroup(trajectories_G, list(rewards_G), list(metrics_G))
-
-
-@logtree.scope_header_decorator
 async def do_group_rollout_and_filter_constant_reward_optimized(
     sampling_client: tinker.SamplingClient,
     env_group_builder: EnvGroupBuilder,
@@ -156,12 +103,15 @@ async def do_group_rollout_and_filter_constant_reward_optimized(
 ) -> Optional[TrajectoryGroup]:
     """
     Optimized replacement using sample_async(num_samples=group_size).
+    
+    This is a minimal wrapper that just replaces TinkerTokenCompleter
+    with OptimizedTinkerTokenCompleter and delegates to do_group_rollout.
     """
     # Get group size
     envs_G = await env_group_builder.make_envs()
     group_size = len(envs_G)
     
-    # Use optimized policy
+    # Use optimized policy that batches all samples in one API call
     policy = OptimizedTinkerTokenCompleter(
         sampling_client=sampling_client,
         max_tokens=max_tokens,
@@ -169,8 +119,13 @@ async def do_group_rollout_and_filter_constant_reward_optimized(
         group_size=group_size,
     )
     
+    # Reset cache for this group
+    policy._samples_cache = None
+    policy._cache_index = 0
+    
+    # Use the original do_group_rollout (it handles the rest)
     with logtree.optional_enable_logging(enable_logging):
-        trajectory_group = await do_group_rollout_optimized(env_group_builder, policy)
+        trajectory_group = await rl_train.do_group_rollout(env_group_builder, policy)
     
     # Filter constant rewards
     trajectory_groups = [trajectory_group]
