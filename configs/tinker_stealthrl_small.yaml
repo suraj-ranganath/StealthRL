@@ -28,6 +28,7 @@ sampling:
   temperature_schedule: "constant"
   temperature_decay: 0.95
   top_p: 0.95
+  batched_sampling: true
 
 # GRPO settings
 grpo:

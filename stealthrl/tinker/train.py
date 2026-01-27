@@ -19,19 +19,89 @@ import time
 import json
 from pathlib import Path
 from typing import Dict, Any, List
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 
 import torch
 import chz
 import tinker
 from tinker_cookbook.rl import train as rl_train
-from tinker_cookbook.rl.types import RLDatasetBuilder
+from tinker_cookbook.rl.types import RLDatasetBuilder, EnvGroupBuilder, TrajectoryGroup
+from tinker_cookbook.completers import TokenCompleter, StopCondition, TokensWithLogprobs
 from tinker_cookbook.tokenizer_utils import get_tokenizer
-from tinker_cookbook.utils import ml_log
+from tinker_cookbook.utils import ml_log, logtree
 from torch.utils.tensorboard import SummaryWriter
 
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# Optional batched sampling (single API call per group)
+# Enabled by env ENABLE_BATCHED_SAMPLING=1 (default: enabled)
+# ============================================================================
+
+@dataclass
+class BatchedTokenCompleter(TokenCompleter):
+    """
+    TokenCompleter that calls sample_async once with num_samples=group_size.
+    """
+    sampling_client: tinker.SamplingClient
+    max_tokens: int
+    group_size: int
+    temperature: float = 1.0
+    _samples_cache: list[TokensWithLogprobs] | None = field(default=None, init=False, repr=False)
+    _cache_index: int = field(default=0, init=False, repr=False)
+
+    async def __call__(self, model_input: tinker.ModelInput, stop: StopCondition) -> TokensWithLogprobs:
+        if self._samples_cache is None:
+            sample_result = await self.sampling_client.sample_async(
+                prompt=model_input,
+                num_samples=self.group_size,
+                sampling_params=tinker.SamplingParams(
+                    stop=stop,
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                ),
+            )
+            self._samples_cache = []
+            for seq in sample_result.sequences:
+                logprobs = seq.logprobs
+                assert logprobs is not None, "logprobs required for GRPO"
+                self._samples_cache.append(TokensWithLogprobs(tokens=seq.tokens, maybe_logprobs=logprobs))
+            self._cache_index = 0
+
+        sample = self._samples_cache[self._cache_index]
+        self._cache_index += 1
+        return sample
+
+
+@logtree.scope_header_decorator
+async def do_group_rollout_batched(
+    sampling_client: tinker.SamplingClient,
+    env_group_builder: EnvGroupBuilder,
+    max_tokens: int,
+    temperature: float,
+    do_remove_constant_reward_groups: bool,
+    enable_logging: bool = True,
+) -> TrajectoryGroup | None:
+    envs_G = await env_group_builder.make_envs()
+    group_size = len(envs_G)
+    policy = BatchedTokenCompleter(
+        sampling_client=sampling_client,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        group_size=group_size,
+    )
+    policy._samples_cache = None
+    policy._cache_index = 0
+
+    with logtree.optional_enable_logging(enable_logging):
+        trajectory_group = await rl_train.do_group_rollout(env_group_builder, policy)
+
+    trajectory_groups = [trajectory_group]
+    if do_remove_constant_reward_groups:
+        trajectory_groups = rl_train.remove_constant_reward_groups(trajectory_groups)
+    if len(trajectory_groups) == 0:
+        return None
+    return trajectory_groups[0]
 
 def _enable_overlap_optim_step_requests() -> None:
     """Overlap forward_backward and optim_step requests for better throughput."""
@@ -204,6 +274,7 @@ class StealthRLConfig:
     temperature: float = 1.0  # Higher = more exploration
     temperature_schedule: str = "constant"  # "constant" | "decay"
     temperature_decay: float = 0.95  # If schedule="decay"
+    enable_batched_sampling: bool = True  # Use single sample_async per group (num_samples=group_size)
     
     # KL divergence penalty (AuthorMist-inspired)
     kl_penalty_coef: float = 0.001  # β in L = -E[R] + β*KL(π || π_ref)
@@ -278,8 +349,18 @@ class StealthRLTrainer:
         # Initialize tokenizer
         self.tokenizer = get_tokenizer(config.model_name)
         
-        # Use default Tinker sampling logic (see docs: training_client.sample / sample_async).
-        logger.info("Using default Tinker sampling (no custom monkey patches).")
+        # Optional batched sampling: single sample_async call per group (num_samples=group_size)
+        if self.config.enable_batched_sampling:
+            try:
+                rl_train._original_do_group_rollout_and_filter_constant_reward = (
+                    rl_train.do_group_rollout_and_filter_constant_reward
+                )
+                rl_train.do_group_rollout_and_filter_constant_reward = do_group_rollout_batched
+                logger.info("✓ Batched sampling enabled (sample_async num_samples=group_size).")
+            except Exception as e:
+                logger.warning("⚠ Failed to enable batched sampling: %s", e)
+        else:
+            logger.info("Batched sampling disabled via config (enable_batched_sampling=False).")
         
         # Statistics tracking
         self.step = 0
@@ -807,6 +888,7 @@ async def main():
             stream_config.get("num_minibatches", None),
         )
     )
+    enable_batched_sampling = bool(sampling_config.get("batched_sampling", True))
 
     async_groups_per_batch = args.async_groups_per_batch
     if async_groups_per_batch is None:
@@ -976,6 +1058,7 @@ async def main():
         temperature=get_float(sampling_config, "temperature", 1.0),
         temperature_schedule=sampling_config.get("temperature_schedule", "constant"),
         temperature_decay=get_float(sampling_config, "temperature_decay", 0.95),
+        enable_batched_sampling=enable_batched_sampling,
         kl_penalty_coef=get_float(kl_config, "penalty_coef", 0.001),
         kl_target=kl_config.get("target"),
         kl_adapt_rate=get_float(kl_config, "adapt_rate", 0.1),
