@@ -278,6 +278,18 @@ class StealthRLTrainer:
         # Initialize tokenizer
         self.tokenizer = get_tokenizer(config.model_name)
         
+        # Enable optimized sampling (sample_async with num_samples)
+        # This generates all group_size rollouts in a single API call
+        # Expected speedup: 2-4x faster sampling
+        try:
+            from stealthrl.tinker.fast_sampling import monkey_patch_tinker_sampling
+            if monkey_patch_tinker_sampling():
+                logger.info("✓ Optimized sampling enabled (sample_async with num_samples)")
+            else:
+                logger.warning("⚠ Could not enable optimized sampling, using default")
+        except Exception as e:
+            logger.warning(f"⚠ Failed to enable optimized sampling: {e}")
+        
         # Statistics tracking
         self.step = 0
         self.all_negative_count = 0
