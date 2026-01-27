@@ -72,6 +72,9 @@ reward:
       roberta_openai: 0.6
       fast_detectgpt: 0.4
     
+    # Batch size for detector inference (higher = faster but more GPU memory)
+    batch_size: 64  # RoBERTa can handle 64+, Fast-DetectGPT benefits less
+    
     fast_detectgpt_model: "gpt-neo-2.7B"
     roberta_openai_model: "roberta-large-openai-detector"
     ghostbuster_model: "roberta-base"

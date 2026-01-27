@@ -41,6 +41,7 @@ class TinkerCompositeReward:
         detector_names: list[str] = ["fast_detectgpt", "ghostbuster"],
         detector_weights: Dict[str, float] | None = None,
         detector_cache_path: str | None = None,
+        detector_batch_size: int = 32,  # Batch size for detector inference
         
         # Detector model selection (VALIDATED MODELS - Jan 2026)
         fast_detectgpt_model: str = "gpt-neo-2.7B",  # AUROC: 0.691
@@ -98,6 +99,7 @@ class TinkerCompositeReward:
         # Component enable/disable flags
         self.enable_semantic = enable_semantic
         self.enable_perplexity = enable_perplexity
+        self.detector_batch_size = detector_batch_size
         
         # Initialize detector ensemble
         from stealthrl.tinker.detectors import DetectorEnsemble

@@ -894,6 +894,8 @@ async def main():
         reward_cfg["detector_weights"] = detectors_config.get("weights", None)
         if detectors_config.get("cache_path"):
             reward_cfg["detector_cache_path"] = detectors_config.get("cache_path")
+        if detectors_config.get("batch_size"):
+            reward_cfg["detector_batch_size"] = int(detectors_config.get("batch_size"))
         
         # Pass through detector-specific model options
         if detectors_config.get("fast_detectgpt_model"):

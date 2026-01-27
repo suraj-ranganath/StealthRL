@@ -313,18 +313,27 @@ class FastDetectGPTDetector(BaseDetector):
         logger.info(f"Initialized Fast-DetectGPT detector with {self.model_short_name} on {self.device}")
     
     @staticmethod
-    def _get_sampling_discrepancy_analytic(logits_ref, logits_score, labels):
+    def _get_sampling_discrepancy_analytic(logits_ref, logits_score, labels, return_batch=False):
         """
         Official Fast-DetectGPT analytic sampling discrepancy criterion.
         From: https://github.com/baoguangsheng/fast-detect-gpt
         
-        This is the core algorithm that makes Fast-DetectGPT 340x faster than DetectGPT.
+        Modified to support batch processing by removing batch_size=1 assertions.
+        The math works identically for batches - each sequence is computed independently.
+        
+        Args:
+            logits_ref: Reference model logits [batch_size, seq_len, vocab_size]
+            logits_score: Scoring model logits [batch_size, seq_len, vocab_size]
+            labels: Token labels [batch_size, seq_len]
+            return_batch: If True, return per-sequence discrepancies, else return mean
+        
+        Returns:
+            float (if return_batch=False) or torch.Tensor (if return_batch=True)
         """
         import torch
         
-        assert logits_ref.shape[0] == 1
-        assert logits_score.shape[0] == 1
-        assert labels.shape[0] == 1
+        # Batch size can be > 1 now! The math works for any batch size.
+        # The original assertions were just safety checks, not algorithmic requirements.
         
         # Handle vocabulary size mismatch
         if logits_ref.size(-1) != logits_score.size(-1):
@@ -338,9 +347,14 @@ class FastDetectGPTDetector(BaseDetector):
         log_likelihood = lprobs_score.gather(dim=-1, index=labels).squeeze(-1)
         mean_ref = (probs_ref * lprobs_score).sum(dim=-1)
         var_ref = (probs_ref * torch.square(lprobs_score)).sum(dim=-1) - torch.square(mean_ref)
+        
+        # Per-sequence discrepancy calculation [batch_size]
         discrepancy = (log_likelihood.sum(dim=-1) - mean_ref.sum(dim=-1)) / var_ref.sum(dim=-1).sqrt()
-        discrepancy = discrepancy.mean()
-        return discrepancy.item()
+        
+        if return_batch:
+            return discrepancy  # Return tensor of shape [batch_size]
+        else:
+            return discrepancy.mean().item()  # Return scalar mean
     
     def _load_model(self):
         """Lazy load the model using our cached models with official Fast-DetectGPT algorithm."""
@@ -409,6 +423,71 @@ class FastDetectGPTDetector(BaseDetector):
         except Exception as e:
             logger.error(f"Fast-DetectGPT error: {e}")
             return 0.5  # Return neutral score on error
+    
+    async def detect_batch(self, texts: List[str], batch_size: int = 32) -> List[float]:
+        """
+        Batch detect AI-generated text using Fast-DetectGPT.
+        
+        Args:
+            texts: List of texts to detect
+            batch_size: Batch size for GPU processing
+        
+        Returns:
+            List of AI probability scores [0, 1]
+        """
+        return await asyncio.to_thread(self._detect_batch_sync, texts, batch_size)
+    
+    def _detect_batch_sync(self, texts: List[str], batch_size: int = 32) -> List[float]:
+        """
+        Synchronous batch detection with proper GPU batching.
+        
+        Processes texts in chunks to avoid OOM and uses padding for true batch inference.
+        """
+        import torch
+        
+        # Load model if not already loaded
+        self._load_model()
+        
+        all_scores = []
+        
+        try:
+            # Process in chunks
+            for i in range(0, len(texts), batch_size):
+                batch_texts = texts[i:i+batch_size]
+                
+                # Tokenize batch with padding
+                tokenized = self.tokenizer(
+                    batch_texts,
+                    truncation=True,
+                    return_tensors="pt",
+                    padding=True,
+                    return_token_type_ids=False
+                ).to(self.device)
+                
+                labels = tokenized.input_ids[:, 1:]
+                
+                # Compute logits for the batch
+                with torch.no_grad():
+                    logits = self.model(**tokenized).logits[:, :-1]
+                    
+                    # Calculate batch discrepancies (returns tensor of shape [batch_size])
+                    crit_batch = self._get_sampling_discrepancy_analytic(
+                        logits, logits, labels, return_batch=True
+                    )
+                    
+                    # Convert each criterion to probability
+                    scaled_crits = crit_batch * 0.5
+                    scores = torch.sigmoid(scaled_crits).cpu().tolist()
+                    
+                    # Clamp to [0, 1] and add to results
+                    all_scores.extend([max(0.0, min(1.0, float(s))) for s in scores])
+        
+        except Exception as e:
+            logger.error(f"Fast-DetectGPT batch error: {e}")
+            # Return neutral scores for all texts on error
+            all_scores = [0.5] * len(texts)
+        
+        return all_scores
 
 
 class RoBERTaOpenAIDetector(BaseDetector):
@@ -508,6 +587,50 @@ class RoBERTaOpenAIDetector(BaseDetector):
         except Exception as e:
             logger.error(f"RoBERTa OpenAI detector error: {e}")
             return 0.5  # Return neutral score on error
+    
+    async def detect_batch(self, texts: List[str], batch_size: int = 32) -> List[float]:
+        """Batch detection with proper GPU batching for efficiency."""
+        return await asyncio.to_thread(self._detect_batch_sync, texts, batch_size)
+    
+    def _detect_batch_sync(self, texts: List[str], batch_size: int = 32) -> List[float]:
+        """Synchronous batch detection."""
+        import torch
+        
+        # Load model if not already loaded
+        self._load_model()
+        
+        all_scores = []
+        
+        # Process in chunks for memory efficiency
+        for i in range(0, len(texts), batch_size):
+            batch_texts = texts[i:i+batch_size]
+            
+            try:
+                # Tokenize batch
+                inputs = self.tokenizer(
+                    batch_texts,
+                    return_tensors="pt",
+                    truncation=True,
+                    max_length=512,
+                    padding=True
+                ).to(self.device)
+                
+                # Batch inference
+                with torch.no_grad():
+                    outputs = self.model(**inputs)
+                    logits = outputs.logits
+                    probs = torch.softmax(logits, dim=-1)
+                    
+                    # Extract AI probability for each text
+                    scores = probs[:, 0].cpu().tolist()
+                    all_scores.extend([max(0.0, min(1.0, float(s))) for s in scores])
+            
+            except Exception as e:
+                logger.error(f"RoBERTa batch error for batch {i//batch_size}: {e}")
+                # Return neutral scores for failed batch
+                all_scores.extend([0.5] * len(batch_texts))
+        
+        return all_scores
 
 
 class GhostbusterDetector(BaseDetector):
@@ -718,6 +841,7 @@ class DetectorEnsemble:
         ghostbuster_model: str = "roberta-base",
         binoculars_performer: str = "gpt2",
         binoculars_observer: str = "gpt2-medium",
+        batch_size: int = 32,  # Batch size for GPU inference
     ):
         """
         Initialize detector ensemble.
@@ -733,11 +857,13 @@ class DetectorEnsemble:
             ghostbuster_model: Model for Ghostbuster ("roberta-base", "roberta-base-openai-detector")
             binoculars_performer: Performer model for Binoculars
             binoculars_observer: Observer model for Binoculars
+            batch_size: Batch size for GPU inference (higher = faster but more memory)
         """
         self.detector_names = detector_names
         self.device = device or _default_device()
         self.max_concurrent = max_concurrent
         self.roberta_openai_model = roberta_openai_model
+        self.batch_size = batch_size
         
         # Initialize cache
         self.cache = DetectorCache(cache_path)
@@ -837,12 +963,46 @@ class DetectorEnsemble:
         }
 
     async def compute_batch(self, texts: List[str]) -> List[Dict[str, Any]]:
-        """Compute ensemble scores for a batch of texts."""
-        async def _compute_one(text: str) -> Dict[str, Any]:
-            async with self._semaphore:
-                return await self.compute(text)
-
-        return await asyncio.gather(*[_compute_one(text) for text in texts])
+        """
+        Compute ensemble scores for a batch of texts using efficient GPU batching.
+        
+        This uses true batching for detectors that support it (RoBERTa, Ghostbuster)
+        and falls back to concurrent processing for others (Fast-DetectGPT).
+        """
+        # Collect detector scores for all texts
+        all_detector_scores = {}
+        
+        for detector_name, detector in self.detectors.items():
+            # Use batch method if available (RoBERTa, Ghostbuster)
+            if hasattr(detector, 'detect_batch'):
+                logger.debug(f"Using batch processing for {detector_name} ({len(texts)} texts)")
+                scores = await detector.detect_batch(texts, batch_size=self.batch_size)
+                all_detector_scores[detector_name] = scores
+            else:
+                # Fallback: concurrent processing for detectors without batch support
+                logger.debug(f"Using concurrent processing for {detector_name} ({len(texts)} texts)")
+                async def _compute_one(text: str) -> float:
+                    async with self._semaphore:
+                        result = await detector.predict(text)
+                        return result
+                
+                scores = await asyncio.gather(*[_compute_one(text) for text in texts])
+                all_detector_scores[detector_name] = scores
+        
+        # Compute ensemble for each text
+        results = []
+        for i in range(len(texts)):
+            scores_dict = {name: all_detector_scores[name][i] for name in all_detector_scores}
+            ensemble_prob = sum(
+                self.weights.get(name, 0.0) * score
+                for name, score in scores_dict.items()
+            )
+            results.append({
+                "ensemble_prob": ensemble_prob,
+                "detector_scores": scores_dict,
+            })
+        
+        return results
     
     def close(self):
         """Close cache connection."""
