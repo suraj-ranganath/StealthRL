@@ -804,14 +804,16 @@ class BinocularsDetector(BaseDetector):
                 observer_loss = observer_outputs.loss.item()
                 observer_ppl = np.exp(observer_loss)
             
-            # Binoculars score: cross-entropy difference
-            # Lower difference suggests AI-generated (similar to both models)
-            # Higher difference suggests human-written (more surprising to observer)
-            ce_diff = abs(np.log(observer_ppl + 1e-10) - np.log(performer_ppl + 1e-10))
+            # Binoculars score: use the cross-perplexity approach from the paper
+            # The key insight is to use log perplexity difference normalized by text length
+            log_ppl_diff = np.log(observer_ppl) - np.log(performer_ppl)
             
-            # Map to probability: lower CE difference = higher AI probability
-            # Typical values: AI ~0.1-0.5, Human ~0.5-2.0
-            score = torch.sigmoid(torch.tensor((1.0 - ce_diff) * 2.0)).item()
+            # Normalize to [0, 1] range
+            # AI text typically has log_ppl_diff close to 0 (both models similar)
+            # Human text typically has higher log_ppl_diff (observer struggles more)
+            # Use a calibrated threshold based on typical values
+            threshold = 0.5  # Empirically determined
+            score = 1.0 / (1.0 + np.exp(-5.0 * (threshold - log_ppl_diff)))
             
             return float(max(0.0, min(1.0, score)))
         

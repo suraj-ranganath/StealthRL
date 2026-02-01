@@ -31,23 +31,44 @@ def quick_test():
         from stealthrl.tinker.dataset import StealthRLDatasetBuilder
         
         logger.info("\n1. Loading small dataset with filtering enabled...")
+        
+        # StealthRLDatasetBuilder needs: data_path, batch_size, group_size, 
+        # model_name_for_tokenizer, renderer_name, reward_config
+        # For quick test, we just need to check data loading works
         builder = StealthRLDatasetBuilder(
-            data_sources=['mage'],
+            data_path="data/mage",  # Path to dataset
+            batch_size=8,
+            group_size=4,
+            model_name_for_tokenizer="gpt2",
+            renderer_name="default",
+            reward_config={
+                "detector_config": {"name": "roberta_openai"},
+                "sem_config": {"model_name": "all-MiniLM-L6-v2"},
+                "ppl_config": {"model_name": "gpt2"},
+                "det_weight": 1.0,
+                "sem_weight": 1.0,
+                "ppl_weight": 0.1,
+            },
             seed=42,
             max_train_examples=100,  # Small for speed
-            max_val_examples=20,
+            max_test_examples=20,
         )
         
-        dataset = builder.build()
+        # Builder returns (train_dataset, test_dataset) tuple
+        import asyncio
+        train_dataset, test_dataset = asyncio.run(builder())
         
-        logger.info(f"   ✓ Loaded {len(dataset.train_dataset)} train examples")
-        logger.info(f"   ✓ Loaded {len(dataset.val_dataset)} val examples")
+        logger.info(f"   ✓ Loaded {len(train_dataset.examples)} train examples")
+        if test_dataset:
+            logger.info(f"   ✓ Loaded {len(test_dataset.examples)} test examples")
         
         logger.info("\n2. Sampling examples to check quality...")
-        batch = dataset.train_dataset.get_batch(0, 5)
+        # Get first 5 examples directly
+        sample_size = min(5, len(train_dataset.examples))
         
         all_valid = True
-        for i, ex in enumerate(batch.examples):
+        for i in range(sample_size):
+            ex = train_dataset.examples[i]
             text = ex.ai_text
             
             # Check for gibberish patterns
