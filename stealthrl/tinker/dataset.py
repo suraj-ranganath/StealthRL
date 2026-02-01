@@ -8,6 +8,7 @@ domain labels, and ESL flags.
 
 import logging
 import math
+import re
 from dataclasses import dataclass
 from typing import Sequence, List, Dict, Any, Literal
 from pathlib import Path
@@ -25,6 +26,76 @@ from tinker_cookbook.tokenizer_utils import get_tokenizer
 from .env import StealthEnvGroupBuilder
 
 logger = logging.getLogger(__name__)
+
+
+def is_valid_text(text: str) -> bool:
+    """
+    Validate text to filter out corrupted/gibberish samples.
+    
+    Returns False if text appears to be corrupted, meaningless, or problematic.
+    """
+    if not text or not isinstance(text, str):
+        return False
+    
+    # Too long (likely corrupted list or garbage)
+    if len(text) > 3000:
+        logger.debug(f"Rejecting text: too long ({len(text)} chars)")
+        return False
+    
+    # Too short (not enough content)
+    if len(text.strip()) < 20:
+        logger.debug("Rejecting text: too short")
+        return False
+    
+    # Known gibberish patterns from training logs
+    gibberish_patterns = [
+        r"Filipinsript",
+        r"GALAges",
+        r"Desifications",
+        r"Gatcalasio",
+        r"usedmodified",
+        r"Snal only determined to try to the Nationalized",
+    ]
+    
+    for pattern in gibberish_patterns:
+        if re.search(pattern, text, re.IGNORECASE):
+            logger.debug(f"Rejecting text: contains gibberish pattern '{pattern}'")
+            return False
+    
+    # Check for excessive numbered lists (corruption indicator)
+    numbered_items = re.findall(r'^\d+\.', text, re.MULTILINE)
+    if len(numbered_items) > 50:
+        logger.debug(f"Rejecting text: excessive numbered list ({len(numbered_items)} items)")
+        return False
+    
+    # Check for reasonable English text (at least some recognizable words)
+    words = re.findall(r'\b[a-zA-Z]{3,}\b', text)
+    if len(words) < 5:
+        logger.debug(f"Rejecting text: too few words ({len(words)})")
+        return False
+    
+    # Check for reasonable word/total char ratio (detect gibberish)
+    total_chars = len(text)
+    word_chars = sum(len(w) for w in words)
+    if total_chars > 0 and word_chars / total_chars < 0.4:  # Less than 40% is actual words
+        logger.debug(f"Rejecting text: low word ratio ({word_chars}/{total_chars})")
+        return False
+    
+    # Check for repeated phrases (generation artifacts)
+    sentences = re.split(r'[.!?]+', text)
+    if len(sentences) > 5:
+        sentence_counts = {}
+        for sent in sentences:
+            sent_clean = sent.strip().lower()
+            if len(sent_clean) > 10:
+                sentence_counts[sent_clean] = sentence_counts.get(sent_clean, 0) + 1
+        
+        # If any sentence repeats more than 3 times, likely garbage
+        if any(count > 3 for count in sentence_counts.values()):
+            logger.debug("Rejecting text: excessive repetition")
+            return False
+    
+    return True
 
 
 @dataclass
@@ -247,9 +318,22 @@ class StealthRLDatasetBuilder(RLDatasetBuilder):
                 
                 try:
                     data = json.loads(line)
+                    
+                    # Validate text before creating example
+                    ai_text = data.get("ai_text", "")
+                    human_ref = data.get("human_reference", "")
+                    
+                    if not is_valid_text(ai_text):
+                        logger.debug(f"Skipping line {line_num}: invalid ai_text")
+                        continue
+                    
+                    if human_ref and not is_valid_text(human_ref):
+                        logger.debug(f"Skipping line {line_num}: invalid human_reference")
+                        continue
+                    
                     example = StealthRLExample(
-                        ai_text=data["ai_text"],
-                        human_reference=data.get("human_reference", ""),
+                        ai_text=ai_text,
+                        human_reference=human_ref,
                         domain=data.get("domain", "unknown"),
                         metadata=data.get("metadata", {}),
                     )
@@ -277,7 +361,15 @@ class StealthRLDatasetBuilder(RLDatasetBuilder):
             
             # Load from appropriate split
             ds = load_from_disk(f'data/mage/{mage_split}')
+            
+            # Shuffle with fixed seed for consistency across runs
+            import random
+            indices = list(range(len(ds)))
+            random.seed(self.seed)
+            random.shuffle(indices)
+            
             examples = []
+            filtered_count = 0
             
             # Determine limit
             limit = None
@@ -316,15 +408,22 @@ class StealthRLDatasetBuilder(RLDatasetBuilder):
                     return domain_map.get(base, base)
                 return 'unknown'
             
-            for i, item in enumerate(ds):
+            for i in indices:
                 if limit and len(examples) >= limit:
                     break
+                
+                item = ds[i]
                 
                 # MAGE format: {text, label, src}
                 # label: 1=human, 0=AI
                 text = item.get('text', '')
                 label = item.get('label', 0)
                 src = item.get('src', 'unknown')
+                
+                # Validate text before adding
+                if not is_valid_text(text):
+                    filtered_count += 1
+                    continue
                 
                 # Use AI-generated text for RL training (optimize for evasion)
                 if label == 0:
@@ -337,6 +436,8 @@ class StealthRLDatasetBuilder(RLDatasetBuilder):
                     examples.append(example)
             
             logger.info(f"Loaded {len(examples)} AI-generated examples from MAGE dataset")
+            if filtered_count > 0:
+                logger.info(f"Filtered out {filtered_count} invalid/corrupted samples")
             return examples
             
         except Exception as e:

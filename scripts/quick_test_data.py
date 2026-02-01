@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""
+Quick test to verify data filtering is working.
+Loads a small dataset and checks for corrupted samples.
+"""
+
+import sys
+from pathlib import Path
+
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+logger = logging.getLogger(__name__)
+
+
+def quick_test():
+    """Load dataset with filtering and verify it works."""
+    
+    logger.info("=" * 80)
+    logger.info("QUICK FILTERING TEST")
+    logger.info("=" * 80)
+    
+    try:
+        from stealthrl.tinker.dataset import StealthRLDatasetBuilder
+        
+        logger.info("\n1. Loading small dataset with filtering enabled...")
+        builder = StealthRLDatasetBuilder(
+            data_sources=['mage'],
+            seed=42,
+            max_train_examples=100,  # Small for speed
+            max_val_examples=20,
+        )
+        
+        dataset = builder.build()
+        
+        logger.info(f"   ✓ Loaded {len(dataset.train_dataset)} train examples")
+        logger.info(f"   ✓ Loaded {len(dataset.val_dataset)} val examples")
+        
+        logger.info("\n2. Sampling examples to check quality...")
+        batch = dataset.train_dataset.get_batch(0, 5)
+        
+        all_valid = True
+        for i, ex in enumerate(batch.examples):
+            text = ex.ai_text
+            
+            # Check for gibberish patterns
+            has_gibberish = any(
+                pattern in text 
+                for pattern in ["Filipinsript", "GALAges", "Desifications"]
+            )
+            
+            # Check length
+            too_long = len(text) > 3000
+            too_short = len(text) < 20
+            
+            # Count numbered items
+            numbered = text.count("\n") > 50
+            
+            if has_gibberish or too_long or too_short or numbered:
+                logger.error(f"   ✗ Example {i+1} has issues:")
+                if has_gibberish:
+                    logger.error(f"     - Contains gibberish")
+                if too_long:
+                    logger.error(f"     - Too long ({len(text)} chars)")
+                if too_short:
+                    logger.error(f"     - Too short ({len(text)} chars)")
+                if numbered:
+                    logger.error(f"     - Excessive line breaks")
+                all_valid = False
+            else:
+                logger.info(f"   ✓ Example {i+1}: {len(text)} chars, domain={ex.domain}")
+        
+        logger.info("\n" + "=" * 80)
+        if all_valid:
+            logger.info("✓✓✓ ALL CHECKS PASSED ✓✓✓")
+            logger.info("\nFiltering is working correctly!")
+            logger.info("You can now run a full training job safely.")
+            logger.info("\n" + "=" * 80)
+            return True
+        else:
+            logger.error("✗✗✗ SOME CHECKS FAILED ✗✗✗")
+            logger.error("\nFiltering may have issues. Check the logs above.")
+            logger.info("\n" + "=" * 80)
+            return False
+            
+    except Exception as e:
+        logger.error(f"\n✗ Error during test: {e}", exc_info=True)
+        return False
+
+
+if __name__ == "__main__":
+    success = quick_test()
+    sys.exit(0 if success else 1)
