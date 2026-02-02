@@ -64,8 +64,9 @@ reward:
   perplexity_weight: 0.0    # Disabled - rely on KL penalty for fluency
   
   # Component toggles
-  enable_semantic: true     # Multi-objective RL: evasion + fidelity
-  enable_perplexity: false  # KL penalty handles fluency
+  enable_semantic: true                # Multi-objective RL: evasion + fidelity
+  enable_perplexity: false             # KL penalty handles fluency
+  compute_perplexity_eval_only: true   # Compute perplexity for eval monitoring (not in reward)
   
   detectors:
     names:

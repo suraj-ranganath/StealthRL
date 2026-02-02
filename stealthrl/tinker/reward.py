@@ -36,6 +36,7 @@ class TinkerCompositeReward:
         # Component enable/disable flags (NEW)
         enable_semantic: bool = True,
         enable_perplexity: bool = True,
+        compute_perplexity_eval_only: bool = False,  # Compute ppl for logging only (not in reward)
         
         # Detector config
         detector_names: list[str] = ["fast_detectgpt", "ghostbuster"],
@@ -108,6 +109,7 @@ class TinkerCompositeReward:
         # Component enable/disable flags
         self.enable_semantic = enable_semantic
         self.enable_perplexity = enable_perplexity
+        self.compute_perplexity_eval_only = compute_perplexity_eval_only
         self.roberta_batch_size = roberta_batch_size
         self.fast_detectgpt_batch_size = fast_detectgpt_batch_size
         
@@ -142,9 +144,10 @@ class TinkerCompositeReward:
                 threshold=semantic_threshold,
             )
         
-        # Initialize perplexity (only if enabled)
+        # Initialize perplexity (if enabled OR compute_eval_only)
         self.ppl_reward = None
-        if enable_perplexity:
+        if enable_perplexity or compute_perplexity_eval_only:
+            logger.info(f"Initializing PerplexityReward (enable_perplexity={enable_perplexity}, compute_eval_only={compute_perplexity_eval_only})")
             from stealthrl.tinker.perplexity import PerplexityReward
             self.ppl_reward = PerplexityReward(
                 model_name=ppl_model,
@@ -152,7 +155,9 @@ class TinkerCompositeReward:
                 ppl_max=ppl_max,
                 ppl_target=ppl_target,
             )
-        
+            logger.info("✓ PerplexityReward initialized successfully")
+        else:
+            logger.info(f"Perplexity disabled (enable_perplexity={enable_perplexity}, compute_eval_only={compute_perplexity_eval_only})")
 
         # Normalization config
         self.normalize_terms = normalize_terms
@@ -237,11 +242,12 @@ class TinkerCompositeReward:
             # Use full [0, 1] range for proper multi-objective RL
             semantic_reward_raw = semantic_sim
         
-        # Compute perplexity reward (only if enabled)
+        # Compute perplexity reward (only if enabled for training)
         perplexity = 30.0  # Default to target if disabled
         ppl_reward_raw = 1.0
         perplexity_time = 0.0
-        if self.enable_perplexity and self.ppl_reward is not None:
+        compute_ppl = self.enable_perplexity or self.compute_perplexity_eval_only
+        if compute_ppl and self.ppl_reward is not None:
             perplexity_start = time.perf_counter()
             ppl_result = await self.ppl_reward.compute(paraphrase_text)
             perplexity_time = time.perf_counter() - perplexity_start
@@ -286,8 +292,10 @@ class TinkerCompositeReward:
             result["semantic_sim"] = semantic_sim
             result["time/reward/semantic"] = semantic_time
         
-        if self.enable_perplexity:
-            result["perplexity_reward"] = ppl_reward
+        # Include perplexity if enabled for reward OR eval-only monitoring
+        if self.enable_perplexity or self.compute_perplexity_eval_only:
+            if self.enable_perplexity:
+                result["perplexity_reward"] = ppl_reward
             result["perplexity"] = perplexity
             result["time/reward/perplexity"] = perplexity_time
         
@@ -347,11 +355,12 @@ class TinkerCompositeReward:
             semantic_time = time.perf_counter() - semantic_start
             semantic_sims = semantic_results["similarities"]
 
-        # Compute perplexity only if enabled
+        # Compute perplexity only if enabled (or eval-only monitoring)
         perplexity_time = 0.0
         perplexities = [30.0] * len(valid_paraphrases)  # Default: target perplexity
         ppl_rewards_raw = [1.0] * len(valid_paraphrases)  # Default: perfect score
-        if self.enable_perplexity and self.ppl_reward is not None:
+        compute_ppl = self.enable_perplexity or self.compute_perplexity_eval_only
+        if compute_ppl and self.ppl_reward is not None:
             perplexity_start = time.perf_counter()
             perplexity_results = await self.ppl_reward.compute_batch(valid_paraphrases)
             perplexity_time = time.perf_counter() - perplexity_start
@@ -405,8 +414,10 @@ class TinkerCompositeReward:
                 result["semantic_sim"] = semantic_sim
                 result["time/reward/semantic"] = semantic_time
             
-            if self.enable_perplexity:
-                result["perplexity_reward"] = ppl_reward
+            # Include perplexity if enabled for reward OR eval-only monitoring
+            if self.enable_perplexity or self.compute_perplexity_eval_only:
+                if self.enable_perplexity:
+                    result["perplexity_reward"] = ppl_reward
                 result["perplexity"] = perplexity
                 result["time/reward/perplexity"] = perplexity_time
             results[valid_indices[idx]] = result

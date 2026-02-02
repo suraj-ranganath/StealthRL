@@ -1,0 +1,98 @@
+model:
+  name: Qwen/Qwen3-4B-Instruct-2507
+  renderer: qwen3
+lora:
+  rank: 32
+  alpha: 32
+  dropout: 0.05
+  target_modules: null
+training:
+  learning_rate: 2.0e-05
+  batch_size: 16
+  group_size: 8
+  num_epochs: 3
+  num_substeps: 1
+  max_tokens: 512
+sampling:
+  temperature: 1.0
+  temperature_schedule: constant
+  temperature_decay: 0.95
+  top_p: 0.95
+  batched_sampling: true
+grpo:
+  normalize_advantages: true
+  advantage_clip: 10.0
+  reward_clip: null
+  remove_constant_reward_groups: true
+kl:
+  penalty_coef: 0.01
+  target: null
+  adapt_rate: 0.1
+all_negative:
+  min_reward: 0.01
+  downweight: 0.5
+curriculum:
+  enabled: false
+  start_quantile: 0.7
+  end_quantile: 0.0
+  steps: 1000
+reward:
+  detector_weight: 1.0
+  semantic_weight: 0.0
+  perplexity_weight: 0.0
+  enable_semantic: true
+  enable_perplexity: false
+  compute_perplexity_eval_only: true
+  detectors:
+    names:
+    - roberta_openai
+    - fast_detectgpt
+    weights:
+      roberta_openai: 0.6
+      fast_detectgpt: 0.4
+    roberta_batch_size: 256
+    fast_detectgpt_batch_size: 64
+    fast_detectgpt_model: gpt-neo-2.7B
+    roberta_openai_model: roberta-large-openai-detector
+    cache_path: cache/detectors.db
+  semantic:
+    model: intfloat/e5-large-v2
+    threshold: 0.9
+  bertscore:
+    enabled: false
+    model_type: roberta-large
+    batch_size: 16
+    num_layers: null
+  perplexity:
+    model: gpt2
+    min: 5.0
+    max: 80.0
+    target: 30.0
+  normalization:
+    enabled: true
+    detector_zscore: true
+    semantic_min: 0.9
+    quality_min: 0.8
+dataset:
+  path: data/mage
+  max_train_examples: 1000
+  max_test_examples: 100
+  seed: 42
+  few_shot: standard
+logging:
+  path: outputs/ablations/det1.0_sem0.0
+  interval: 10
+  eval_interval: 25
+  save_interval: 100
+  num_groups_to_log: 4
+  debug_mode: false
+parallel:
+  mode: sync
+  stream_minibatch:
+    num_minibatches: 4
+  async:
+    max_steps_off_policy: 2
+ablation:
+  detector_weight: 1.0
+  semantic_weight: 0.0
+  study: reward_weights

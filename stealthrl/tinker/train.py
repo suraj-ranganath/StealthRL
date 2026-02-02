@@ -28,7 +28,7 @@ from tinker_cookbook.rl import train as rl_train
 from tinker_cookbook.rl.types import RLDatasetBuilder, EnvGroupBuilder, TrajectoryGroup
 from tinker_cookbook.completers import TokenCompleter, StopCondition, TokensWithLogprobs
 from tinker_cookbook.tokenizer_utils import get_tokenizer
-from tinker_cookbook.utils import ml_log, logtree
+from tinker_cookbook.utils import ml_log, logtree, trace
 from torch.utils.tensorboard import SummaryWriter
 
 logger = logging.getLogger(__name__)
@@ -932,6 +932,75 @@ async def main():
     with open(output_dir / "run_metadata.json", "w") as f:
         json.dump(run_metadata, f, indent=2)
     
+    # Extract model and LoRA config early (needed for config saving)
+    base_model_name = model_config.get("name", "Qwen/Qwen3-4B-Instruct-2507")
+    lora_rank = int(lora_config.get("rank", 16))
+    lora_alpha = lora_config.get("alpha")
+    if lora_alpha is not None:
+        lora_alpha = int(lora_alpha)
+    
+    # Save complete configuration for reproducibility and analysis
+    # This includes all training hyperparameters, model settings, and reward weights
+    complete_config = {
+        "run_info": {
+            "run_name": run_name,
+            "start_time": datetime.now().isoformat(),
+            "config_file": args.config,
+            "command_line_args": vars(args),
+        },
+        "model": {
+            "base_model": model_config.get("name", "Qwen/Qwen3-4B-Instruct-2507"),
+            "renderer": model_config.get("renderer", "qwen3"),
+        },
+        "lora": {
+            "rank": lora_rank,
+            "alpha": lora_alpha,
+            "dropout": get_float(lora_config, "dropout", 0.05),
+            "target_modules": lora_config.get("target_modules"),
+        },
+        "training": {
+            "learning_rate": get_float(training_config, "learning_rate", 1e-5),
+            "batch_size": batch_size,
+            "group_size": group_size,
+            "num_epochs": num_epochs,
+            "training_mode": training_mode,
+            "save_every": save_every,
+            "eval_every": eval_every,
+        },
+        "sampling": {
+            "temperature": get_float(sampling_config, "temperature", 1.0),
+            "top_p": get_float(sampling_config, "top_p", 0.9),
+            "top_k": get_int(sampling_config, "top_k", 50),
+            "max_tokens": get_int(sampling_config, "max_tokens", 200),
+            "batched_sampling": enable_batched_sampling,
+        },
+        "grpo": {
+            "group_size": group_size,
+            "normalize_advantages": grpo_config.get("normalize_advantages", True),
+            "advantage_clip": grpo_config.get("advantage_clip"),
+        },
+        "kl": {
+            "penalty_coef": get_float(kl_config, "penalty", 0.001),
+            "target": kl_config.get("target"),
+            "adapt_rate": kl_config.get("adapt_rate"),
+        },
+        "reward": reward_config,
+        "dataset": {
+            "path": data_path,
+            "few_shot": dataset_config.get("few_shot", "standard"),
+            "seed": dataset_config.get("seed", 42),
+            "max_examples": dataset_config.get("max_examples"),
+            "max_train_examples": dataset_config.get("max_train_examples"),
+            "max_test_examples": dataset_config.get("max_test_examples"),
+        },
+        "parallel": parallel_config,
+    }
+    
+    with open(output_dir / "training_config.json", "w") as f:
+        json.dump(complete_config, f, indent=2)
+    
+    logger.info(f"Saved complete configuration to: {output_dir}/training_config.json")
+    
     # Set up logging to file
     log_file = output_dir / "training.log"
     file_handler = logging.FileHandler(log_file)
@@ -953,11 +1022,7 @@ async def main():
     
     # Initialize Tinker clients (ServiceClient loads API key from environment automatically)
     service_client = tinker.ServiceClient()
-    base_model_name = model_config.get("name", "Qwen/Qwen3-4B-Instruct-2507")
-    lora_rank = int(lora_config.get("rank", 16))
-    lora_alpha = lora_config.get("alpha")
-    if lora_alpha is not None:
-        lora_alpha = int(lora_alpha)
+    # Note: base_model_name, lora_rank, lora_alpha already extracted above for config saving
     training_client = await service_client.create_lora_training_client_async(
         base_model=base_model_name,
         rank=lora_rank,
