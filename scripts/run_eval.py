@@ -22,6 +22,7 @@ Usage:
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -107,6 +108,42 @@ Examples:
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--n-bootstrap", type=int, default=500, help="Bootstrap samples")
     parser.add_argument("--log-level", type=str, default="INFO", help="Log level")
+
+    # Optional GPT quality evaluation
+    parser.add_argument(
+        "--gpt-quality",
+        action="store_true",
+        help="Enable GPT-based quality evaluation (requires OpenAI API key)",
+    )
+    parser.add_argument(
+        "--gpt-quality-max-per-method",
+        type=int,
+        default=200,
+        help="Maximum number of samples per method to judge",
+    )
+    parser.add_argument(
+        "--gpt-quality-model",
+        type=str,
+        default="gpt-5-mini",
+        help="Model name for GPT quality judging",
+    )
+    parser.add_argument(
+        "--gpt-quality-methods",
+        nargs="+",
+        default=None,
+        help="Methods to run GPT quality judging on (default: m2/stealthrl)",
+    )
+    parser.add_argument(
+        "--openai-api-key",
+        type=str,
+        default=None,
+        help="OpenAI API key (overrides OPENAI_API_KEY env var)",
+    )
+    parser.add_argument(
+        "--gpt-quality-no-cache",
+        action="store_true",
+        help="Disable GPT quality cache (always re-call API)",
+    )
     
     return parser.parse_args()
 
@@ -148,6 +185,9 @@ def main():
             logger.warning("Removing StealthRL from methods...")
             args.methods = [m for m in args.methods if m not in ("m2", "stealthrl")]
     
+    # Resolve OpenAI key if needed
+    openai_key = args.openai_api_key or os.getenv("OPENAI_API_KEY")
+
     # Create runner
     runner = EvalRunner(
         output_dir=args.out_dir,
@@ -174,6 +214,12 @@ def main():
                 stealthrl_checkpoint=args.stealthrl_checkpoint,
                 cache_dir=args.cache_dir,
                 setting_suffix=f"N={n_cand}" if len(args.n_candidates) > 1 else None,
+                gpt_quality=args.gpt_quality,
+                gpt_quality_methods=args.gpt_quality_methods,
+                gpt_quality_max_per_method=args.gpt_quality_max_per_method,
+                gpt_quality_model=args.gpt_quality_model,
+                openai_api_key=openai_key,
+                gpt_quality_cache=not args.gpt_quality_no_cache,
             )
         
         logger.info("Evaluation completed successfully!")

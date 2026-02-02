@@ -355,6 +355,8 @@ class DetectorResult:
 | **Token Change** | `token_change_rate` | [0, 1] | Token-level change rate |
 | **ChrF** | `chrf` | [0, 1] | Character n-gram F-score |
 | **Length Ratio** | `len_ratio` | (0, ∞) | Output length / Input length |
+| **GPT Quality** | `quality_rating` | [1, 5] | GPT-based Likert rating of overall paraphrase quality (optional) |
+| **GPT Similarity** | `similarity_rating` | [1, 5] | GPT-based Likert rating of semantic equivalence (optional) |
 
 ### Semantic Similarity Details
 
@@ -435,6 +437,8 @@ outputs/eval_runs/{run_name}_{YYYYMMDD}_{HHMMSS}/
 ├── scores.csv                # Detection scores (CSV format)
 ├── quality.parquet           # Quality metrics (primary format)
 ├── quality.csv               # Quality metrics (CSV format)
+├── quality_gpt.parquet       # GPT-based quality ratings (optional)
+├── quality_gpt.csv           # GPT-based quality ratings (optional)
 ├── metrics.json              # Aggregated metrics with bootstrap CIs
 ├── thresholds.json           # Calibrated detection thresholds
 ├── raw_outputs.json          # All attack outputs
@@ -678,6 +682,20 @@ python scripts/run_eval.py \
   --datasets mage
 ```
 
+### Optional GPT Quality Evaluation
+
+```bash
+# GPT-based quality evaluation for StealthRL only (requires OpenAI API key)
+export OPENAI_API_KEY="your-openai-key"
+python scripts/run_eval.py \
+  --methods m2 \
+  --stealthrl-checkpoint checkpoints/atharv_checkpoint_1.json \
+  --detectors roberta fast_detectgpt binoculars \
+  --n-human 1000 --n-ai 1000 \
+  --gpt-quality --gpt-quality-max-per-method 200 \
+  --gpt-quality-model gpt-5-mini
+```
+
 ### CLI Arguments
 
 | Argument | Default | Description |
@@ -697,6 +715,12 @@ python scripts/run_eval.py \
 | `--n-bootstrap` | 500 | Bootstrap samples for CI |
 | `--log-level` | `"INFO"` | Logging level |
 | `--quick` | False | Quick test mode (overrides defaults) |
+| `--gpt-quality` | False | Enable GPT-based quality evaluation |
+| `--gpt-quality-max-per-method` | 200 | Max samples per method for GPT judging |
+| `--gpt-quality-model` | `"gpt-5-mini"` | GPT model for judging |
+| `--gpt-quality-methods` | None | Methods to judge (default: `m2`/`stealthrl`) |
+| `--openai-api-key` | None | API key override (else uses `OPENAI_API_KEY`) |
+| `--gpt-quality-no-cache` | False | Disable cached GPT judgments |
 
 **Note**: The `--n-values` (budget sweep) and `--no-sanitize` arguments are deprecated. The current pipeline uses a fixed `--n-candidates` value.
 

@@ -19,6 +19,66 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
+# Global style flag to avoid repeated theme setup
+_STYLE_APPLIED = False
+
+
+def _apply_paper_style():
+    """Apply consistent paper-quality plotting style."""
+    global _STYLE_APPLIED
+    if _STYLE_APPLIED:
+        return
+    
+    import matplotlib as mpl
+    import seaborn as sns
+    
+    sns.set_theme(
+        context="paper",
+        style="whitegrid",
+        font="serif",
+        palette="colorblind",
+        rc={
+            "figure.dpi": 150,
+            "savefig.dpi": 300,
+            "axes.titlesize": 12,
+            "axes.titlepad": 8,
+            "axes.labelsize": 11,
+            "axes.labelpad": 6,
+            "xtick.labelsize": 9,
+            "ytick.labelsize": 9,
+            "legend.fontsize": 9,
+            "legend.title_fontsize": 9,
+            "axes.linewidth": 0.8,
+            "grid.linewidth": 0.6,
+            "grid.alpha": 0.25,
+            "grid.color": "#d0d0d0",
+            "lines.linewidth": 2.0,
+            "lines.markersize": 7,
+            "legend.frameon": True,
+            "legend.framealpha": 0.9,
+            "legend.edgecolor": "#cccccc",
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+        },
+    )
+    
+    mpl.rcParams.update({
+        "figure.autolayout": True,
+        "pdf.fonttype": 42,
+        "ps.fonttype": 42,
+        "font.family": "serif",
+        "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
+        "axes.facecolor": "white",
+        "figure.facecolor": "white",
+    })
+    
+    _STYLE_APPLIED = True
+
+
+def _pretty_detector_name(detector: str) -> str:
+    return detector.replace("_", " ").title()
+
+
 # 15 colorblind-friendly colors (from Adversarial Paraphrasing paper)
 COLORBLIND_COLORS = [
     "#0072B2",  # Blue
@@ -99,11 +159,14 @@ def create_heatmap(
         vmin, vmax: Value range
         annot_fmt: Annotation format
     """
+    _apply_paper_style()
     import matplotlib.pyplot as plt
     import seaborn as sns
     
     # Pivot data for heatmap
     pivot = data.pivot(index=row_col, columns=col_col, values=value_col)
+    pivot.index = [_pretty_detector_name(d) for d in pivot.index]
+    pivot.columns = [METHOD_NAMES.get(m, m) for m in pivot.columns]
     
     fig, ax = plt.subplots(figsize=figsize)
     
@@ -140,6 +203,7 @@ def create_tradeoff_plot(
     output_path: str = None,
     figsize: Tuple[int, int] = (8, 6),
     annotate: bool = True,
+    show_pareto: bool = True,
 ) -> None:
     """
     Create tradeoff/Pareto curve (Figure 2 in SPEC.md).
@@ -157,12 +221,14 @@ def create_tradeoff_plot(
         figsize: Figure size
         annotate: Whether to add method labels
     """
+    _apply_paper_style()
     import matplotlib.pyplot as plt
     
     fig, ax = plt.subplots(figsize=figsize)
     
     for _, row in data.iterrows():
         method = row[label_col]
+        label = METHOD_NAMES.get(method, method)
         color = COLORS.get(method, "#333333")
         
         ax.scatter(
@@ -170,14 +236,14 @@ def create_tradeoff_plot(
             row[y_col],
             s=150,
             c=color,
-            label=method,
+            label=label,
             edgecolors='white',
             linewidth=2,
         )
         
         if annotate:
             ax.annotate(
-                method,
+                label,
                 (row[x_col], row[y_col]),
                 xytext=(5, 5),
                 textcoords='offset points',
@@ -187,6 +253,21 @@ def create_tradeoff_plot(
     ax.set_xlabel("Semantic Similarity (E5)", fontsize=12)
     ax.set_ylabel("Mean TPR@1%FPR (↓ better attack)", fontsize=12)
     ax.set_title(title, fontsize=14, fontweight='bold')
+
+    # Pareto frontier (maximize similarity, minimize TPR)
+    if show_pareto:
+        pareto_points = []
+        filtered = data[[x_col, y_col]].dropna().sort_values(by=x_col, ascending=False)
+        best_tpr = float("inf")
+        for _, row in filtered.iterrows():
+            tpr = row[y_col]
+            if tpr < best_tpr:
+                pareto_points.append((row[x_col], tpr))
+                best_tpr = tpr
+        if len(pareto_points) >= 2:
+            pareto_points = sorted(pareto_points, key=lambda p: p[0])
+            xs, ys = zip(*pareto_points)
+            ax.plot(xs, ys, color="#111111", linewidth=2.5, linestyle="-", label="Pareto frontier")
     
     # Add reference lines
     ax.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5, label='Random')
@@ -233,6 +314,7 @@ def create_budget_sweep_plot(
         output_path: Path to save figure
         figsize: Figure size
     """
+    _apply_paper_style()
     import matplotlib.pyplot as plt
     
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
@@ -248,7 +330,7 @@ def create_budget_sweep_plot(
             method_data[x_col],
             method_data[y_col],
             marker='o',
-            label=method,
+            label=METHOD_NAMES.get(method, method),
             color=color,
             linewidth=2,
             markersize=8,
@@ -270,7 +352,7 @@ def create_budget_sweep_plot(
             method_data[x_col],
             method_data[y2_col],
             marker='s',
-            label=method,
+            label=METHOD_NAMES.get(method, method),
             color=color,
             linewidth=2,
             markersize=8,
@@ -303,6 +385,7 @@ def create_sanitize_plot(
     
     Shows homoglyph attack effectiveness before/after sanitization.
     """
+    _apply_paper_style()
     import matplotlib.pyplot as plt
     
     fig, ax = plt.subplots(figsize=figsize)
@@ -321,7 +404,7 @@ def create_sanitize_plot(
     ax.set_ylabel('Mean TPR@1%FPR', fontsize=12)
     ax.set_title('Effect of Sanitization Defense', fontsize=14, fontweight='bold')
     ax.set_xticks(x)
-    ax.set_xticklabels(methods, rotation=45, ha='right')
+    ax.set_xticklabels([METHOD_NAMES.get(m, m) for m in methods], rotation=45, ha='right')
     ax.legend()
     ax.grid(True, alpha=0.3, axis='y')
     
@@ -364,6 +447,7 @@ def create_auroc_bar_chart(
         figsize: Figure size
         show_baseline: Whether to show 0.5 baseline (random)
     """
+    _apply_paper_style()
     import matplotlib.pyplot as plt
     
     fig, ax = plt.subplots(figsize=figsize)
@@ -396,7 +480,7 @@ def create_auroc_bar_chart(
             x + offset, 
             aurocs, 
             width, 
-            label=method.replace('_', ' ').title(),
+            label=METHOD_NAMES.get(method, method),
             color=color,
             edgecolor='white',
             linewidth=0.5,
@@ -425,7 +509,7 @@ def create_auroc_bar_chart(
     ax.set_ylabel('AUROC', fontsize=12)
     ax.set_title(title, fontsize=14, fontweight='bold')
     ax.set_xticks(x)
-    ax.set_xticklabels([d.replace('_', '\n') for d in detectors], fontsize=10)
+    ax.set_xticklabels([_pretty_detector_name(d).replace(' ', '\n') for d in detectors], fontsize=10)
     ax.legend(loc='upper right', fontsize=9, ncol=2)
     ax.set_ylim(0, 1.05)
     ax.grid(True, alpha=0.3, axis='y')
@@ -464,6 +548,7 @@ def create_auroc_radar_chart(
     Useful for visualizing attack coverage across multiple detectors.
     Smaller area = better attack (closer to 0.5 center).
     """
+    _apply_paper_style()
     import matplotlib.pyplot as plt
     from math import pi
     
@@ -490,13 +575,13 @@ def create_auroc_radar_chart(
         values += values[:1]  # Complete the loop
         
         color = COLORS.get(method, None)
-        ax.plot(angles, values, 'o-', linewidth=2, label=method.replace('_', ' ').title(),
+        ax.plot(angles, values, 'o-', linewidth=2, label=METHOD_NAMES.get(method, method),
                 color=color)
         ax.fill(angles, values, alpha=0.1, color=color)
     
     # Add detector labels
     ax.set_xticks(angles[:-1])
-    ax.set_xticklabels([d.replace('_', '\n') for d in detectors], size=9)
+    ax.set_xticklabels([_pretty_detector_name(d).replace(' ', '\n') for d in detectors], size=9)
     
     # Add baseline circle at 0.5
     baseline_values = [0.5] * (n_detectors + 1)
@@ -531,6 +616,7 @@ def create_method_comparison_summary(
     3. TPR@1%FPR summary
     4. Attack Success Rate
     """
+    _apply_paper_style()
     import matplotlib.pyplot as plt
     
     fig, axes = plt.subplots(2, 2, figsize=figsize)
@@ -550,13 +636,18 @@ def create_method_comparison_summary(
                   for d in detectors]
         color = COLORS.get(method, f"C{i}")
         offset = (i - len(methods)/2 + 0.5) * width
-        ax1.bar(x + offset, aurocs, width, label=method.replace('_', ' ').title(), color=color)
+        ax1.bar(x + offset, aurocs, width, label=METHOD_NAMES.get(method, method), color=color)
     
     ax1.axhline(y=0.5, color='red', linestyle='--', alpha=0.7)
     ax1.set_ylabel('AUROC')
     ax1.set_title('(a) AUROC by Detector', fontweight='bold')
     ax1.set_xticks(x)
-    ax1.set_xticklabels([d[:10] for d in detectors], rotation=45, ha='right', fontsize=8)
+    ax1.set_xticklabels(
+        [_pretty_detector_name(d).replace(' ', '\n') for d in detectors],
+        rotation=45,
+        ha='right',
+        fontsize=8,
+    )
     ax1.legend(fontsize=8, ncol=2)
     ax1.set_ylim(0, 1.05)
     
@@ -572,8 +663,10 @@ def create_method_comparison_summary(
     ax2.set_ylabel('Mean AUROC ± std')
     ax2.set_title('(b) Mean AUROC Across Detectors', fontweight='bold')
     ax2.set_xticks(x2)
-    ax2.set_xticklabels([m.replace('_', '\n')[:12] for m in mean_aurocs[method_col]], 
-                        fontsize=9)
+    ax2.set_xticklabels(
+        [METHOD_NAMES.get(m, m).replace(' ', '\n') for m in mean_aurocs[method_col]],
+        fontsize=9,
+    )
     ax2.set_ylim(0, 1.05)
     
     # Add value labels
@@ -591,12 +684,17 @@ def create_method_comparison_summary(
                 for d in detectors]
         color = COLORS.get(method, f"C{i}")
         offset = (i - len(methods)/2 + 0.5) * width
-        ax3.bar(x + offset, tprs, width, label=method.replace('_', ' ').title(), color=color)
+        ax3.bar(x + offset, tprs, width, label=METHOD_NAMES.get(method, method), color=color)
     
     ax3.set_ylabel('TPR@1%FPR')
     ax3.set_title('(c) True Positive Rate at 1% FPR', fontweight='bold')
     ax3.set_xticks(x)
-    ax3.set_xticklabels([d[:10] for d in detectors], rotation=45, ha='right', fontsize=8)
+    ax3.set_xticklabels(
+        [_pretty_detector_name(d).replace(' ', '\n') for d in detectors],
+        rotation=45,
+        ha='right',
+        fontsize=8,
+    )
     ax3.set_ylim(0, 1.05)
     
     # Panel 4: Attack Success Rate summary
@@ -611,8 +709,10 @@ def create_method_comparison_summary(
         ax4.set_ylabel('Attack Success Rate (ASR)')
         ax4.set_title('(d) Mean Attack Success Rate', fontweight='bold')
         ax4.set_xticks(x4)
-        ax4.set_xticklabels([m.replace('_', '\n')[:12] for m in mean_asr[method_col]], 
-                            fontsize=9)
+        ax4.set_xticklabels(
+            [METHOD_NAMES.get(m, m).replace(' ', '\n') for m in mean_asr[method_col]],
+            fontsize=9,
+        )
         ax4.set_ylim(0, 1.05)
         
         # Add value labels
@@ -662,6 +762,7 @@ def create_score_distribution_plot(
         figsize: Figure size
         include_human: Whether human baseline is included in data
     """
+    _apply_paper_style()
     import matplotlib.pyplot as plt
     import seaborn as sns
     
@@ -697,8 +798,9 @@ def create_score_distribution_plot(
         
         ax.set_xlabel('')
         ax.set_ylabel('Detection Score' if ax == axes[0] else '')
-        ax.set_title(detector.replace('_', ' ').title(), fontweight='bold')
-        ax.tick_params(axis='x', rotation=45)
+        ax.set_title(_pretty_detector_name(detector), fontweight='bold')
+        labels = [METHOD_NAMES.get(t.get_text(), t.get_text()) for t in ax.get_xticklabels()]
+        ax.set_xticklabels(labels, rotation=45, ha='right')
         ax.grid(True, alpha=0.3, axis='y')
         
         # Add threshold line at 0.5 (typical decision boundary)
@@ -736,6 +838,7 @@ def create_score_shift_plot(
         output_path: Path to save figure
         figsize: Figure size
     """
+    _apply_paper_style()
     import matplotlib.pyplot as plt
     
     methods = list(after_scores.keys()) if isinstance(after_scores, dict) else []
@@ -781,7 +884,7 @@ def create_score_shift_plot(
                 transform=ax.transAxes, fontsize=9,
                 verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
     
-    fig.suptitle(f"{title} ({detector_name})", fontsize=14, fontweight='bold')
+    fig.suptitle(f"{title} ({_pretty_detector_name(detector_name)})", fontsize=14, fontweight='bold')
     fig.text(0.5, 0.02, '↓ Points below diagonal = Successful evasion', ha='center', fontsize=10, style='italic')
     plt.tight_layout()
     
@@ -813,6 +916,7 @@ def create_human_ai_separation_plot(
         output_path: Path to save figure
         figsize: Figure size
     """
+    _apply_paper_style()
     import matplotlib.pyplot as plt
     
     fig, ax = plt.subplots(figsize=figsize)
@@ -829,7 +933,7 @@ def create_human_ai_separation_plot(
     
     ax.set_xlabel('Detection Score', fontsize=12)
     ax.set_ylabel('Density', fontsize=12)
-    ax.set_title(f"{title}\n({detector_name})", fontsize=14, fontweight='bold')
+    ax.set_title(f"{title}\n({_pretty_detector_name(detector_name)})", fontsize=14, fontweight='bold')
     ax.legend(loc='upper right', fontsize=9)
     ax.grid(True, alpha=0.3)
     
@@ -860,6 +964,7 @@ def create_roc_curves(
         output_path: Path to save figure
         figsize: Figure size
     """
+    _apply_paper_style()
     import matplotlib.pyplot as plt
     from sklearn.metrics import roc_curve, auc
     
@@ -878,7 +983,7 @@ def create_roc_curves(
             roc_auc = auc(fpr, tpr)
             
             color = COLORS.get(method, None)
-            label = METHOD_NAMES.get(method, method.replace("_", " ").title())
+            label = METHOD_NAMES.get(method, method)
             ax.plot(fpr, tpr, lw=2, color=color,
                     label=f'{label} (AUC={roc_auc:.2f})')
         
@@ -889,7 +994,7 @@ def create_roc_curves(
         ax.set_ylim([0.0, 1.05])
         ax.set_xlabel('False Positive Rate')
         ax.set_ylabel('True Positive Rate')
-        ax.set_title(detector.replace('_', ' ').title())
+        ax.set_title(_pretty_detector_name(detector))
         ax.legend(loc='lower right', fontsize=8)
         ax.grid(True, alpha=0.3)
     
@@ -927,6 +1032,7 @@ def create_roc_curves_logscale(
         figsize: Figure size
         fpr_min: Minimum FPR for x-axis (log scale)
     """
+    _apply_paper_style()
     import matplotlib.pyplot as plt
     from sklearn.metrics import roc_curve, auc
     
@@ -950,8 +1056,9 @@ def create_roc_curves_logscale(
             tpr_valid = tpr[valid_idx]
             
             color = COLORS.get(method, None)
+            label = METHOD_NAMES.get(method, method)
             ax.plot(fpr_valid, tpr_valid, lw=2, color=color,
-                    label=f'{method.replace("_", " ").title()} (AUC={roc_auc:.2f})')
+                    label=f'{label} (AUC={roc_auc:.2f})')
         
         # Random baseline (diagonal in log scale)
         fpr_line = np.logspace(np.log10(fpr_min), 0, 100)
@@ -962,7 +1069,7 @@ def create_roc_curves_logscale(
         ax.set_ylim([0.0, 1.05])
         ax.set_xlabel('False Positive Rate (log scale)')
         ax.set_ylabel('True Positive Rate')
-        ax.set_title(detector.replace('_', ' ').title(), fontweight='bold')
+        ax.set_title(_pretty_detector_name(detector), fontweight='bold')
         ax.legend(loc='lower right', fontsize=7)
         ax.grid(True, alpha=0.3, which='both')
         
@@ -1006,11 +1113,14 @@ def create_transferability_heatmap(
         output_path: Path to save figure
         figsize: Figure size
     """
+    _apply_paper_style()
     import matplotlib.pyplot as plt
     import seaborn as sns
     
     # Pivot to get methods as rows, detectors as columns
     pivot = data.pivot(index=method_col, columns=detector_col, values=value_col)
+    pivot.index = [METHOD_NAMES.get(m, m) for m in pivot.index]
+    pivot.columns = [_pretty_detector_name(d) for d in pivot.columns]
     
     # Get baseline row
     if baseline_col not in pivot.index:
@@ -1068,7 +1178,7 @@ def create_quality_likert_chart(
     method_col: str = "method",
     rating_col: str = "quality_rating",
     similarity_col: str = "similarity_rating",
-    title: str = "Text Quality Evaluation (GPT-4o Ratings)",
+    title: str = "Text Quality Evaluation (GPT-5-mini Ratings)",
     output_path: str = None,
     figsize: Tuple[int, int] = (12, 5),
 ) -> None:
@@ -1086,16 +1196,21 @@ def create_quality_likert_chart(
         output_path: Path to save figure
         figsize: Figure size
     """
+    _apply_paper_style()
     import matplotlib.pyplot as plt
     
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
     
-    methods = quality_data[method_col].unique()
+    rated = quality_data[quality_data[rating_col].notna()]
+    methods = rated[method_col].unique()
+    if len(methods) == 0:
+        logger.warning("No GPT quality ratings available for Likert chart")
+        return
     x = np.arange(len(methods))
     
     # Quality ratings
-    quality_means = quality_data.groupby(method_col)[rating_col].mean()
-    quality_stds = quality_data.groupby(method_col)[rating_col].std()
+    quality_means = rated.groupby(method_col)[rating_col].mean()
+    quality_stds = rated.groupby(method_col)[rating_col].std()
     
     colors = [COLORS.get(m, f"C{i}") for i, m in enumerate(methods)]
     
@@ -1105,7 +1220,7 @@ def create_quality_likert_chart(
     ax1.set_ylabel('Quality Rating (1-5)', fontsize=11)
     ax1.set_title('(a) Overall Quality', fontweight='bold')
     ax1.set_xticks(x)
-    ax1.set_xticklabels([m.replace('_', '\n') for m in methods], fontsize=9)
+    ax1.set_xticklabels([METHOD_NAMES.get(m, m).replace(' ', '\n') for m in methods], fontsize=9)
     ax1.set_ylim(0, 5.5)
     ax1.axhline(y=4, color='gray', linestyle='--', alpha=0.5, label='Good threshold')
     
@@ -1116,8 +1231,9 @@ def create_quality_likert_chart(
     
     # Similarity ratings (if available)
     if similarity_col in quality_data.columns:
-        sim_means = quality_data.groupby(method_col)[similarity_col].mean()
-        sim_stds = quality_data.groupby(method_col)[similarity_col].std()
+        sim_rated = quality_data[quality_data[similarity_col].notna()]
+        sim_means = sim_rated.groupby(method_col)[similarity_col].mean()
+        sim_stds = sim_rated.groupby(method_col)[similarity_col].std()
         
         bars2 = ax2.bar(x, [sim_means.get(m, 0) for m in methods],
                         yerr=[sim_stds.get(m, 0) for m in methods],
@@ -1125,7 +1241,7 @@ def create_quality_likert_chart(
         ax2.set_ylabel('Similarity Rating (1-5)', fontsize=11)
         ax2.set_title('(b) Semantic Similarity', fontweight='bold')
         ax2.set_xticks(x)
-        ax2.set_xticklabels([m.replace('_', '\n') for m in methods], fontsize=9)
+        ax2.set_xticklabels([METHOD_NAMES.get(m, m).replace(' ', '\n') for m in methods], fontsize=9)
         ax2.set_ylim(0, 5.5)
         ax2.axhline(y=4, color='gray', linestyle='--', alpha=0.5)
         
@@ -1165,6 +1281,7 @@ def create_winrate_chart(
         output_path: Path to save figure
         figsize: Figure size
     """
+    _apply_paper_style()
     import matplotlib.pyplot as plt
     
     fig, ax = plt.subplots(figsize=figsize)
@@ -1424,12 +1541,18 @@ def create_quality_table(
     df = pd.DataFrame(quality_metrics)
     
     # Aggregate by method
-    summary = df.groupby('method').agg({
+    agg_cols = {
         'sim_e5': ['mean', 'std'],
         'ppl_score': ['mean', 'std'],
         'edit_rate': ['mean', 'std'],
         'valid': 'mean',
-    }).round(3)
+    }
+    if 'quality_rating' in df.columns:
+        agg_cols['quality_rating'] = ['mean', 'std']
+    if 'similarity_rating' in df.columns:
+        agg_cols['similarity_rating'] = ['mean', 'std']
+
+    summary = df.groupby('method').agg(agg_cols).round(3)
     
     # Flatten column names
     summary.columns = ['_'.join(col).strip() for col in summary.columns.values]
@@ -1504,6 +1627,7 @@ def _create_quality_evasion_scatter(
     X-axis: Semantic similarity (higher = better quality)
     Y-axis: Mean ASR or (1 - TPR@1%FPR) (higher = better evasion)
     """
+    _apply_paper_style()
     import matplotlib.pyplot as plt
     
     # Aggregate metrics by method
@@ -1587,6 +1711,7 @@ def _create_asr_comparison_chart(
     """
     Create grouped bar chart comparing ASR across methods and detectors.
     """
+    _apply_paper_style()
     import matplotlib.pyplot as plt
     import numpy as np
     
@@ -1619,7 +1744,7 @@ def _create_asr_comparison_chart(
             x + offset,
             values,
             width,
-            label=detector.replace('_', ' ').title(),
+            label=_pretty_detector_name(detector),
             color=detector_colors[i % len(detector_colors)],
             edgecolor='black',
             linewidth=0.5,
@@ -1666,6 +1791,7 @@ def _create_perplexity_similarity_scatter(
     
     Ideal position: high similarity (right), low perplexity (bottom).
     """
+    _apply_paper_style()
     import matplotlib.pyplot as plt
     
     # Aggregate by method
@@ -1752,6 +1878,7 @@ def _create_human_ai_separation_from_df(
     Create human vs AI separation plots from a scores DataFrame.
     Creates one plot per detector showing human vs AI (per method) distributions.
     """
+    _apply_paper_style()
     import matplotlib.pyplot as plt
     
     detectors = scores_data['detector_name'].unique()
@@ -1795,7 +1922,7 @@ def _create_human_ai_separation_from_df(
         
         ax.set_xlabel('Detection Score (higher = more AI-like)', fontsize=12)
         ax.set_ylabel('Density', fontsize=12)
-        ax.set_title(f"Human vs AI Score Separation\n({detector.replace('_', ' ').title()})", 
+        ax.set_title(f"Human vs AI Score Separation\n({_pretty_detector_name(detector)})", 
                      fontsize=14, fontweight='bold')
         ax.legend(loc='upper right', fontsize=9)
         ax.grid(True, alpha=0.3)
@@ -1830,6 +1957,8 @@ def generate_all_plots(
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    _apply_paper_style()
     
     # ========================================================================
     # Heatmaps (SPEC.md Figure 1)
@@ -2009,17 +2138,17 @@ def generate_all_plots(
 
 
 # ============================================================================
-# GPT-4o Quality Evaluation Templates (Adversarial Paraphrasing-style)
+# GPT Quality Evaluation Templates (Adversarial Paraphrasing-style)
 # ============================================================================
 
 QUALITY_RATING_PROMPT = """
-You are an expert linguist and paraphrase evaluator. Your task is to assess the quality of a paraphrased text compared to the original source text. Use the following scoring criteria:
+You are an expert linguist and paraphrase evaluator. Your task is to assess the overall linguistic quality of a paraphrased text compared to the original source text. Focus on fluency, grammaticality, clarity, and naturalness. Use the following scoring criteria:
 
-5 - Approximately equivalent: Meaning is preserved; differences are only in wording or structure.
-4 - Nearly equivalent: Meaning is mostly preserved; minor factual details differ.
-3 - Somewhat equivalent: Some meaning is preserved; important details or meanings differ.
-2 - Topically related: The texts are on the same topic but most meaning is lost.
-1 - Not topically related: The texts are not related in topic or meaning.
+5 - Excellent: Fluent, grammatical, and natural; reads like high-quality human writing.
+4 - Good: Mostly fluent and clear with minor awkwardness or errors.
+3 - Acceptable: Understandable but noticeably awkward or error-prone.
+2 - Poor: Hard to read; many grammatical issues or unnatural phrasing.
+1 - Unusable: Severely degraded quality; incoherent or ungrammatical.
 
 Provide your final output as a JSON object in this format:
 {
@@ -2057,7 +2186,7 @@ def get_quality_rating_messages(original_text: str, paraphrased_text: str) -> Li
         List of message dicts for OpenAI API
     """
     user_prompt = f"""
-Evaluate the following paraphrase using the criteria above:
+Evaluate the following paraphrase using the criteria above (focus on fluency and overall writing quality):
 
 Original Text:
 \"\"\"{original_text}\"\"\"
@@ -2065,7 +2194,7 @@ Original Text:
 Paraphrased Text:
 \"\"\"{paraphrased_text}\"\"\"
 
-What score (1 to 5) would you assign to this paraphrase, and why?
+What score (1 to 5) would you assign to the paraphrase's quality, and why?
 """
     
     return [

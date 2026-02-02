@@ -82,6 +82,13 @@ class QualityMetrics:
     # Validity
     valid: bool = True
     fail_reason: Optional[str] = None
+
+    # Optional GPT-based ratings
+    quality_rating: Optional[int] = None
+    similarity_rating: Optional[int] = None
+    quality_justification: Optional[str] = None
+    similarity_justification: Optional[str] = None
+    quality_model: Optional[str] = None
     
     def to_dict(self) -> dict:
         return asdict(self)

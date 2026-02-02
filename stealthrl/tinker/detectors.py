@@ -13,6 +13,8 @@ import threading
 from typing import Dict, List, Any, Tuple, Optional
 from pathlib import Path
 import time
+import re
+import unicodedata
 
 logger = logging.getLogger(__name__)
 
@@ -718,6 +720,120 @@ class GhostbusterDetector(BaseDetector):
             return 0.5  # Return neutral score on error
 
 
+class MageDetector(BaseDetector):
+    """
+    MAGE detector (Longformer-based).
+    
+    Model: yaful/MAGE
+    Labels: 0 = machine-generated, 1 = human-written
+    
+    Note: This detector returns AI probability by default (p_machine).
+    The reward uses (1 - p_machine) to align with p_human.
+    """
+    
+    MODEL_NAME = "yaful/MAGE"
+    
+    def __init__(
+        self,
+        cache: DetectorCache,
+        device: Optional[str] = None,
+        max_length: int = 4096,
+        score_mode: str = "ai_prob",  # ai_prob | human_prob | log_odds
+    ):
+        super().__init__("mage", cache)
+        self.device = device or _default_device()
+        self.max_length = max_length
+        self.score_mode = score_mode
+        self.model = None
+        self.tokenizer = None
+        logger.info(f"Initialized MAGE detector on {self.device} (max_length={self.max_length})")
+    
+    @staticmethod
+    def _preprocess(text: str) -> str:
+        text = unicodedata.normalize("NFKC", text)
+        text = text.replace("\u00a0", " ")
+        text = re.sub(r"[ \t]+", " ", text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()
+    
+    def _load_model(self):
+        """Lazy load Longformer classifier with cached model loading."""
+        if self.model is None:
+            logger.info(f"Loading {self.MODEL_NAME} for MAGE detector...")
+            self.model, self.tokenizer = load_model_cached(
+                self.MODEL_NAME,
+                "sequence_classification",
+                self.device,
+                num_labels=2,
+            )
+            if getattr(self.tokenizer, "pad_token", None) is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            logger.info(f"✓ {self.MODEL_NAME} loaded on {self.device}")
+            if self.score_mode not in {"ai_prob", "human_prob", "log_odds"}:
+                logger.warning(f"Unknown mage score_mode '{self.score_mode}', falling back to ai_prob")
+                self.score_mode = "ai_prob"
+    
+    async def _compute_score(self, text: str) -> float:
+        return await asyncio.to_thread(self._compute_score_sync, text)
+    
+    def _compute_score_sync(self, text: str) -> float:
+        scores = self._detect_batch_sync([text], batch_size=1)
+        return scores[0] if scores else 0.5
+    
+    async def detect_batch(self, texts: List[str], batch_size: int = 4) -> List[float]:
+        return await asyncio.to_thread(self._detect_batch_sync, texts, batch_size)
+    
+    def _detect_batch_sync(self, texts: List[str], batch_size: int = 4) -> List[float]:
+        import torch
+        
+        self._load_model()
+        all_scores: List[float] = []
+        eps = 1e-8
+        
+        for i in range(0, len(texts), batch_size):
+            batch_texts = [self._preprocess(t) for t in texts[i:i+batch_size]]
+            try:
+                enc = self.tokenizer(
+                    batch_texts,
+                    return_tensors="pt",
+                    padding=True,
+                    truncation=True,
+                    max_length=self.max_length,
+                )
+                input_ids = enc["input_ids"].to(self.device)
+                attention_mask = enc["attention_mask"].to(self.device)
+                
+                # Longformer requires global attention on at least one token
+                global_attention_mask = torch.zeros_like(attention_mask)
+                global_attention_mask[:, 0] = 1
+                
+                with torch.no_grad():
+                    out = self.model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                        global_attention_mask=global_attention_mask,
+                    )
+                    probs = torch.softmax(out.logits, dim=-1)
+                    p_machine = probs[:, 0]
+                    p_human = probs[:, 1]
+                
+                if self.score_mode == "human_prob":
+                    scores = p_human
+                elif self.score_mode == "log_odds":
+                    scores = torch.log(p_human + eps) - torch.log(p_machine + eps)
+                else:
+                    scores = p_machine
+                
+                scores_list = scores.detach().cpu().tolist()
+                all_scores.extend([float(s) for s in scores_list])
+            
+            except Exception as e:
+                logger.error(f"MAGE batch error for batch {i//batch_size}: {e}")
+                all_scores.extend([0.5] * len(batch_texts))
+        
+        return all_scores
+
+
 class BinocularsDetector(BaseDetector):
     """
     Binoculars detector using paired language model approach.
@@ -843,8 +959,11 @@ class DetectorEnsemble:
         ghostbuster_model: str = "roberta-base",
         binoculars_performer: str = "gpt2",
         binoculars_observer: str = "gpt2-medium",
+        mage_max_length: int = 4096,
+        mage_score_mode: str = "ai_prob",
         roberta_batch_size: int = 128,  # Batch size for RoBERTa (memory efficient)
         fast_detectgpt_batch_size: int = 32,  # Batch size for Fast-DetectGPT (larger model)
+        mage_batch_size: int = 4,
     ):
         """
         Initialize detector ensemble.
@@ -860,7 +979,11 @@ class DetectorEnsemble:
             ghostbuster_model: Model for Ghostbuster ("roberta-base", "roberta-base-openai-detector")
             binoculars_performer: Performer model for Binoculars
             binoculars_observer: Observer model for Binoculars
-            batch_size: Batch size for GPU inference (higher = faster but more memory)
+            mage_max_length: Max sequence length for MAGE (Longformer)
+            mage_score_mode: Score mode for MAGE (ai_prob | human_prob | log_odds)
+            roberta_batch_size: Batch size for RoBERTa
+            fast_detectgpt_batch_size: Batch size for Fast-DetectGPT
+            mage_batch_size: Batch size for MAGE
         """
         self.detector_names = detector_names
         self.device = device or _default_device()
@@ -868,6 +991,9 @@ class DetectorEnsemble:
         self.roberta_openai_model = roberta_openai_model
         self.roberta_batch_size = roberta_batch_size
         self.fast_detectgpt_batch_size = fast_detectgpt_batch_size
+        self.mage_batch_size = mage_batch_size
+        self.mage_max_length = mage_max_length
+        self.mage_score_mode = mage_score_mode
         
         # Initialize cache
         self.cache = DetectorCache(cache_path)
@@ -903,6 +1029,13 @@ class DetectorEnsemble:
                     performer_model=binoculars_performer,
                     observer_model=binoculars_observer,
                     device=self.device
+                )
+            elif name == "mage":
+                self.detectors[name] = MageDetector(
+                    self.cache,
+                    device=self.device,
+                    max_length=mage_max_length,
+                    score_mode=mage_score_mode,
                 )
             else:
                 logger.warning(f"Unknown detector: {name}, skipping")
@@ -982,6 +1115,8 @@ class DetectorEnsemble:
                 # Use detector-specific batch size
                 if 'roberta' in detector_name.lower():
                     batch_size = self.roberta_batch_size
+                elif 'mage' in detector_name.lower():
+                    batch_size = self.mage_batch_size
                 elif 'fast' in detector_name.lower() or 'detectgpt' in detector_name.lower():
                     batch_size = self.fast_detectgpt_batch_size
                 else:

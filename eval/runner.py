@@ -16,6 +16,7 @@ Usage:
 import argparse
 import json
 import logging
+import os
 import sys
 import time
 from datetime import datetime
@@ -35,6 +36,7 @@ from .metrics import (
     E5SimilarityScorer,
     PerplexityScorer,
 )
+from .quality_judge import GPTQualityConfig, run_gpt_quality_judge
 from .plots import (
     generate_all_plots,
     generate_all_tables,
@@ -100,6 +102,7 @@ class EvalRunner:
         self.all_quality: List[Dict] = []
         self.all_metrics: List[Dict] = []
         self.thresholds: Dict[str, float] = {}
+        self.all_quality_gpt: List[Dict] = []
     
     def load_datasets(
         self,
@@ -389,6 +392,7 @@ class EvalRunner:
     def compute_quality_metrics(
         self,
         outputs: Dict[str, Dict[str, List[str]]],
+        setting: str = "default",
     ):
         """Compute text quality metrics for all outputs."""
         logger.info("Computing quality metrics...")
@@ -407,7 +411,7 @@ class EvalRunner:
                     paraphrased_texts=attacked_texts,
                     sample_ids=sample_ids,
                     method=method_name,
-                    setting="default",
+                    setting=setting,
                     similarity_scorer=sim_scorer,
                     perplexity_scorer=ppl_scorer,
                 )
@@ -416,6 +420,75 @@ class EvalRunner:
                     self.all_quality.append(q.to_dict())
         
         logger.info(f"Computed quality metrics for {len(self.all_quality)} samples")
+
+    def compute_gpt_quality_metrics(
+        self,
+        outputs: Dict[str, Dict[str, List[str]]],
+        methods: List[str],
+        max_per_method: int,
+        model: str,
+        openai_api_key: Optional[str],
+        cache_path: Optional[str],
+        setting: str,
+    ):
+        """Compute GPT-based quality ratings (optional, API required)."""
+        if not openai_api_key:
+            logger.warning("[GPT-QUALITY] OpenAI API key not provided; skipping GPT quality evaluation.")
+            return
+
+        items: List[Dict[str, str]] = []
+
+        for dataset_name, dataset in self.datasets.items():
+            original_texts = [s.text for s in dataset.ai_samples]
+            sample_ids = [s.id for s in dataset.ai_samples]
+
+            for method_name in methods:
+                attacked_texts = outputs.get(dataset_name, {}).get(method_name)
+                if not attacked_texts:
+                    continue
+
+                for sid, orig, para in zip(sample_ids, original_texts, attacked_texts):
+                    items.append({
+                        "sample_id": sid,
+                        "dataset": dataset_name,
+                        "method": method_name,
+                        "setting": setting,
+                        "original": orig,
+                        "paraphrased": para,
+                    })
+
+        if not items:
+            logger.warning("[GPT-QUALITY] No items to evaluate (check method names).")
+            return
+
+        config = GPTQualityConfig(
+            model=model,
+            max_per_method=max_per_method,
+            seed=self.seed,
+            cache_path=Path(cache_path) if cache_path else None,
+        )
+
+        logger.info(f"[GPT-QUALITY] Starting GPT quality evaluation with model={model}")
+        results = run_gpt_quality_judge(
+            api_key=openai_api_key,
+            items=items,
+            config=config,
+        )
+        self.all_quality_gpt = results
+
+        # Merge into existing quality records
+        quality_index = {
+            (q.get("sample_id"), q.get("method"), q.get("setting")): q
+            for q in self.all_quality
+        }
+        for r in results:
+            key = (r.get("sample_id"), r.get("method"), r.get("setting"))
+            if key in quality_index:
+                quality_index[key].update(r)
+            else:
+                self.all_quality.append(r)
+
+        logger.info(f"[GPT-QUALITY] Completed GPT quality ratings for {len(results)} samples")
     
     def save_all_artifacts(self):
         """Save all artifacts to disk."""
@@ -434,6 +507,12 @@ class EvalRunner:
         quality_df = pd.DataFrame(self.all_quality)
         quality_df.to_parquet(self.output_dir / "quality.parquet")
         quality_df.to_csv(self.output_dir / "quality.csv", index=False)
+        
+        # Save GPT quality ratings (if any)
+        if self.all_quality_gpt:
+            gpt_df = pd.DataFrame(self.all_quality_gpt)
+            gpt_df.to_parquet(self.output_dir / "quality_gpt.parquet")
+            gpt_df.to_csv(self.output_dir / "quality_gpt.csv", index=False)
 
         # Save metrics
         with open(self.output_dir / "metrics.json", "w") as f:
@@ -481,6 +560,12 @@ class EvalRunner:
         cache_dir: str = None,
         binoculars_full: bool = False,
         setting_suffix: str = None,
+        gpt_quality: bool = False,
+        gpt_quality_methods: Optional[List[str]] = None,
+        gpt_quality_max_per_method: int = 200,
+        gpt_quality_model: str = "gpt-5-mini",
+        openai_api_key: Optional[str] = None,
+        gpt_quality_cache: bool = True,
     ):
         """
         Run complete evaluation pipeline.
@@ -558,11 +643,32 @@ class EvalRunner:
         step_times["7_compute_metrics"] = time.time() - step_start
         logger.info(f"[TIMING] Step 7 (Compute metrics): {step_times['7_compute_metrics']:.2f}s")
         
+        setting_label = setting_suffix or "default"
+
         # Step 8: Compute quality metrics
         step_start = time.time()
-        self.compute_quality_metrics(outputs)
+        self.compute_quality_metrics(outputs, setting=setting_label)
         step_times["8_quality_metrics"] = time.time() - step_start
         logger.info(f"[TIMING] Step 8 (Quality metrics): {step_times['8_quality_metrics']:.2f}s")
+
+        # Step 8b: Optional GPT-based quality evaluation
+        if gpt_quality:
+            step_start = time.time()
+            methods_for_gpt = gpt_quality_methods or ["m2", "stealthrl"]
+            cache_path = None
+            if gpt_quality_cache:
+                cache_path = str(self.output_dir / "quality_gpt.jsonl")
+            self.compute_gpt_quality_metrics(
+                outputs=outputs,
+                methods=methods_for_gpt,
+                max_per_method=gpt_quality_max_per_method,
+                model=gpt_quality_model,
+                openai_api_key=openai_api_key,
+                cache_path=cache_path,
+                setting=setting_label,
+            )
+            step_times["8b_gpt_quality"] = time.time() - step_start
+            logger.info(f"[TIMING] Step 8b (GPT quality): {step_times['8b_gpt_quality']:.2f}s")
         
         # Step 9: Save artifacts
         step_start = time.time()
@@ -681,6 +787,42 @@ def main():
     parser.add_argument("--n-bootstrap", type=int, default=1000, help="Bootstrap samples")
     parser.add_argument("--log-level", type=str, default="INFO", help="Logging level")
     
+    # Optional GPT quality evaluation
+    parser.add_argument(
+        "--gpt-quality",
+        action="store_true",
+        help="Enable GPT-based quality evaluation (requires OpenAI API key)",
+    )
+    parser.add_argument(
+        "--gpt-quality-max-per-method",
+        type=int,
+        default=200,
+        help="Maximum number of samples per method to judge",
+    )
+    parser.add_argument(
+        "--gpt-quality-model",
+        type=str,
+        default="gpt-5-mini",
+        help="Model name for GPT quality judging",
+    )
+    parser.add_argument(
+        "--gpt-quality-methods",
+        nargs="+",
+        default=None,
+        help="Methods to run GPT quality judging on (default: m2/stealthrl)",
+    )
+    parser.add_argument(
+        "--openai-api-key",
+        type=str,
+        default=None,
+        help="OpenAI API key (overrides OPENAI_API_KEY env var)",
+    )
+    parser.add_argument(
+        "--gpt-quality-no-cache",
+        action="store_true",
+        help="Disable GPT quality cache (always re-call API)",
+    )
+    
     args = parser.parse_args()
     
     # Handle budget sweep flag
@@ -705,6 +847,8 @@ def main():
     logger.info(f"Binoculars mode: {'Falcon-7B (full)' if args.binoculars_full else 'GPT-2 (lightweight)'}")
     logger.info(f"N candidates: {args.n_candidates}")
     logger.info(f"Output dir: {args.out_dir}")
+    if args.gpt_quality:
+        logger.info(f"GPT quality: enabled (model={args.gpt_quality_model}, cap={args.gpt_quality_max_per_method})")
     logger.info("=" * 60)
     
     # Create and run evaluator
@@ -715,6 +859,9 @@ def main():
         n_bootstrap=args.n_bootstrap,
     )
     
+    # Resolve OpenAI key if needed
+    openai_key = args.openai_api_key or os.getenv("OPENAI_API_KEY")
+
     # Run for each N value (budget sweep)
     for n_cand in args.n_candidates:
         logger.info(f"\n{'='*60}")
@@ -732,6 +879,12 @@ def main():
             cache_dir=args.cache_dir,
             binoculars_full=args.binoculars_full,
             setting_suffix=f"N={n_cand}",
+            gpt_quality=args.gpt_quality,
+            gpt_quality_methods=args.gpt_quality_methods,
+            gpt_quality_max_per_method=args.gpt_quality_max_per_method,
+            gpt_quality_model=args.gpt_quality_model,
+            openai_api_key=openai_key,
+            gpt_quality_cache=not args.gpt_quality_no_cache,
         )
 
 

@@ -14,6 +14,9 @@ python scripts/run_eval.py --datasets mage --n-human 1000 --n-ai 1000
 # With StealthRL checkpoint
 python scripts/run_eval.py --stealthrl-checkpoint outputs/runs/best_checkpoint --methods m0 m1 m2
 
+# With GPT-based quality evaluation (requires OPENAI_API_KEY)
+python scripts/run_eval.py --methods m2 --gpt-quality --gpt-quality-max-per-method 200
+
 # All methods and detectors
 python scripts/run_eval.py \
     --datasets mage raid \
@@ -39,6 +42,7 @@ artifacts/
 ├── scores.parquet          # Per-sample detector scores
 ├── scores.csv              # Same in CSV format
 ├── quality.parquet         # Per-sample quality metrics
+├── quality_gpt.parquet     # GPT-based quality ratings (optional)
 ├── metrics.json            # Aggregated metrics with CIs
 ├── thresholds.json         # Calibrated detector thresholds
 ├── raw_outputs.json        # Raw attack outputs
@@ -84,6 +88,8 @@ artifacts/
 - **sim_e5**: E5 cosine similarity
 - **ppl_score**: Perplexity (GPT-2)
 - **edit_rate**: Character edit distance ratio
+ - **quality_rating**: GPT Likert quality rating (1-5, optional)
+ - **similarity_rating**: GPT semantic similarity rating (1-5, optional)
 
 ## Python API
 

@@ -984,6 +984,12 @@ async def main():
             reward_cfg["roberta_batch_size"] = int(detectors_config.get("roberta_batch_size"))
         if detectors_config.get("fast_detectgpt_batch_size"):
             reward_cfg["fast_detectgpt_batch_size"] = int(detectors_config.get("fast_detectgpt_batch_size"))
+        if detectors_config.get("mage_batch_size"):
+            reward_cfg["mage_batch_size"] = int(detectors_config.get("mage_batch_size"))
+        if detectors_config.get("mage_max_length"):
+            reward_cfg["mage_max_length"] = int(detectors_config.get("mage_max_length"))
+        if detectors_config.get("mage_score_mode"):
+            reward_cfg["mage_score_mode"] = detectors_config.get("mage_score_mode")
         
         # Pass through detector-specific model options
         if detectors_config.get("fast_detectgpt_model"):

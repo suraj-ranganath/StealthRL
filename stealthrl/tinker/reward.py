@@ -49,10 +49,13 @@ class TinkerCompositeReward:
         ghostbuster_model: str = "roberta-base",
         binoculars_performer: str = "gpt2",
         binoculars_observer: str = "gpt2-medium",
+        mage_max_length: int = 4096,
+        mage_score_mode: str = "ai_prob",
         
         # Batch sizes for detector inference
         roberta_batch_size: int = 128,
         fast_detectgpt_batch_size: int = 32,
+        mage_batch_size: int = 4,
         
         # Semantic config
         semantic_model: str = "intfloat/e5-large-v2",
@@ -85,6 +88,8 @@ class TinkerCompositeReward:
             ghostbuster_model: Model for Ghostbuster
             binoculars_performer: Performer model for Binoculars
             binoculars_observer: Observer model for Binoculars
+            mage_max_length: Max sequence length for MAGE (Longformer)
+            mage_score_mode: Score mode for MAGE (ai_prob | human_prob | log_odds)
             semantic_model: E5 model for semantic similarity
             semantic_threshold: Minimum acceptable semantic similarity
             ppl_model: Model for perplexity computation
@@ -117,8 +122,11 @@ class TinkerCompositeReward:
             ghostbuster_model=ghostbuster_model,
             binoculars_performer=binoculars_performer,
             binoculars_observer=binoculars_observer,
+            mage_max_length=mage_max_length,
+            mage_score_mode=mage_score_mode,
             roberta_batch_size=roberta_batch_size,
             fast_detectgpt_batch_size=fast_detectgpt_batch_size,
+            mage_batch_size=mage_batch_size,
         )
         
         # Pre-warm detector models to avoid lazy loading during training
