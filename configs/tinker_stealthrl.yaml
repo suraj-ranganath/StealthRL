@@ -55,20 +55,33 @@ curriculum:
 
 # Reward function configuration
 reward:
-  # Weights (α, β, γ, δ)
+  # Weights (α, β, γ)
   detector_weight: 1.0  # α: Detector evasion
   semantic_weight: 1.0  # β: Semantic similarity
-  perplexity_weight: 0.5  # γ: Fluency
-  fairness_weight: 0.2  # δ: ESL fairness
+  perplexity_weight: 0.5  # γ: Fluency (removed fairness penalty)
   
-  # Detector ensemble
+  # Detector ensemble (VALIDATED DETECTORS - Jan 2026)
   detectors:
     names:
-      - "fast_detectgpt"
-      - "ghostbuster"
-    weights:  # Optional custom weights (null = equal)
-      fast_detectgpt: 0.5
-      ghostbuster: 0.5
+      - "roberta_openai"  # RoBERTa-large-openai-detector (AUROC: 0.891, 12x faster)
+      - "fast_detectgpt"  # Fast-DetectGPT gpt-neo-2.7B (AUROC: 0.691, robust)
+    weights:  # Performance-based weights (RoBERTa: higher accuracy, Fast-DetectGPT: complementary)
+      roberta_openai: 0.6  # 60% weight (superior accuracy + speed)
+      fast_detectgpt: 0.4  # 40% weight (different detection method, reduces correlation)
+    
+    # Batch sizes for detector inference (higher = faster but more GPU memory)
+    # RoBERTa is memory efficient and can handle larger batches
+    roberta_batch_size: 128  # RoBERTa-large can handle 128+ on most GPUs
+    # Fast-DetectGPT uses gpt-neo-2.7B which needs more memory
+    fast_detectgpt_batch_size: 32  # Reduce if OOM, increase if you have VRAM
+    
+    # Detector-specific settings
+    fast_detectgpt_model: "gpt-neo-2.7B"  # VALIDATED: AUROC 0.691 on 5000 samples
+    roberta_openai_model: "roberta-large-openai-detector"  # VALIDATED: AUROC 0.891 on 200 samples
+    ghostbuster_model: "roberta-base"  # BACKUP: Not validated yet
+    binoculars_performer: "gpt2"  # BACKUP: Not validated yet
+    binoculars_observer: "gpt2-medium"  # BACKUP: Not validated yet
+    
     cache_path: "cache/detectors.db"
   
   # Semantic similarity (E5)
@@ -103,8 +116,10 @@ reward:
 
 # Dataset settings
 dataset:
-  path: "data/tinker"
-  max_examples: null  # Optional limit for debugging
+  path: "data/mage"  # MAGE dataset (60K+, 14 domains, HuggingFace format)
+  max_examples: null  # Limit total examples per split (null=unlimited, set to 200-1000 for testing)
+  max_train_examples: null  # Optional: limit only train split
+  max_test_examples: null   # Optional: limit only test split
   seed: 42
   few_shot: "standard"  # "standard" | null | custom
 
@@ -116,3 +131,11 @@ logging:
   save_interval: 500  # Save every N batches
   num_groups_to_log: 4  # Detailed logs
   debug_mode: false
+
+# Parallel training (Tinker async/stream)
+parallel:
+  mode: "stream_minibatch"  # sync | stream_minibatch | async
+  stream_minibatch:
+    num_minibatches: 4  # Pipelined minibatches per substep
+  async:
+    max_steps_off_policy: 2

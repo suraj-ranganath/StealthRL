@@ -345,6 +345,12 @@ def plot_reward_decomposition(df: pd.DataFrame, output_dir: Path):
 
 def plot_stability_metrics(df: pd.DataFrame, output_dir: Path):
     """Plot training stability and convergence metrics."""
+    time_col = None
+    for candidate in ("time/total", "time/training_loop/total", "time/train"):
+        if candidate in df.columns:
+            time_col = candidate
+            break
+
     fig, axes = plt.subplots(2, 2, figsize=(16, 12))
     fig.suptitle('Training Stability & Convergence Analysis', 
                  fontsize=20, fontweight='bold')
@@ -380,11 +386,22 @@ def plot_stability_metrics(df: pd.DataFrame, output_dir: Path):
     
     # 4. Training time per step
     ax = axes[1, 1]
-    ax.plot(df['step'], df['time/total'], 'red', linewidth=2)
-    ax.set_xlabel('Training Step', fontsize=14)
-    ax.set_ylabel('Time (seconds)', fontsize=14)
-    ax.set_title('Iteration Time\n(includes generation + training)', fontsize=16)
-    ax.grid(True, alpha=0.3)
+    if time_col:
+        ax.plot(df['step'], df[time_col], 'red', linewidth=2)
+        ax.set_xlabel('Training Step', fontsize=14)
+        ax.set_ylabel('Time (seconds)', fontsize=14)
+        ax.set_title('Iteration Time\n(includes generation + training)', fontsize=16)
+        ax.grid(True, alpha=0.3)
+    else:
+        ax.axis('off')
+        ax.text(
+            0.5,
+            0.5,
+            "No time metrics found",
+            ha="center",
+            va="center",
+            fontsize=14,
+        )
     
     plt.tight_layout()
     plt.savefig(output_dir / 'stability_metrics.png', dpi=300, bbox_inches='tight')
@@ -394,6 +411,12 @@ def plot_stability_metrics(df: pd.DataFrame, output_dir: Path):
 
 def generate_summary_stats(df: pd.DataFrame, output_dir: Path):
     """Generate summary statistics table."""
+    time_col = None
+    for candidate in ("time/total", "time/training_loop/total", "time/train"):
+        if candidate in df.columns:
+            time_col = candidate
+            break
+
     summary = {
         'Metric': [],
         'Initial': [],
@@ -439,7 +462,10 @@ def generate_summary_stats(df: pd.DataFrame, output_dir: Path):
         f.write(summary_df.to_string(index=False))
         f.write("\n\n")
         f.write(f"Total Training Steps: {len(df)}\n")
-        f.write(f"Total Training Time: {df['time/total'].sum() / 3600:.2f} hours\n")
+        if time_col:
+            f.write(f"Total Training Time: {df[time_col].sum() / 3600:.2f} hours\n")
+        else:
+            f.write("Total Training Time: n/a (time metric missing)\n")
         f.write(f"Final Learning Rate: {df['optim/lr'].iloc[-1]}\n")
     
     print(f"✓ Saved summary statistics to {output_dir / 'training_summary.csv'}")
@@ -448,10 +474,20 @@ def generate_summary_stats(df: pd.DataFrame, output_dir: Path):
 
 def main():
     """Main visualization pipeline."""
-    # Path to metrics file
-    metrics_path = Path(__file__).parent.parent / "outputs" / "tinker_ultrafast" / "run_20251207_212110" / "metrics.jsonl"
-    output_dir = metrics_path.parent / "visualizations"
-    output_dir.mkdir(exist_ok=True)
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate training visualizations")
+    parser.add_argument(
+        "--run-dir",
+        type=str,
+        required=True,
+        help="Path to run directory containing metrics.jsonl",
+    )
+    args = parser.parse_args()
+
+    metrics_path = Path(args.run_dir) / "metrics.jsonl"
+    output_dir = Path(args.run_dir) / "visualizations"
+    output_dir.mkdir(parents=True, exist_ok=True)
     
     print("="*70)
     print("STEALTHRL TRAINING VISUALIZATION")

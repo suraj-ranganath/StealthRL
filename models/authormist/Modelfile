@@ -1,0 +1,26 @@
+# AuthorMist Modelfile for Ollama
+# 
+# Setup Instructions:
+# 1. Download the AuthorMist imatrix GGUF file
+# 2. Place it in this directory (models/authormist/)
+# 3. Update the FROM line below with the actual filename
+# 4. Run: ollama create authormist -f models/authormist/Modelfile
+# 5. Test: ollama run authormist "Paraphrase: The quick brown fox jumps."
+
+# UPDATE THIS LINE with your GGUF filename:
+FROM ./authormist-originality.i1-Q4_K_M.gguf
+
+# Template for AuthorMist paraphrasing
+TEMPLATE """{{ .Prompt }}"""
+
+# System prompt (optional - AuthorMist may work better without)
+# SYSTEM """You are an expert text humanizer. Your task is to paraphrase text to make it more human-like while preserving the original meaning."""
+
+# Parameters optimized for paraphrasing
+PARAMETER temperature 0.7
+PARAMETER top_p 0.9
+PARAMETER top_k 40
+PARAMETER num_predict 512
+PARAMETER stop "</s>"
+PARAMETER stop "<|endoftext|>"
+PARAMETER stop "<|im_end|>"

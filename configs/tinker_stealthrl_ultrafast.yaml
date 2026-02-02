@@ -106,3 +106,11 @@ logging:
   eval_every: 50
   num_groups_to_log: 2
   debug_mode: false
+
+# Parallel training (Tinker async/stream)
+parallel:
+  mode: "stream_minibatch"  # sync | stream_minibatch | async
+  stream_minibatch:
+    num_minibatches: 2
+  async:
+    max_steps_off_policy: 1

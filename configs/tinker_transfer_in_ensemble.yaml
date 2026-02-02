@@ -124,6 +124,14 @@ logging:
   debug_samples: true
   debug_frequency: 100
 
+# Parallel training (Tinker async/stream)
+parallel:
+  mode: "stream_minibatch"  # sync | stream_minibatch | async
+  stream_minibatch:
+    num_minibatches: 4
+  async:
+    max_steps_off_policy: 2
+
 # Transfer evaluation notes:
 # 1. Train with this config (Fast-DetectGPT + Ghostbuster)
 # 2. Evaluate with scripts/evaluate_transfer.py

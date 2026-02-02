@@ -205,6 +205,19 @@ async def main():
     grpo_config = yaml_config.get('grpo', {})
     kl_config = yaml_config.get('kl', {})
     logging_config = yaml_config.get('logging', {})
+    parallel_config = yaml_config.get('parallel', {})
+
+    parallel_mode = parallel_config.get('mode', 'sync')
+    async_config = parallel_config.get('async', {})
+    stream_config = parallel_config.get('stream_minibatch', {})
+
+    async_groups_per_batch = async_config.get('groups_per_batch')
+    if async_groups_per_batch is not None:
+        async_groups_per_batch = int(async_groups_per_batch)
+
+    stream_groups_per_batch = stream_config.get('groups_per_batch')
+    if stream_groups_per_batch is not None:
+        stream_groups_per_batch = int(stream_groups_per_batch)
     
     # Create config with settings from YAML (ensure proper types)
     config = StealthRLConfig(
@@ -228,7 +241,16 @@ async def main():
         log_path=str(output_dir),
         save_every=int(logging_config.get('save_every', 100)),
         eval_every=int(logging_config.get('eval_every', 50)),
+        training_mode=parallel_mode,
+        async_max_steps_off_policy=int(async_config.get('max_steps_off_policy', 1)),
+        async_groups_per_batch=async_groups_per_batch,
+        stream_groups_per_batch=stream_groups_per_batch,
+        stream_num_minibatches=int(stream_config.get('num_minibatches', 2)),
     )
+
+    run_metadata["training_mode"] = parallel_mode
+    with open(output_dir / "run_metadata.json", "w") as f:
+        json.dump(run_metadata, f, indent=2)
     
     logger.info(f"Output directory: {output_dir}")
     logger.info(f"Metrics will be saved to: {output_dir}/metrics.jsonl")

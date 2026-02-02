@@ -19,18 +19,128 @@ import time
 import json
 from pathlib import Path
 from typing import Dict, Any, List
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 
 import torch
 import chz
 import tinker
 from tinker_cookbook.rl import train as rl_train
-from tinker_cookbook.rl.types import RLDatasetBuilder
+from tinker_cookbook.rl.types import RLDatasetBuilder, EnvGroupBuilder, TrajectoryGroup
+from tinker_cookbook.completers import TokenCompleter, StopCondition, TokensWithLogprobs
 from tinker_cookbook.tokenizer_utils import get_tokenizer
-from tinker_cookbook.utils import ml_log
+from tinker_cookbook.utils import ml_log, logtree
 from torch.utils.tensorboard import SummaryWriter
 
 logger = logging.getLogger(__name__)
+
+# ============================================================================
+# Optional batched sampling (single API call per group)
+# Enabled by env ENABLE_BATCHED_SAMPLING=1 (default: enabled)
+# ============================================================================
+
+@dataclass
+class BatchedTokenCompleter(TokenCompleter):
+    """
+    TokenCompleter that calls sample_async once with num_samples=group_size.
+    """
+    sampling_client: tinker.SamplingClient
+    max_tokens: int
+    group_size: int
+    temperature: float = 1.0
+    _samples_cache: list[TokensWithLogprobs] | None = field(default=None, init=False, repr=False)
+    _cache_index: int = field(default=0, init=False, repr=False)
+
+    async def __call__(self, model_input: tinker.ModelInput, stop: StopCondition) -> TokensWithLogprobs:
+        if self._samples_cache is None:
+            sample_result = await self.sampling_client.sample_async(
+                prompt=model_input,
+                num_samples=self.group_size,
+                sampling_params=tinker.SamplingParams(
+                    stop=stop,
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                ),
+            )
+            self._samples_cache = []
+            for seq in sample_result.sequences:
+                logprobs = seq.logprobs
+                assert logprobs is not None, "logprobs required for GRPO"
+                self._samples_cache.append(TokensWithLogprobs(tokens=seq.tokens, maybe_logprobs=logprobs))
+            self._cache_index = 0
+
+        sample = self._samples_cache[self._cache_index]
+        self._cache_index += 1
+        return sample
+
+
+@logtree.scope_header_decorator
+async def do_group_rollout_batched(
+    sampling_client: tinker.SamplingClient,
+    env_group_builder: EnvGroupBuilder,
+    max_tokens: int,
+    temperature: float,
+    do_remove_constant_reward_groups: bool,
+    enable_logging: bool = True,
+) -> TrajectoryGroup | None:
+    envs_G = await env_group_builder.make_envs()
+    group_size = len(envs_G)
+    policy = BatchedTokenCompleter(
+        sampling_client=sampling_client,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        group_size=group_size,
+    )
+    policy._samples_cache = None
+    policy._cache_index = 0
+
+    with logtree.optional_enable_logging(enable_logging):
+        trajectory_group = await rl_train.do_group_rollout(env_group_builder, policy)
+
+    trajectory_groups = [trajectory_group]
+    if do_remove_constant_reward_groups:
+        trajectory_groups = rl_train.remove_constant_reward_groups(trajectory_groups)
+    if len(trajectory_groups) == 0:
+        return None
+    return trajectory_groups[0]
+
+def _enable_overlap_optim_step_requests() -> None:
+    """Overlap forward_backward and optim_step requests for better throughput."""
+    if getattr(rl_train, "_overlap_patch_applied", False):
+        return
+
+    async def train_step_overlap(
+        data_D: List[tinker.Datum],
+        training_client: tinker.TrainingClient,
+        learning_rate: float,
+        num_substeps: int,
+        loss_fn: Any,
+    ) -> List[torch.Tensor]:
+        batches_md = rl_train.split_list(data_D, min(num_substeps, len(data_D)))
+        training_logprobs_D: list[torch.Tensor] = []
+        for batch_d in batches_md:
+            fwd_bwd_future = await training_client.forward_backward_async(
+                list(map(rl_train.remove_mask, batch_d)),
+                loss_fn=loss_fn,
+            )
+            adam_params = tinker.AdamParams(
+                learning_rate=learning_rate,
+                beta1=0.9,
+                beta2=0.95,
+                eps=1e-8,
+            )
+            optim_future = await training_client.optim_step_async(adam_params)
+
+            fwd_bwd_result = await fwd_bwd_future.result_async()
+            for output in fwd_bwd_result.loss_fn_outputs:
+                training_logprobs_D.append(output["logprobs"].to_torch())
+
+            await optim_future.result_async()
+
+        return training_logprobs_D
+
+    rl_train.train_step = train_step_overlap
+    rl_train._overlap_patch_applied = True
+    logger.info("Enabled overlapped forward_backward/optim_step submissions.")
 
 
 class TensorBoardLogger:
@@ -151,12 +261,20 @@ class StealthRLConfig:
     group_size: int = 4  # Number of rollouts per prompt (for centering)
     num_epochs: int = 2
     num_substeps: int = 1  # Gradient accumulation steps
+
+    # Parallel training mode
+    training_mode: str = "sync"  # "sync" | "stream_minibatch" | "async"
+    async_max_steps_off_policy: int = 1  # Async only: max steps off-policy
+    async_groups_per_batch: int | None = None  # Async only: override groups per batch
+    stream_groups_per_batch: int | None = None  # Stream only: override groups per batch
+    stream_num_minibatches: int = 2  # Stream only: minibatches per substep
     
     # Sampling settings
     max_tokens: int = 512  # Max tokens per generation
     temperature: float = 1.0  # Higher = more exploration
     temperature_schedule: str = "constant"  # "constant" | "decay"
     temperature_decay: float = 0.95  # If schedule="decay"
+    enable_batched_sampling: bool = True  # Use single sample_async per group (num_samples=group_size)
     
     # KL divergence penalty (AuthorMist-inspired)
     kl_penalty_coef: float = 0.001  # β in L = -E[R] + β*KL(π || π_ref)
@@ -231,6 +349,19 @@ class StealthRLTrainer:
         # Initialize tokenizer
         self.tokenizer = get_tokenizer(config.model_name)
         
+        # Optional batched sampling: single sample_async call per group (num_samples=group_size)
+        if self.config.enable_batched_sampling:
+            try:
+                rl_train._original_do_group_rollout_and_filter_constant_reward = (
+                    rl_train.do_group_rollout_and_filter_constant_reward
+                )
+                rl_train.do_group_rollout_and_filter_constant_reward = do_group_rollout_batched
+                logger.info("✓ Batched sampling enabled (sample_async num_samples=group_size).")
+            except Exception as e:
+                logger.warning("⚠ Failed to enable batched sampling: %s", e)
+        else:
+            logger.info("Batched sampling disabled via config (enable_batched_sampling=False).")
+        
         # Statistics tracking
         self.step = 0
         self.all_negative_count = 0
@@ -293,17 +424,27 @@ class StealthRLTrainer:
                 )
             )
         
-        # Run training (using Tinker's do_sync_training)
-        # Based on Tinker source: do_sync_training iterates for i_batch in range(start_batch, end_batch)
-        # It calls dataset.get_batch(i_batch) directly (NOT i_batch % num_batches)
-        # Therefore: num_batches must equal end_batch to avoid IndexError
+        # Run training (sync, streaming, or async off-policy)
+        # Based on Tinker source: training loops iterate for i_batch in range(start_batch, end_batch)
+        # and call dataset.get_batch(i_batch) directly (NOT i_batch % num_batches).
+        # Therefore: num_batches must equal end_batch to avoid IndexError.
         num_train_batches = len(train_dataset)
         total_iterations = num_train_batches * self.config.num_epochs
         
         logger.info(f"Starting training: {total_iterations} iterations across {self.config.num_epochs} epoch(s)")
         logger.info(f"Dataset size: {num_train_batches} batches per epoch")
-        
-        await rl_train.do_sync_training(
+
+        if tinker_config.async_config is not None:
+            training_func = rl_train.do_async_training
+            logger.info("Training mode: async (off-policy, pipelined)")
+        elif tinker_config.stream_minibatch_config is not None:
+            training_func = rl_train.do_sync_training_with_stream_minibatch
+            logger.info("Training mode: stream_minibatch (pipelined sampling/training)")
+        else:
+            training_func = rl_train.do_sync_training
+            logger.info("Training mode: sync (on-policy)")
+
+        await training_func(
             start_batch=0,
             end_batch=total_iterations,  # Exclusive upper bound (like Python range)
             num_batches=total_iterations,  # Must equal end_batch to avoid IndexError
@@ -410,7 +551,49 @@ To use this model later:
         logger.info(f"LoRA LR scaling factor: {lora_lr_factor:.1f}x")
         logger.info(f"Scaled LR: {scaled_lr:.2e}")
         
+        training_mode = self.config.training_mode
+        if training_mode not in {"sync", "stream_minibatch", "async"}:
+            raise ValueError(
+                f"Unknown training_mode '{training_mode}'. "
+                "Expected: sync | stream_minibatch | async."
+            )
+
+        groups_per_batch_default = getattr(dataset, "batch_size", self.config.batch_size)
+        async_config = None
+        stream_minibatch_config = None
+        if training_mode == "async":
+            if not hasattr(rl_train, "AsyncConfig"):
+                raise RuntimeError(
+                    "Async training requested, but tinker_cookbook AsyncConfig is not available. "
+                    "Please upgrade tinker_cookbook."
+                )
+            groups_per_batch = self.config.async_groups_per_batch or groups_per_batch_default
+            async_config = rl_train.AsyncConfig(
+                max_steps_off_policy=self.config.async_max_steps_off_policy,
+                groups_per_batch=groups_per_batch,
+            )
+        elif training_mode == "stream_minibatch":
+            if not hasattr(rl_train, "StreamMinibatchConfig"):
+                raise RuntimeError(
+                    "Stream minibatch training requested, but tinker_cookbook StreamMinibatchConfig "
+                    "is not available. Please upgrade tinker_cookbook."
+                )
+            groups_per_batch = self.config.stream_groups_per_batch or groups_per_batch_default
+            num_minibatches = max(1, min(self.config.stream_num_minibatches, groups_per_batch))
+            if num_minibatches != self.config.stream_num_minibatches:
+                logger.warning(
+                    "stream_num_minibatches=%s exceeds groups_per_batch=%s; clamping to %s",
+                    self.config.stream_num_minibatches,
+                    groups_per_batch,
+                    num_minibatches,
+                )
+            stream_minibatch_config = rl_train.StreamMinibatchConfig(
+                groups_per_batch=groups_per_batch,
+                num_minibatches=num_minibatches,
+            )
+
         # Build Tinker config
+        save_every = self.config.save_every if self.config.save_every > 0 else 10**9
         tinker_config = rl_train.Config(
             model_name=self.config.model_name,
             learning_rate=scaled_lr,
@@ -422,8 +605,10 @@ To use this model later:
             dataset_builder=self.config.dataset_builder,
             remove_constant_reward_groups=self.config.remove_constant_reward_groups,
             log_path=self.config.log_path,
-            save_every=self.config.save_every,
+            save_every=save_every,
             eval_every=self.config.eval_every,
+            async_config=async_config,
+            stream_minibatch_config=stream_minibatch_config,
         )
         
         return tinker_config
@@ -560,22 +745,168 @@ async def main():
     import json
     from datetime import datetime
     from dotenv import load_dotenv
+    import yaml
     
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Train StealthRL with Tinker")
     parser.add_argument("--config", type=str, help="Path to config YAML file")
-    parser.add_argument("--data-path", type=str, default="data/tinker", help="Path to training data")
-    parser.add_argument("--output-dir", type=str, default="outputs/runs", help="Base output directory for runs")
-    parser.add_argument("--num-epochs", type=int, default=3, help="Number of training epochs")
-    parser.add_argument("--batch-size", type=int, default=8, help="Batch size")
+    default_data_path = "data/tinker"
+    default_output_dir = "outputs/runs"
+    default_num_epochs = 3
+    default_batch_size = 8
+    default_group_size = 4
+    default_save_every = 10
+    default_eval_every = 5
+    default_training_mode = "sync"
+    default_async_max_steps = 1
+    default_stream_num_minibatches = 2
+
+    parser.add_argument("--data-path", type=str, default=default_data_path, help="Path to training data")
+    parser.add_argument("--output-dir", type=str, default=default_output_dir, help="Base output directory for runs")
+    parser.add_argument("--num-epochs", type=int, default=default_num_epochs, help="Number of training epochs")
+    parser.add_argument("--batch-size", type=int, default=default_batch_size, help="Batch size")
+    parser.add_argument("--group-size", type=int, default=default_group_size, help="Group size (rollouts per prompt)")
     parser.add_argument("--run-name", type=str, help="Custom run name (default: auto-generated with timestamp)")
-    parser.add_argument("--save-every", type=int, default=10, help="Save checkpoint every N iterations (default: 10)")
-    parser.add_argument("--eval-every", type=int, default=5, help="Run evaluation every N iterations (default: 5)")
+    parser.add_argument(
+        "--save-every",
+        type=int,
+        default=default_save_every,
+        help="Save checkpoint every N iterations (default: 10)",
+    )
+    parser.add_argument(
+        "--eval-every",
+        type=int,
+        default=default_eval_every,
+        help="Run evaluation every N iterations (default: 5)",
+    )
+    parser.add_argument(
+        "--training-mode",
+        type=str,
+        choices=["sync", "stream_minibatch", "async"],
+        default=default_training_mode,
+        help="Training mode for Tinker (default: sync)",
+    )
+    parser.add_argument(
+        "--async-max-steps-off-policy",
+        type=int,
+        default=default_async_max_steps,
+        help="Async mode: max steps off-policy before discarding trajectories",
+    )
+    parser.add_argument(
+        "--async-groups-per-batch",
+        type=int,
+        default=None,
+        help="Async mode: override groups per batch (default: batch size)",
+    )
+    parser.add_argument(
+        "--stream-groups-per-batch",
+        type=int,
+        default=None,
+        help="Stream mode: override groups per batch (default: batch size)",
+    )
+    parser.add_argument(
+        "--stream-num-minibatches",
+        type=int,
+        default=default_stream_num_minibatches,
+        help="Stream mode: minibatches per substep (default: 2)",
+    )
     args = parser.parse_args()
     
     # Load environment variables from .env file
     load_dotenv()
     
+    yaml_config = {}
+    if args.config:
+        with open(args.config, "r", encoding="utf-8") as f:
+            yaml_config = yaml.safe_load(f) or {}
+        logger.info("Loaded config from %s", args.config)
+
+    model_config = yaml_config.get("model", {})
+    lora_config = yaml_config.get("lora", {})
+    training_config = yaml_config.get("training", {})
+    sampling_config = yaml_config.get("sampling", {})
+    grpo_config = yaml_config.get("grpo", {})
+    kl_config = yaml_config.get("kl", {})
+    logging_config = yaml_config.get("logging", {})
+    dataset_config = yaml_config.get("dataset", {})
+    reward_config = yaml_config.get("reward", {})
+    parallel_config = yaml_config.get("parallel", {})
+    async_config = parallel_config.get("async", {})
+    stream_config = parallel_config.get("stream_minibatch", {})
+
+    def choose_value(cli_value, default_value, config_value):
+        if args.config:
+            if cli_value != default_value:
+                return cli_value
+            if config_value is not None:
+                return config_value
+            return default_value
+        return cli_value
+
+    def get_int(config, key, default):
+        value = config.get(key, default)
+        if value is None:
+            return default
+        return int(value)
+
+    def get_float(config, key, default):
+        value = config.get(key, default)
+        if value is None:
+            return default
+        return float(value)
+
+    data_path = choose_value(args.data_path, default_data_path, dataset_config.get("path"))
+    batch_size = int(choose_value(args.batch_size, default_batch_size, training_config.get("batch_size", None)))
+    group_size = int(choose_value(args.group_size, default_group_size, training_config.get("group_size", None)))
+    num_epochs = int(choose_value(args.num_epochs, default_num_epochs, training_config.get("num_epochs", None)))
+    save_every = int(
+        choose_value(
+            args.save_every,
+            default_save_every,
+            logging_config.get("save_every", logging_config.get("save_interval")),
+        )
+    )
+    eval_every = int(
+        choose_value(
+            args.eval_every,
+            default_eval_every,
+            logging_config.get("eval_every", logging_config.get("eval_interval")),
+        )
+    )
+    training_mode = choose_value(args.training_mode, default_training_mode, parallel_config.get("mode"))
+    async_max_steps = int(
+        choose_value(
+            args.async_max_steps_off_policy,
+            default_async_max_steps,
+            async_config.get("max_steps_off_policy", None),
+        )
+    )
+    stream_num_minibatches = int(
+        choose_value(
+            args.stream_num_minibatches,
+            default_stream_num_minibatches,
+            stream_config.get("num_minibatches", None),
+        )
+    )
+    enable_batched_sampling = bool(sampling_config.get("batched_sampling", True))
+
+    async_groups_per_batch = args.async_groups_per_batch
+    if async_groups_per_batch is None:
+        async_groups_per_batch = async_config.get("groups_per_batch")
+    if async_groups_per_batch is not None:
+        async_groups_per_batch = int(async_groups_per_batch)
+
+    stream_groups_per_batch = args.stream_groups_per_batch
+    if stream_groups_per_batch is None:
+        stream_groups_per_batch = stream_config.get("groups_per_batch")
+    if stream_groups_per_batch is not None:
+        stream_groups_per_batch = int(stream_groups_per_batch)
+
+    base_output_dir = Path(args.output_dir)
+    config_log_path = logging_config.get("log_path") or logging_config.get("path")
+    if args.config and args.output_dir == default_output_dir and config_log_path:
+        base_output_dir = Path(config_log_path)
+
     # Create timestamped run directory
     if args.run_name:
         run_name = args.run_name
@@ -583,7 +914,6 @@ async def main():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         run_name = f"run_{timestamp}"
     
-    base_output_dir = Path(args.output_dir)
     output_dir = base_output_dir / run_name
     output_dir.mkdir(parents=True, exist_ok=True)
     
@@ -591,10 +921,12 @@ async def main():
     run_metadata = {
         "run_name": run_name,
         "start_time": datetime.now().isoformat(),
-        "data_path": args.data_path,
-        "num_epochs": args.num_epochs,
-        "batch_size": args.batch_size,
+        "data_path": data_path,
+        "num_epochs": num_epochs,
+        "batch_size": batch_size,
+        "group_size": group_size,
         "config_file": args.config,
+        "training_mode": training_mode,
         "status": "running",
     }
     with open(output_dir / "run_metadata.json", "w") as f:
@@ -621,46 +953,153 @@ async def main():
     
     # Initialize Tinker clients (ServiceClient loads API key from environment automatically)
     service_client = tinker.ServiceClient()
+    base_model_name = model_config.get("name", "Qwen/Qwen3-4B-Instruct-2507")
+    lora_rank = int(lora_config.get("rank", 16))
+    lora_alpha = lora_config.get("alpha")
+    if lora_alpha is not None:
+        lora_alpha = int(lora_alpha)
     training_client = await service_client.create_lora_training_client_async(
-        base_model="Qwen/Qwen3-4B-Instruct-2507",
-        rank=16
+        base_model=base_model_name,
+        rank=lora_rank,
     )
     
-    # Load config (placeholder - would load from YAML)
     from stealthrl.tinker.dataset import StealthRLDatasetBuilder
-    
+
+    reward_cfg = {
+        "detector_weight": float(reward_config.get("detector_weight", 1.0)),
+        "semantic_weight": float(reward_config.get("semantic_weight", 1.0)),
+        "perplexity_weight": float(reward_config.get("perplexity_weight", 0.5)),
+        "enable_semantic": bool(reward_config.get("enable_semantic", True)),
+        "enable_perplexity": bool(reward_config.get("enable_perplexity", True)),
+    }
+
+    detectors_config = reward_config.get("detectors", {})
+    if detectors_config:
+        reward_cfg["detector_names"] = detectors_config.get("names", ["fast_detectgpt", "ghostbuster"])
+        reward_cfg["detector_weights"] = detectors_config.get("weights", None)
+        if detectors_config.get("cache_path"):
+            reward_cfg["detector_cache_path"] = detectors_config.get("cache_path")
+        # Extract detector-specific batch sizes
+        if detectors_config.get("roberta_batch_size"):
+            reward_cfg["roberta_batch_size"] = int(detectors_config.get("roberta_batch_size"))
+        if detectors_config.get("fast_detectgpt_batch_size"):
+            reward_cfg["fast_detectgpt_batch_size"] = int(detectors_config.get("fast_detectgpt_batch_size"))
+        
+        # Pass through detector-specific model options
+        if detectors_config.get("fast_detectgpt_model"):
+            reward_cfg["fast_detectgpt_model"] = detectors_config.get("fast_detectgpt_model")
+        if detectors_config.get("roberta_openai_model"):
+            reward_cfg["roberta_openai_model"] = detectors_config.get("roberta_openai_model")
+        if detectors_config.get("ghostbuster_model"):
+            reward_cfg["ghostbuster_model"] = detectors_config.get("ghostbuster_model")
+        if detectors_config.get("binoculars_performer"):
+            reward_cfg["binoculars_performer"] = detectors_config.get("binoculars_performer")
+        if detectors_config.get("binoculars_observer"):
+            reward_cfg["binoculars_observer"] = detectors_config.get("binoculars_observer")
+
+    semantic_config = reward_config.get("semantic", {})
+    semantic_model = semantic_config.get("model_name") or semantic_config.get("model")
+    if semantic_model:
+        reward_cfg["semantic_model"] = semantic_model
+    if semantic_config.get("threshold") is not None:
+        reward_cfg["semantic_threshold"] = float(semantic_config.get("threshold"))
+
+    perplexity_config = reward_config.get("perplexity", {})
+    ppl_model = perplexity_config.get("model_name") or perplexity_config.get("model")
+    if ppl_model:
+        reward_cfg["ppl_model"] = ppl_model
+    ppl_min = perplexity_config.get("ppl_min", perplexity_config.get("min"))
+    ppl_max = perplexity_config.get("ppl_max", perplexity_config.get("max"))
+    ppl_target = perplexity_config.get("ppl_target", perplexity_config.get("target"))
+    if ppl_min is not None:
+        reward_cfg["ppl_min"] = float(ppl_min)
+    if ppl_max is not None:
+        reward_cfg["ppl_max"] = float(ppl_max)
+    if ppl_target is not None:
+        reward_cfg["ppl_target"] = float(ppl_target)
+
+    normalization_config = reward_config.get("normalization", {})
+    if normalization_config:
+        if normalization_config.get("enabled") is not None:
+            reward_cfg["normalize_terms"] = bool(normalization_config.get("enabled"))
+        if normalization_config.get("detector_zscore") is not None:
+            reward_cfg["detector_zscore"] = bool(normalization_config.get("detector_zscore"))
+        if normalization_config.get("semantic_min") is not None:
+            reward_cfg["semantic_min"] = float(normalization_config.get("semantic_min"))
+        if normalization_config.get("quality_min") is not None:
+            reward_cfg["quality_min"] = float(normalization_config.get("quality_min"))
+
     dataset_builder = StealthRLDatasetBuilder(
-        data_path=args.data_path,
-        batch_size=args.batch_size,
-        group_size=4,
-        model_name_for_tokenizer="Qwen/Qwen3-4B-Instruct-2507",
-        renderer_name="qwen3",
-        reward_config={
-            "detector_weight": 1.0,
-            "semantic_weight": 1.0,
-            "perplexity_weight": 0.5,
-            "fairness_weight": 0.2,
-        },
-        seed=42,
+        data_path=data_path,
+        batch_size=batch_size,
+        group_size=group_size,
+        model_name_for_tokenizer=base_model_name,
+        renderer_name=model_config.get("renderer", "qwen3"),
+        reward_config=reward_cfg,
+        convo_prefix=dataset_config.get("few_shot", "standard"),
+        seed=dataset_config.get("seed", 42),
+        max_examples=dataset_config.get("max_examples", None),
+        max_train_examples=dataset_config.get("max_train_examples", None),
+        max_test_examples=dataset_config.get("max_test_examples", None),
     )
     
     config = StealthRLConfig(
-        model_name="Qwen/Qwen3-4B-Instruct-2507",
-        lora_rank=16,
-        learning_rate=1e-5,
-        batch_size=args.batch_size,
-        group_size=4,
-        num_epochs=args.num_epochs,
-        kl_penalty_coef=0.001,
+        model_name=base_model_name,
+        lora_rank=lora_rank,
+        lora_alpha=lora_alpha,
+        lora_dropout=get_float(lora_config, "dropout", 0.05),
+        lora_target_modules=lora_config.get("target_modules"),
+        learning_rate=get_float(training_config, "learning_rate", 1e-5),
+        batch_size=batch_size,
+        group_size=group_size,
+        num_epochs=num_epochs,
+        num_substeps=get_int(training_config, "num_substeps", 1),
+        max_tokens=get_int(training_config, "max_tokens", 512),
+        temperature=get_float(sampling_config, "temperature", 1.0),
+        temperature_schedule=sampling_config.get("temperature_schedule", "constant"),
+        temperature_decay=get_float(sampling_config, "temperature_decay", 0.95),
+        enable_batched_sampling=enable_batched_sampling,
+        kl_penalty_coef=get_float(kl_config, "penalty_coef", 0.001),
+        kl_target=kl_config.get("target"),
+        kl_adapt_rate=get_float(kl_config, "adapt_rate", 0.1),
+        normalize_advantages=bool(grpo_config.get("normalize_advantages", True)),
+        advantage_clip=get_float(grpo_config, "advantage_clip", 5.0),
+        reward_clip=(
+            float(grpo_config.get("reward_clip"))
+            if grpo_config.get("reward_clip") is not None
+            else None
+        ),
+        remove_constant_reward_groups=bool(grpo_config.get("remove_constant_reward_groups", True)),
+        all_negative_min_reward=get_float(yaml_config.get("all_negative", {}), "min_reward", 0.01),
+        all_negative_downweight=get_float(yaml_config.get("all_negative", {}), "downweight", 0.5),
+        curriculum_enabled=bool(yaml_config.get("curriculum", {}).get("enabled", False)),
+        curriculum_start_quantile=get_float(yaml_config.get("curriculum", {}), "start_quantile", 0.7),
+        curriculum_end_quantile=get_float(yaml_config.get("curriculum", {}), "end_quantile", 0.0),
+        curriculum_steps=get_int(yaml_config.get("curriculum", {}), "steps", 1000),
         dataset_builder=dataset_builder,
         log_path=str(output_dir),  # Save metrics to output directory
-        save_every=args.save_every,
-        eval_every=args.eval_every,
+        log_interval=get_int(logging_config, "log_interval", 20),
+        eval_interval=get_int(logging_config, "eval_interval", eval_every),
+        save_interval=get_int(logging_config, "save_interval", save_every),
+        num_groups_to_log=get_int(logging_config, "num_groups_to_log", 4),
+        debug_mode=bool(logging_config.get("debug_mode", False)),
+        save_every=save_every,
+        eval_every=eval_every,
+        training_mode=training_mode,
+        async_max_steps_off_policy=async_max_steps,
+        async_groups_per_batch=async_groups_per_batch,
+        stream_groups_per_batch=stream_groups_per_batch,
+        stream_num_minibatches=stream_num_minibatches,
     )
     
     logger.info(f"Output directory: {output_dir}")
     logger.info(f"Metrics will be saved to: {output_dir}/metrics.jsonl")
     logger.info(f"HTML logs will be saved to: {output_dir}/")
+
+    if training_mode in {"sync", "async"}:
+        _enable_overlap_optim_step_requests()
+    else:
+        logger.info("Stream minibatch mode: forward_backward/optim_step overlap not applied.")
     
     # Initialize trainer
     trainer = StealthRLTrainer(
