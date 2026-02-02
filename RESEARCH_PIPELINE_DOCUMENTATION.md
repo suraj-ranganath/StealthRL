@@ -24,9 +24,10 @@ This document provides a complete description of the StealthRL evaluation pipeli
 
 **Appendices:**
 - [Appendix A: RAID Dataset](#appendix-a1-raid-dataset-optional-multi-domain-generalization)
-- [Appendix B: Ablation Studies](#appendix-b-ablation-studies) ⭐ **NEW**
-- [Appendix C: PadBen Task Configurations](#appendix-c-padben-task-configurations)
-- [Appendix D: Color Scheme](#appendix-d-color-scheme)
+- [Appendix B: Ablation Studies](#appendix-b-ablation-studies)
+- [Appendix C: Checkpoint Comparison](#appendix-c-checkpoint-comparison) ⭐ **NEW**
+- [Appendix D: PadBen Task Configurations](#appendix-d-padben-task-configurations)
+- [Appendix E: Color Scheme](#appendix-e-color-scheme)
 
 ---
 
@@ -883,14 +884,14 @@ The ablation studies are run via a dedicated script `scripts/run_ablations.py` t
 # Run all ablations with 100 samples per class
 python scripts/run_ablations.py \
     --stealthrl-checkpoint checkpoints/atharv_checkpoint_1.json \
-    --n-samples 100 \
+    --n-human 100 --n-ai 100 \
     --out-dir outputs/ablations
 
 # Run specific ablations only
 python scripts/run_ablations.py \
     --ablations guidance budget sanitize padben \
     --stealthrl-checkpoint checkpoints/atharv_checkpoint_1.json \
-    --n-samples 100
+    --n-human 100 --n-ai 100
 ```
 
 ### CLI Arguments for run_ablations.py
@@ -898,7 +899,8 @@ python scripts/run_ablations.py \
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--ablations` | `["guidance", "budget", "homoglyph", "sanitize", "padben"]` | Which ablations to run |
-| `--n-samples` | 100 | Samples per class (human/AI) |
+| `--n-human` | 100 | Number of human samples |
+| `--n-ai` | 100 | Number of AI samples |
 | `--stealthrl-checkpoint` | None | Path to StealthRL checkpoint (required for M2) |
 | `--detectors` | `["roberta", "fast_detectgpt", "binoculars"]` | Detectors to evaluate |
 | `--out-dir` | `"outputs/ablations"` | Output directory |
@@ -958,7 +960,7 @@ Each variant is then evaluated against **all three detectors**.
 # Run guidance transfer ablation only
 python scripts/run_ablations.py \
     --ablations guidance \
-    --n-samples 100 \
+    --n-human 100 --n-ai 100 \
     --out-dir outputs/ablations
 ```
 
@@ -991,7 +993,7 @@ python scripts/run_ablations.py \
 python scripts/run_ablations.py \
     --ablations budget \
     --stealthrl-checkpoint checkpoints/atharv_checkpoint_1.json \
-    --n-samples 100
+    --n-human 100 --n-ai 100
 ```
 
 ---
@@ -1021,7 +1023,7 @@ python scripts/run_ablations.py \
 # Run homoglyph sweep ablation only
 python scripts/run_ablations.py \
     --ablations homoglyph \
-    --n-samples 100
+    --n-human 100 --n-ai 100
 ```
 
 ---
@@ -1053,7 +1055,7 @@ python scripts/run_ablations.py \
 python scripts/run_ablations.py \
     --ablations sanitize \
     --stealthrl-checkpoint checkpoints/atharv_checkpoint_1.json \
-    --n-samples 100
+    --n-human 100 --n-ai 100
 ```
 
 ---
@@ -1083,7 +1085,7 @@ python scripts/run_ablations.py \
 python scripts/run_ablations.py \
     --ablations padben \
     --stealthrl-checkpoint checkpoints/atharv_checkpoint_1.json \
-    --n-samples 100
+    --n-human 100 --n-ai 100
 ```
 
 ---
@@ -1096,7 +1098,7 @@ For a complete ablation study suitable for paper submission:
 python scripts/run_ablations.py \
     --ablations all \
     --stealthrl-checkpoint checkpoints/atharv_checkpoint_1.json \
-    --n-samples 200 \
+    --n-human 200 --n-ai 200 \
     --n-bootstrap 1000 \
     --out-dir outputs/ablations
 ```
@@ -1111,7 +1113,110 @@ python scripts/run_ablations.py \
 
 ---
 
-## Appendix C: PadBen Task Configurations
+## Appendix C: Checkpoint Comparison
+
+Compare multiple StealthRL checkpoints against each other using `scripts/compare_checkpoints.py`. This is useful for:
+- Comparing training runs with different hyperparameters
+- Tracking training progress at different steps
+- Ablating architecture or reward function choices
+- Selecting the best checkpoint for final evaluation
+
+### Running Checkpoint Comparison
+
+```bash
+# Compare two checkpoints
+python scripts/compare_checkpoints.py \
+    --checkpoints checkpoints/run1.json checkpoints/run2.json \
+    --n-human 100 --n-ai 100
+
+# Compare with custom display names
+python scripts/compare_checkpoints.py \
+    --checkpoints checkpoints/early.json checkpoints/late.json \
+    --names "Early (5k steps)" "Late (20k steps)" \
+    --n-human 100 --n-ai 100
+
+# Quick comparison (fewer samples, single detector)
+python scripts/compare_checkpoints.py \
+    --checkpoints checkpoints/*.json \
+    --quick
+
+# Compare with specific detectors
+python scripts/compare_checkpoints.py \
+    --checkpoints cp1.json cp2.json cp3.json \
+    --detectors roberta fast_detectgpt \
+    --n-human 200 --n-ai 200
+```
+
+### CLI Arguments for compare_checkpoints.py
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--checkpoints` | **Required** | Paths to checkpoint JSON files to compare |
+| `--names` | Filename stems | Display names for each checkpoint |
+| `--dataset` | `"mage"` | Dataset to use for evaluation |
+| `--n-human` | 100 | Number of human samples |
+| `--n-ai` | 100 | Number of AI samples |
+| `--n-candidates` | 1 | Candidates per sample |
+| `--detectors` | `["roberta", "fast_detectgpt", "binoculars"]` | Detectors to evaluate |
+| `--out-dir` | `"outputs/checkpoint_comparison"` | Output directory |
+| `--quick` | False | Quick mode (20 samples, 1 detector) |
+| `--device` | Auto | Device (`cuda`/`mps`/`cpu`) |
+| `--seed` | 42 | Random seed |
+| `--n-bootstrap` | 500 | Bootstrap samples for CI |
+
+### Checkpoint Comparison Output Structure
+
+```
+outputs/checkpoint_comparison/comparison_{timestamp}/
+├── comparison_summary.json         # Metadata about the comparison
+├── compare_{timestamp}.log         # Detailed log
+├── checkpoint_comparison.csv       # Full results table
+├── comparison_table.md             # Markdown summary table
+└── fig_checkpoint_comparison.png   # Bar chart comparing ASR and AUROC
+```
+
+### Output Metrics
+
+For each (checkpoint, detector) pair, the comparison reports:
+
+| Metric | Description | Better For Attack |
+|--------|-------------|-------------------|
+| `auroc` | Area under ROC curve | Lower |
+| `tpr_at_1fpr` | True positive rate at 1% FPR | Lower |
+| `asr` | Attack success rate (1 - tpr_at_1fpr) | Higher |
+| `mean_similarity` | Semantic similarity to original | Higher |
+
+### Example Output
+
+```
+======================================================================
+COMPARISON SUMMARY
+======================================================================
+
+roberta:
+  Best checkpoint: late_20k
+  ASR: 95.2%
+  AUROC: 0.312
+
+fast_detectgpt:
+  Best checkpoint: late_20k
+  ASR: 98.1%
+  AUROC: 0.087
+
+binoculars:
+  Best checkpoint: late_20k
+  ASR: 97.5%
+  AUROC: 0.124
+
+======================================================================
+OVERALL BEST: late_20k
+Mean ASR across detectors: 96.9%
+======================================================================
+```
+
+---
+
+## Appendix D: PadBen Task Configurations
 
 PadBen provides 5 tasks designed to probe different aspects of AI text detection under paraphrase attacks:
 
@@ -1123,7 +1228,7 @@ PadBen provides 5 tasks designed to probe different aspects of AI text detection
 | `exhaustive-task4` | Iterative Depth | 1st iteration | 3rd iteration | Ablation: Does more paraphrasing help? |
 | `exhaustive-task5` | Deep Attack | Human-written | 3rd-iteration paraphrase | **Key test**: Best-case paraphrase evasion |
 
-## Appendix D: Color Scheme
+## Appendix E: Color Scheme
 
 Consistent colors for paper figures:
 

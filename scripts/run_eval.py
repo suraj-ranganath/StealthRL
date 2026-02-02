@@ -82,7 +82,13 @@ Examples:
         default=None,
         help="Path to StealthRL checkpoint (required for m2)",
     )
-    parser.add_argument("--n-candidates", type=int, default=2, help="Candidates per sample (batched in single API call)")
+    parser.add_argument(
+        "--n-candidates",
+        nargs="+",
+        type=int,
+        default=[2],
+        help="Candidates per sample (supports budget sweep: --n-candidates 1 2 4 8)",
+    )
     
     # Detector options
     parser.add_argument(
@@ -115,7 +121,7 @@ def main():
         args.detectors = ["roberta", "fast_detectgpt"]
         args.n_human = 50
         args.n_ai = 50
-        args.n_candidates = 2
+        args.n_candidates = [2]
         args.n_bootstrap = 100
         args.out_dir = "artifacts_quick"
     
@@ -150,18 +156,25 @@ def main():
         n_bootstrap=args.n_bootstrap,
     )
     
-    # Run evaluation
+    # Run evaluation for each n_candidates value (budget sweep)
     try:
-        runner.run(
-            datasets=args.datasets,
-            methods=args.methods,
-            detectors=args.detectors,
-            n_candidates=args.n_candidates,
-            n_human=args.n_human,
-            n_ai=args.n_ai,
-            stealthrl_checkpoint=args.stealthrl_checkpoint,
-            cache_dir=args.cache_dir,
-        )
+        for n_cand in args.n_candidates:
+            if len(args.n_candidates) > 1:
+                logger.info(f"\n{'='*70}")
+                logger.info(f"Running with N={n_cand} candidates")
+                logger.info(f"{'='*70}\n")
+            
+            runner.run(
+                datasets=args.datasets,
+                methods=args.methods,
+                detectors=args.detectors,
+                n_candidates=n_cand,
+                n_human=args.n_human,
+                n_ai=args.n_ai,
+                stealthrl_checkpoint=args.stealthrl_checkpoint,
+                cache_dir=args.cache_dir,
+                setting_suffix=f"N={n_cand}" if len(args.n_candidates) > 1 else None,
+            )
         
         logger.info("Evaluation completed successfully!")
         
