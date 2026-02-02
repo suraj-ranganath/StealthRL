@@ -139,6 +139,7 @@ class TinkerCompositeReward:
         # Initialize perplexity (if enabled OR compute_eval_only)
         self.ppl_reward = None
         if enable_perplexity or compute_perplexity_eval_only:
+            logger.info(f"Initializing PerplexityReward (enable_perplexity={enable_perplexity}, compute_eval_only={compute_perplexity_eval_only})")
             from stealthrl.tinker.perplexity import PerplexityReward
             self.ppl_reward = PerplexityReward(
                 model_name=ppl_model,
@@ -146,7 +147,9 @@ class TinkerCompositeReward:
                 ppl_max=ppl_max,
                 ppl_target=ppl_target,
             )
-        
+            logger.info("✓ PerplexityReward initialized successfully")
+        else:
+            logger.info(f"Perplexity disabled (enable_perplexity={enable_perplexity}, compute_eval_only={compute_perplexity_eval_only})")
 
         # Normalization config
         self.normalize_terms = normalize_terms
