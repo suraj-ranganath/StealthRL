@@ -123,43 +123,46 @@ def plot_training_curves(df: pd.DataFrame, output_dir: Path):
     ax.legend()
     ax.grid(True, alpha=0.3)
     
-    # 4. Individual Detectors - RoBERTa
+    # 4. Perplexity (if available)
     ax = axes[1, 0]
-    if 'test/detector/roberta_openai/mean' in df.columns:
-        test_steps = df[df['test/detector/roberta_openai/mean'].notna()]['step']
-        test_rob = 1 - df[df['test/detector/roberta_openai/mean'].notna()]['test/detector/roberta_openai/mean']
-        ax.plot(test_steps, test_rob, 'r-', linewidth=2, marker='o', markersize=6, label='Test')
+    if 'env/all/perplexity' in df.columns:
+        ax.plot(df['step'], df['env/all/perplexity'], 'b-', linewidth=2, label='Train')
+        
+        test_ppl_col = 'test/perplexity/mean' if 'test/perplexity/mean' in df.columns else 'test/env/all/perplexity'
+        eval_ppl_col = 'eval/perplexity/mean' if 'eval/perplexity/mean' in df.columns else 'eval/env/all/perplexity'
+        
+        if test_ppl_col in df.columns:
+            test_steps = df[df[test_ppl_col].notna()]['step']
+            test_ppl = df[df[test_ppl_col].notna()][test_ppl_col]
+            ax.plot(test_steps, test_ppl, 'r--', linewidth=2, marker='o', markersize=6, label='Test')
+        
+        if eval_ppl_col in df.columns:
+            eval_steps = df[df[eval_ppl_col].notna()]['step']
+            eval_ppl = df[df[eval_ppl_col].notna()][eval_ppl_col]
+            ax.plot(eval_steps, eval_ppl, 'g--', linewidth=2, marker='s', markersize=6, label='Eval')
+        
+        ax.axhline(y=30, color='green', linestyle='--', alpha=0.5, label='Target (30)')
+        ax.axhline(y=80, color='orange', linestyle='--', alpha=0.5, label='Warning (80)')
+        ax.set_xlabel('Training Step')
+        ax.set_ylabel('Perplexity')
+        ax.set_title('Text Naturalness (Perplexity)')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+    else:
+        ax.text(0.5, 0.5, 'Perplexity not computed', ha='center', va='center', fontsize=14, color='gray')
+        ax.axis('off')
     
-    if 'eval/detector/roberta_openai/mean' in df.columns:
-        eval_steps = df[df['eval/detector/roberta_openai/mean'].notna()]['step']
-        eval_rob = 1 - df[df['eval/detector/roberta_openai/mean'].notna()]['eval/detector/roberta_openai/mean']
-        ax.plot(eval_steps, eval_rob, 'g-', linewidth=2, marker='s', markersize=6, label='Eval')
-    
-    ax.axhline(y=0.5, color='k', linestyle='--', alpha=0.3, label='Random')
-    ax.set_xlabel('Training Step')
-    ax.set_ylabel('RoBERTa Evasion')
-    ax.set_title('RoBERTa Detector Evasion')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    
-    # 5. Individual Detectors - Fast-DetectGPT
+    # 5. Entropy (exploration)
     ax = axes[1, 1]
-    if 'test/detector/fast_detectgpt/mean' in df.columns:
-        test_steps = df[df['test/detector/fast_detectgpt/mean'].notna()]['step']
-        test_fdg = 1 - df[df['test/detector/fast_detectgpt/mean'].notna()]['test/detector/fast_detectgpt/mean']
-        ax.plot(test_steps, test_fdg, 'r-', linewidth=2, marker='o', markersize=6, label='Test')
-    
-    if 'eval/detector/fast_detectgpt/mean' in df.columns:
-        eval_steps = df[df['eval/detector/fast_detectgpt/mean'].notna()]['step']
-        eval_fdg = 1 - df[df['eval/detector/fast_detectgpt/mean'].notna()]['eval/detector/fast_detectgpt/mean']
-        ax.plot(eval_steps, eval_fdg, 'g-', linewidth=2, marker='s', markersize=6, label='Eval')
-    
-    ax.axhline(y=0.5, color='k', linestyle='--', alpha=0.3, label='Random')
-    ax.set_xlabel('Training Step')
-    ax.set_ylabel('Fast-DetectGPT Evasion')
-    ax.set_title('Fast-DetectGPT Detector Evasion')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
+    if 'optim/entropy' in df.columns:
+        ax.plot(df['step'], df['optim/entropy'], 'purple', linewidth=2)
+        ax.set_xlabel('Training Step')
+        ax.set_ylabel('Policy Entropy')
+        ax.set_title('Exploration Level')
+        ax.grid(True, alpha=0.3)
+    else:
+        ax.text(0.5, 0.5, 'Entropy not available', ha='center', va='center', fontsize=14, color='gray')
+        ax.axis('off')
     
     # 6. Parse Success Rate
     ax = axes[1, 2]
@@ -573,8 +576,7 @@ def generate_summary_stats(df: pd.DataFrame, output_dir: Path):
         'Total Reward': ('env/all/reward/total', ['test/reward/mean', 'test/env/all/reward/total'], ['eval/reward/mean', 'eval/env/all/reward/total'], True),
         'Detector Evasion': ('env/all/detector_prob', ['test/detector_prob/mean', 'test/env/all/detector_prob'], ['eval/detector_prob/mean', 'eval/env/all/detector_prob'], False),
         'Semantic Similarity': ('env/all/semantic_sim', ['test/semantic_sim/mean', 'test/env/all/semantic_sim'], ['eval/semantic_sim/mean', 'eval/env/all/semantic_sim'], True),
-        'RoBERTa Evasion': (None, ['test/detector/roberta_openai/mean'], ['eval/detector/roberta_openai/mean'], False),
-        'Fast-DetectGPT Evasion': (None, ['test/detector/fast_detectgpt/mean'], ['eval/detector/fast_detectgpt/mean'], False),
+        'Perplexity': ('env/all/perplexity', ['test/perplexity/mean', 'test/env/all/perplexity'], ['eval/perplexity/mean', 'eval/env/all/perplexity'], False),
         'KL Divergence': ('kl_policy_base', None, None, False),
         'Parse Success (%)': ('env/all/parse_success', ['test/valid_output_rate/mean', 'test/env/all/parse_success'], ['eval/valid_output_rate/mean', 'eval/env/all/parse_success'], True),
     }
