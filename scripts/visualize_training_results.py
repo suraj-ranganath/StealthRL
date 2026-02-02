@@ -395,40 +395,65 @@ def plot_pareto_frontiers(df: pd.DataFrame, output_dir: Path):
 def plot_reward_decomposition(df: pd.DataFrame, output_dir: Path):
     """Plot reward component contributions over time."""
     fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-    fig.suptitle('Reward Component Analysis', fontsize=20, fontweight='bold')
     
-    # Find available reward components
+    # Load config to get reward weights
+    config_path = output_dir.parent / 'training_config.json'
+    weights = {'detector': 1.0, 'semantic': 1.0, 'perplexity': 0.0, 'fairness': 0.0}
+    if config_path.exists():
+        import json
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+            reward_config = config.get('reward', {})
+            weights['detector'] = reward_config.get('detector_weight', 1.0)
+            weights['semantic'] = reward_config.get('semantic_weight', 1.0)
+            weights['perplexity'] = reward_config.get('perplexity_weight', 0.0)
+            weights['fairness'] = reward_config.get('fairness_weight', 0.0)
+    
+    fig.suptitle(f'Reward Component Analysis (Weights: det={weights["detector"]}, sem={weights["semantic"]}, ppl={weights["perplexity"]})', 
+                 fontsize=18, fontweight='bold')
+    
+    # Find available reward components (these are RAW values before weighting)
     all_components = ['env/all/reward/detector', 'env/all/reward/semantic', 
                       'env/all/reward/perplexity', 'env/all/reward/fairness']
     components = [c for c in all_components if c in df.columns]
     colors = ['#ff7f0e', '#2ca02c', '#d62728', '#9467bd'][:len(components)]
     
-    # 1. Stacked area chart of reward components
+    # Apply weights to get actual contributions
+    weighted_data = df[components].copy()
+    for comp in components:
+        comp_name = comp.split('/')[-1]  # 'detector', 'semantic', etc.
+        if comp_name in weights:
+            weighted_data[comp] = df[comp] * weights[comp_name]
+    
+    # 1. Stacked area chart of WEIGHTED reward components
     ax = axes[0, 0]
     if components:
         # Stack positive and negative separately
-        positive_data = df[components].clip(lower=0)
+        positive_data = weighted_data.clip(lower=0)
         ax.stackplot(df['step'], positive_data.T, labels=[c.split('/')[-1] for c in components], 
                      colors=colors, alpha=0.7)
         ax.set_xlabel('Training Step', fontsize=14)
-        ax.set_ylabel('Reward Contribution', fontsize=14)
-        ax.set_title('Positive Reward Components', fontsize=16)
+        ax.set_ylabel('Weighted Contribution to Total Reward', fontsize=14)
+        ax.set_title('Weighted Reward Components', fontsize=16)
         ax.legend(loc='upper left', fontsize=10)
         ax.grid(True, alpha=0.3)
     else:
         ax.text(0.5, 0.5, 'No reward components found', ha='center', va='center', fontsize=14)
         ax.axis('off')
     
-    # 2. Individual component trajectories
+    # 2. Individual component trajectories (RAW, before weighting)
     ax = axes[0, 1]
     if components:
         for comp, color in zip(components, colors):
-            ax.plot(df['step'], df[comp], linewidth=2, label=comp.split('/')[-1], 
+            comp_name = comp.split('/')[-1]
+            weight = weights.get(comp_name, 1.0)
+            ax.plot(df['step'], df[comp], linewidth=2, 
+                    label=f"{comp_name} (raw, w={weight})", 
                     color=color)
         ax.axhline(y=0, color='k', linestyle='--', alpha=0.3)
         ax.set_xlabel('Training Step', fontsize=14)
-        ax.set_ylabel('Reward Value', fontsize=14)
-        ax.set_title('Individual Reward Components', fontsize=16)
+        ax.set_ylabel('Raw Reward Value (before weighting)', fontsize=14)
+        ax.set_title('Individual Reward Components (Unweighted)', fontsize=16)
         ax.legend(fontsize=10)
         ax.grid(True, alpha=0.3)
     else:
