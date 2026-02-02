@@ -53,13 +53,18 @@ def plot_training_curves(df: pd.DataFrame, output_dir: Path):
     # 1. Total Reward
     ax = axes[0, 0]
     ax.plot(df['step'], df['env/all/reward/total'], 'b-', linewidth=2, label='Train')
-    if 'test/reward/mean' in df.columns:
-        test_steps = df[df['test/reward/mean'].notna()]['step']
-        test_rewards = df[df['test/reward/mean'].notna()]['test/reward/mean']
+    
+    # Support both old and new metric formats
+    test_reward_col = 'test/reward/mean' if 'test/reward/mean' in df.columns else 'test/env/all/reward/total'
+    eval_reward_col = 'eval/reward/mean' if 'eval/reward/mean' in df.columns else 'eval/env/all/reward/total'
+    
+    if test_reward_col in df.columns:
+        test_steps = df[df[test_reward_col].notna()]['step']
+        test_rewards = df[df[test_reward_col].notna()][test_reward_col]
         ax.plot(test_steps, test_rewards, 'r--', linewidth=2, marker='o', markersize=6, label='Test')
-    if 'eval/reward/mean' in df.columns:
-        eval_steps = df[df['eval/reward/mean'].notna()]['step']
-        eval_rewards = df[df['eval/reward/mean'].notna()]['eval/reward/mean']
+    if eval_reward_col in df.columns:
+        eval_steps = df[df[eval_reward_col].notna()]['step']
+        eval_rewards = df[df[eval_reward_col].notna()][eval_reward_col]
         ax.plot(eval_steps, eval_rewards, 'g--', linewidth=2, marker='s', markersize=6, label='Eval')
     ax.set_xlabel('Training Step')
     ax.set_ylabel('Total Reward')
@@ -72,14 +77,18 @@ def plot_training_curves(df: pd.DataFrame, output_dir: Path):
     train_evasion = 1 - df['env/all/detector_prob']
     ax.plot(df['step'], train_evasion, 'b-', linewidth=2, label='Train')
     
-    if 'test/detector_prob/mean' in df.columns:
-        test_steps = df[df['test/detector_prob/mean'].notna()]['step']
-        test_evasion = 1 - df[df['test/detector_prob/mean'].notna()]['test/detector_prob/mean']
+    # Support both old and new formats
+    test_det_col = 'test/detector_prob/mean' if 'test/detector_prob/mean' in df.columns else 'test/env/all/detector_prob'
+    eval_det_col = 'eval/detector_prob/mean' if 'eval/detector_prob/mean' in df.columns else 'eval/env/all/detector_prob'
+    
+    if test_det_col in df.columns:
+        test_steps = df[df[test_det_col].notna()]['step']
+        test_evasion = 1 - df[df[test_det_col].notna()][test_det_col]
         ax.plot(test_steps, test_evasion, 'r--', linewidth=2, marker='o', markersize=6, label='Test')
     
-    if 'eval/detector_prob/mean' in df.columns:
-        eval_steps = df[df['eval/detector_prob/mean'].notna()]['step']
-        eval_evasion = 1 - df[df['eval/detector_prob/mean'].notna()]['eval/detector_prob/mean']
+    if eval_det_col in df.columns:
+        eval_steps = df[df[eval_det_col].notna()]['step']
+        eval_evasion = 1 - df[df[eval_det_col].notna()][eval_det_col]
         ax.plot(eval_steps, eval_evasion, 'g--', linewidth=2, marker='s', markersize=6, label='Eval')
     
     ax.axhline(y=0.5, color='k', linestyle='--', alpha=0.3, label='Random')
@@ -93,14 +102,18 @@ def plot_training_curves(df: pd.DataFrame, output_dir: Path):
     ax = axes[0, 2]
     ax.plot(df['step'], df['env/all/semantic_sim'], 'b-', linewidth=2, label='Train')
     
-    if 'test/semantic_sim/mean' in df.columns:
-        test_steps = df[df['test/semantic_sim/mean'].notna()]['step']
-        test_sem = df[df['test/semantic_sim/mean'].notna()]['test/semantic_sim/mean']
+    # Support both old and new formats
+    test_sem_col = 'test/semantic_sim/mean' if 'test/semantic_sim/mean' in df.columns else 'test/env/all/semantic_sim'
+    eval_sem_col = 'eval/semantic_sim/mean' if 'eval/semantic_sim/mean' in df.columns else 'eval/env/all/semantic_sim'
+    
+    if test_sem_col in df.columns:
+        test_steps = df[df[test_sem_col].notna()]['step']
+        test_sem = df[df[test_sem_col].notna()][test_sem_col]
         ax.plot(test_steps, test_sem, 'r--', linewidth=2, marker='o', markersize=6, label='Test')
     
-    if 'eval/semantic_sim/mean' in df.columns:
-        eval_steps = df[df['eval/semantic_sim/mean'].notna()]['step']
-        eval_sem = df[df['eval/semantic_sim/mean'].notna()]['eval/semantic_sim/mean']
+    if eval_sem_col in df.columns:
+        eval_steps = df[df[eval_sem_col].notna()]['step']
+        eval_sem = df[df[eval_sem_col].notna()][eval_sem_col]
         ax.plot(eval_steps, eval_sem, 'g--', linewidth=2, marker='s', markersize=6, label='Eval')
     
     ax.axhline(y=0.95, color='orange', linestyle='--', alpha=0.5, label='Target (0.95)')
@@ -152,14 +165,18 @@ def plot_training_curves(df: pd.DataFrame, output_dir: Path):
     ax = axes[1, 2]
     ax.plot(df['step'], df['env/all/parse_success'] * 100, 'b-', linewidth=2, label='Train')
     
-    if 'test/valid_output_rate/mean' in df.columns:
-        test_steps = df[df['test/valid_output_rate/mean'].notna()]['step']
-        test_parse = df[df['test/valid_output_rate/mean'].notna()]['test/valid_output_rate/mean'] * 100
+    # Support both old and new formats
+    test_parse_col = 'test/valid_output_rate/mean' if 'test/valid_output_rate/mean' in df.columns else 'test/env/all/parse_success'
+    eval_parse_col = 'eval/valid_output_rate/mean' if 'eval/valid_output_rate/mean' in df.columns else 'eval/env/all/parse_success'
+    
+    if test_parse_col in df.columns:
+        test_steps = df[df[test_parse_col].notna()]['step']
+        test_parse = df[df[test_parse_col].notna()][test_parse_col] * 100
         ax.plot(test_steps, test_parse, 'r--', linewidth=2, marker='o', markersize=6, label='Test')
     
-    if 'eval/valid_output_rate/mean' in df.columns:
-        eval_steps = df[df['eval/valid_output_rate/mean'].notna()]['step']
-        eval_parse = df[df['eval/valid_output_rate/mean'].notna()]['eval/valid_output_rate/mean'] * 100
+    if eval_parse_col in df.columns:
+        eval_steps = df[df[eval_parse_col].notna()]['step']
+        eval_parse = df[df[eval_parse_col].notna()][eval_parse_col] * 100
         ax.plot(eval_steps, eval_parse, 'g--', linewidth=2, marker='s', markersize=6, label='Eval')
     
     ax.axhline(y=90, color='orange', linestyle='--', alpha=0.5, label='Target (90%)')
@@ -181,11 +198,16 @@ def plot_training_curves(df: pd.DataFrame, output_dir: Path):
     
     # 8. Detector Comparison (Test vs Eval)
     ax = axes[2, 1]
-    if 'test/detector_prob/mean' in df.columns and 'eval/detector_prob/mean' in df.columns:
-        test_steps = df[df['test/detector_prob/mean'].notna()]['step']
-        test_prob = df[df['test/detector_prob/mean'].notna()]['test/detector_prob/mean']
-        eval_steps = df[df['eval/detector_prob/mean'].notna()]['step']
-        eval_prob = df[df['eval/detector_prob/mean'].notna()]['eval/detector_prob/mean']
+    
+    # Support both old and new formats
+    test_det_col = 'test/detector_prob/mean' if 'test/detector_prob/mean' in df.columns else 'test/env/all/detector_prob'
+    eval_det_col = 'eval/detector_prob/mean' if 'eval/detector_prob/mean' in df.columns else 'eval/env/all/detector_prob'
+    
+    if test_det_col in df.columns and eval_det_col in df.columns:
+        test_steps = df[df[test_det_col].notna()]['step']
+        test_prob = df[df[test_det_col].notna()][test_det_col]
+        eval_steps = df[df[eval_det_col].notna()]['step']
+        eval_prob = df[df[eval_det_col].notna()][eval_det_col]
         
         ax.plot(test_steps, test_prob, 'r-', linewidth=2, marker='o', markersize=6, label='Test P(AI)')
         ax.plot(eval_steps, eval_prob, 'g-', linewidth=2, marker='s', markersize=6, label='Eval P(AI)')
@@ -195,6 +217,20 @@ def plot_training_curves(df: pd.DataFrame, output_dir: Path):
         ax.set_title('Generalization: Test vs Eval')
         ax.legend()
         ax.grid(True, alpha=0.3)
+    elif test_det_col in df.columns:
+        # Show only test if eval not available
+        test_steps = df[df[test_det_col].notna()]['step']
+        test_prob = df[df[test_det_col].notna()][test_det_col]
+        ax.plot(test_steps, test_prob, 'r-', linewidth=2, marker='o', markersize=6, label='Test P(AI)')
+        ax.axhline(y=0.5, color='k', linestyle='--', alpha=0.3, label='Random')
+        ax.set_xlabel('Training Step')
+        ax.set_ylabel('Detector Probability')
+        ax.set_title('Test Set Performance')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+    else:
+        ax.text(0.5, 0.5, 'No test/eval data available', ha='center', va='center', fontsize=14)
+        ax.axis('off')
     
     # 9. Learning Rate
     ax = axes[2, 2]
@@ -534,16 +570,16 @@ def generate_summary_stats(df: pd.DataFrame, output_dir: Path):
     }
     
     metrics = {
-        'Total Reward': ('env/all/reward/total', 'test/reward/mean', 'eval/reward/mean', True),
-        'Detector Evasion': ('env/all/detector_prob', 'test/detector_prob/mean', 'eval/detector_prob/mean', False),
-        'Semantic Similarity': ('env/all/semantic_sim', 'test/semantic_sim/mean', 'eval/semantic_sim/mean', True),
-        'RoBERTa Evasion': (None, 'test/detector/roberta_openai/mean', 'eval/detector/roberta_openai/mean', False),
-        'Fast-DetectGPT Evasion': (None, 'test/detector/fast_detectgpt/mean', 'eval/detector/fast_detectgpt/mean', False),
+        'Total Reward': ('env/all/reward/total', ['test/reward/mean', 'test/env/all/reward/total'], ['eval/reward/mean', 'eval/env/all/reward/total'], True),
+        'Detector Evasion': ('env/all/detector_prob', ['test/detector_prob/mean', 'test/env/all/detector_prob'], ['eval/detector_prob/mean', 'eval/env/all/detector_prob'], False),
+        'Semantic Similarity': ('env/all/semantic_sim', ['test/semantic_sim/mean', 'test/env/all/semantic_sim'], ['eval/semantic_sim/mean', 'eval/env/all/semantic_sim'], True),
+        'RoBERTa Evasion': (None, ['test/detector/roberta_openai/mean'], ['eval/detector/roberta_openai/mean'], False),
+        'Fast-DetectGPT Evasion': (None, ['test/detector/fast_detectgpt/mean'], ['eval/detector/fast_detectgpt/mean'], False),
         'KL Divergence': ('kl_policy_base', None, None, False),
-        'Parse Success (%)': ('env/all/parse_success', 'test/valid_output_rate/mean', 'eval/valid_output_rate/mean', True),
+        'Parse Success (%)': ('env/all/parse_success', ['test/valid_output_rate/mean', 'test/env/all/parse_success'], ['eval/valid_output_rate/mean', 'eval/env/all/parse_success'], True),
     }
     
-    for name, (train_col, test_col, eval_col, maximize) in metrics.items():
+    for name, (train_col, test_cols, eval_cols, maximize) in metrics.items():
         summary['Metric'].append(name)
         
         # Train metrics
@@ -566,8 +602,15 @@ def generate_summary_stats(df: pd.DataFrame, output_dir: Path):
             summary['Train Final'].append('N/A')
             summary['Train Best'].append('N/A')
         
-        # Test metrics
-        if test_col and test_col in df.columns:
+        # Test metrics - try multiple column names
+        test_col = None
+        if test_cols:
+            for col in test_cols:
+                if col in df.columns:
+                    test_col = col
+                    break
+        
+        if test_col:
             test_data = df[df[test_col].notna()][test_col]
             if len(test_data) > 0:
                 # Convert detector prob to evasion
@@ -581,8 +624,15 @@ def generate_summary_stats(df: pd.DataFrame, output_dir: Path):
         else:
             summary['Test Final'].append('N/A')
         
-        # Eval metrics
-        if eval_col and eval_col in df.columns:
+        # Eval metrics - try multiple column names
+        eval_col = None
+        if eval_cols:
+            for col in eval_cols:
+                if col in df.columns:
+                    eval_col = col
+                    break
+        
+        if eval_col:
             eval_data = df[df[eval_col].notna()][eval_col]
             if len(eval_data) > 0:
                 # Convert detector prob to evasion
@@ -612,13 +662,22 @@ def generate_summary_stats(df: pd.DataFrame, output_dir: Path):
         f.write("GENERALIZATION ANALYSIS (Test vs Eval)\n")
         f.write("="*90 + "\n\n")
         
-        # Add generalization metrics
-        if 'test/detector_prob/mean' in df.columns and 'eval/detector_prob/mean' in df.columns:
-            test_prob = df[df['test/detector_prob/mean'].notna()]['test/detector_prob/mean'].iloc[-1]
-            eval_prob = df[df['eval/detector_prob/mean'].notna()]['eval/detector_prob/mean'].iloc[-1]
+        # Add generalization metrics - support both old and new formats
+        test_det_col = 'test/detector_prob/mean' if 'test/detector_prob/mean' in df.columns else 'test/env/all/detector_prob'
+        eval_det_col = 'eval/detector_prob/mean' if 'eval/detector_prob/mean' in df.columns else 'eval/env/all/detector_prob'
+        
+        if test_det_col in df.columns and eval_det_col in df.columns:
+            test_prob = df[df[test_det_col].notna()][test_det_col].iloc[-1]
+            eval_prob = df[df[eval_det_col].notna()][eval_det_col].iloc[-1]
             f.write(f"Final Test Detector P(AI): {test_prob:.4f} (Evasion: {1-test_prob:.4f})\n")
             f.write(f"Final Eval Detector P(AI): {eval_prob:.4f} (Evasion: {1-eval_prob:.4f})\n")
             f.write(f"Generalization Gap: {abs(test_prob - eval_prob):.4f}\n\n")
+        elif test_det_col in df.columns:
+            test_prob = df[df[test_det_col].notna()][test_det_col].iloc[-1]
+            f.write(f"Final Test Detector P(AI): {test_prob:.4f} (Evasion: {1-test_prob:.4f})\n")
+            f.write("No eval set data available\n\n")
+        else:
+            f.write("No test/eval data available\n\n")
         
         f.write(f"Total Training Steps: {len(df)}\n")
         if time_col:
