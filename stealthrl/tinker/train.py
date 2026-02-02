@@ -94,7 +94,13 @@ async def do_group_rollout_batched(
     policy._cache_index = 0
 
     with logtree.optional_enable_logging(enable_logging):
+        # Time the sampling/rollout phase
+        sampling_start = time.time()
         trajectory_group = await rl_train.do_group_rollout(env_group_builder, policy)
+        sampling_time = time.time() - sampling_start
+        
+        # Log sampling time to logtree
+        logtree.log_scalar("time/sampling", sampling_time)
 
     trajectory_groups = [trajectory_group]
     if do_remove_constant_reward_groups:
