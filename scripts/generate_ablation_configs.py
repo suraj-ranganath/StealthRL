@@ -15,44 +15,33 @@ BASE_CONFIG = "configs/tinker_mage_10k.yaml"
 OUTPUT_DIR = Path("configs/ablations")
 
 # Weight combinations to test (detector_weight, semantic_weight)
+# Simplified ablation: fix detector=1.0, sweep semantic weight
 WEIGHT_GRID: List[Tuple[float, float]] = [
-    # Detector-only (baseline)
-    (1.0, 0.0),
-    
-    # Balanced multi-objective
-    (1.0, 0.5),
-    (1.0, 1.0),  # Equal weights (our default)
-    (1.0, 1.5),
-    (1.0, 2.0),
-    
-    # Semantic-heavy
-    (1.0, 3.0),
-    (1.0, 5.0),
-    
-    # Detector-heavy
-    (2.0, 1.0),
-    (3.0, 1.0),
-    (5.0, 1.0),
-    
-    # Semantic-only (upper bound on similarity)
-    (0.0, 1.0),
+    (1.0, 0.0),  # Pure evasion
+    (1.0, 0.1),  # Slight fidelity constraint
+    (1.0, 0.2),  # Current best run baseline
+    (1.0, 0.3),  # Balanced
 ]
 
 # Fast ablation settings (for quick iteration)
 ABLATION_OVERRIDES = {
     "dataset": {
-        "max_train_examples": 2000,  # 2K samples for speed
-        "max_test_examples": 200,     # More test samples for reliable eval
+        "max_train_examples": 1000,  # 1K samples for speed
+        "max_test_examples": 100,     # More test samples for reliable eval
     },
     "training": {
+        "learning_rate": 2e-5,  # Match successful run (scaled to 2e-4 after 10x)
         "num_epochs": 3,  # Fewer epochs
-        "batch_size": 64,
+        "batch_size": 16,
         "group_size": 8,
     },
     "logging": {
         "path": "outputs/ablations",
         "eval_interval": 25,  # More frequent eval
         "save_interval": 100,
+    },
+    "parallel": {
+        "mode": "sync",  # Match successful run (sync mode)
     },
 }
 
