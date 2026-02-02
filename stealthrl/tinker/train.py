@@ -28,7 +28,7 @@ from tinker_cookbook.rl import train as rl_train
 from tinker_cookbook.rl.types import RLDatasetBuilder, EnvGroupBuilder, TrajectoryGroup
 from tinker_cookbook.completers import TokenCompleter, StopCondition, TokensWithLogprobs
 from tinker_cookbook.tokenizer_utils import get_tokenizer
-from tinker_cookbook.utils import ml_log, logtree
+from tinker_cookbook.utils import ml_log, logtree, trace
 from torch.utils.tensorboard import SummaryWriter
 
 logger = logging.getLogger(__name__)
@@ -94,13 +94,8 @@ async def do_group_rollout_batched(
     policy._cache_index = 0
 
     with logtree.optional_enable_logging(enable_logging):
-        # Time the sampling/rollout phase
-        sampling_start = time.time()
-        trajectory_group = await rl_train.do_group_rollout(env_group_builder, policy)
-        sampling_time = time.time() - sampling_start
-        
-        # Log sampling time to logtree
-        logtree.log_scalar("time/sampling", sampling_time)
+        with trace.scope("sampling"):
+            trajectory_group = await rl_train.do_group_rollout(env_group_builder, policy)
 
     trajectory_groups = [trajectory_group]
     if do_remove_constant_reward_groups:
