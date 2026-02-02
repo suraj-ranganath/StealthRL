@@ -47,57 +47,131 @@ def is_pareto_efficient(costs: np.ndarray) -> np.ndarray:
 
 def plot_training_curves(df: pd.DataFrame, output_dir: Path):
     """Plot training progression curves."""
-    fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+    fig, axes = plt.subplots(3, 3, figsize=(20, 16))
     fig.suptitle('StealthRL Training Progression (GRPO)', fontsize=20, fontweight='bold')
     
     # 1. Total Reward
     ax = axes[0, 0]
     ax.plot(df['step'], df['env/all/reward/total'], 'b-', linewidth=2, label='Train')
-    if 'test/env/all/reward/total' in df.columns:
-        test_steps = df[df['test/env/all/reward/total'].notna()]['step']
-        test_rewards = df[df['test/env/all/reward/total'].notna()]['test/env/all/reward/total']
-        ax.plot(test_steps, test_rewards, 'r--', linewidth=2, marker='o', label='Test')
+    if 'test/reward/mean' in df.columns:
+        test_steps = df[df['test/reward/mean'].notna()]['step']
+        test_rewards = df[df['test/reward/mean'].notna()]['test/reward/mean']
+        ax.plot(test_steps, test_rewards, 'r--', linewidth=2, marker='o', markersize=6, label='Test')
+    if 'eval/reward/mean' in df.columns:
+        eval_steps = df[df['eval/reward/mean'].notna()]['step']
+        eval_rewards = df[df['eval/reward/mean'].notna()]['eval/reward/mean']
+        ax.plot(eval_steps, eval_rewards, 'g--', linewidth=2, marker='s', markersize=6, label='Eval')
     ax.set_xlabel('Training Step')
     ax.set_ylabel('Total Reward')
     ax.set_title('Total Reward')
     ax.legend()
     ax.grid(True, alpha=0.3)
     
-    # 2. Detector Evasion
+    # 2. Detector Evasion (1 - P(AI))
     ax = axes[0, 1]
-    ax.plot(df['step'], df['env/all/reward/detector'], 'g-', linewidth=2, label='Detector Reward')
-    ax.axhline(y=0, color='k', linestyle='--', alpha=0.3)
+    train_evasion = 1 - df['env/all/detector_prob']
+    ax.plot(df['step'], train_evasion, 'b-', linewidth=2, label='Train')
+    
+    if 'test/detector_prob/mean' in df.columns:
+        test_steps = df[df['test/detector_prob/mean'].notna()]['step']
+        test_evasion = 1 - df[df['test/detector_prob/mean'].notna()]['test/detector_prob/mean']
+        ax.plot(test_steps, test_evasion, 'r--', linewidth=2, marker='o', markersize=6, label='Test')
+    
+    if 'eval/detector_prob/mean' in df.columns:
+        eval_steps = df[df['eval/detector_prob/mean'].notna()]['step']
+        eval_evasion = 1 - df[df['eval/detector_prob/mean'].notna()]['eval/detector_prob/mean']
+        ax.plot(eval_steps, eval_evasion, 'g--', linewidth=2, marker='s', markersize=6, label='Eval')
+    
+    ax.axhline(y=0.5, color='k', linestyle='--', alpha=0.3, label='Random')
     ax.set_xlabel('Training Step')
-    ax.set_ylabel('Detector Reward (higher = better evasion)')
+    ax.set_ylabel('Detector Evasion (1 - P(AI))')
     ax.set_title('Detector Evasion Progress')
     ax.legend()
     ax.grid(True, alpha=0.3)
     
     # 3. Semantic Similarity
     ax = axes[0, 2]
-    ax.plot(df['step'], df['env/all/semantic_sim'], 'purple', linewidth=2)
-    ax.axhline(y=0.95, color='r', linestyle='--', alpha=0.5, label='Quality Threshold')
+    ax.plot(df['step'], df['env/all/semantic_sim'], 'b-', linewidth=2, label='Train')
+    
+    if 'test/semantic_sim/mean' in df.columns:
+        test_steps = df[df['test/semantic_sim/mean'].notna()]['step']
+        test_sem = df[df['test/semantic_sim/mean'].notna()]['test/semantic_sim/mean']
+        ax.plot(test_steps, test_sem, 'r--', linewidth=2, marker='o', markersize=6, label='Test')
+    
+    if 'eval/semantic_sim/mean' in df.columns:
+        eval_steps = df[df['eval/semantic_sim/mean'].notna()]['step']
+        eval_sem = df[df['eval/semantic_sim/mean'].notna()]['eval/semantic_sim/mean']
+        ax.plot(eval_steps, eval_sem, 'g--', linewidth=2, marker='s', markersize=6, label='Eval')
+    
+    ax.axhline(y=0.95, color='orange', linestyle='--', alpha=0.5, label='Target (0.95)')
     ax.set_xlabel('Training Step')
     ax.set_ylabel('Semantic Similarity')
     ax.set_title('Semantic Quality Preservation')
-    ax.set_ylim([0.93, 1.0])
     ax.legend()
     ax.grid(True, alpha=0.3)
     
-    # 4. Perplexity
+    # 4. Individual Detectors - RoBERTa
     ax = axes[1, 0]
-    ax.plot(df['step'], df['env/all/perplexity'], 'orange', linewidth=2)
-    ax.axhline(y=30, color='g', linestyle='--', alpha=0.5, label='Target (30)')
-    ax.axhline(y=80, color='r', linestyle='--', alpha=0.5, label='Max (80)')
+    if 'test/detector/roberta_openai/mean' in df.columns:
+        test_steps = df[df['test/detector/roberta_openai/mean'].notna()]['step']
+        test_rob = 1 - df[df['test/detector/roberta_openai/mean'].notna()]['test/detector/roberta_openai/mean']
+        ax.plot(test_steps, test_rob, 'r-', linewidth=2, marker='o', markersize=6, label='Test')
+    
+    if 'eval/detector/roberta_openai/mean' in df.columns:
+        eval_steps = df[df['eval/detector/roberta_openai/mean'].notna()]['step']
+        eval_rob = 1 - df[df['eval/detector/roberta_openai/mean'].notna()]['eval/detector/roberta_openai/mean']
+        ax.plot(eval_steps, eval_rob, 'g-', linewidth=2, marker='s', markersize=6, label='Eval')
+    
+    ax.axhline(y=0.5, color='k', linestyle='--', alpha=0.3, label='Random')
     ax.set_xlabel('Training Step')
-    ax.set_ylabel('Perplexity')
-    ax.set_title('Text Naturalness (Perplexity)')
+    ax.set_ylabel('RoBERTa Evasion')
+    ax.set_title('RoBERTa Detector Evasion')
     ax.legend()
     ax.grid(True, alpha=0.3)
     
-    # 5. KL Divergence
+    # 5. Individual Detectors - Fast-DetectGPT
     ax = axes[1, 1]
-    ax.plot(df['step'], df['kl_policy_base'], 'red', linewidth=2)
+    if 'test/detector/fast_detectgpt/mean' in df.columns:
+        test_steps = df[df['test/detector/fast_detectgpt/mean'].notna()]['step']
+        test_fdg = 1 - df[df['test/detector/fast_detectgpt/mean'].notna()]['test/detector/fast_detectgpt/mean']
+        ax.plot(test_steps, test_fdg, 'r-', linewidth=2, marker='o', markersize=6, label='Test')
+    
+    if 'eval/detector/fast_detectgpt/mean' in df.columns:
+        eval_steps = df[df['eval/detector/fast_detectgpt/mean'].notna()]['step']
+        eval_fdg = 1 - df[df['eval/detector/fast_detectgpt/mean'].notna()]['eval/detector/fast_detectgpt/mean']
+        ax.plot(eval_steps, eval_fdg, 'g-', linewidth=2, marker='s', markersize=6, label='Eval')
+    
+    ax.axhline(y=0.5, color='k', linestyle='--', alpha=0.3, label='Random')
+    ax.set_xlabel('Training Step')
+    ax.set_ylabel('Fast-DetectGPT Evasion')
+    ax.set_title('Fast-DetectGPT Detector Evasion')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # 6. Parse Success Rate
+    ax = axes[1, 2]
+    ax.plot(df['step'], df['env/all/parse_success'] * 100, 'b-', linewidth=2, label='Train')
+    
+    if 'test/valid_output_rate/mean' in df.columns:
+        test_steps = df[df['test/valid_output_rate/mean'].notna()]['step']
+        test_parse = df[df['test/valid_output_rate/mean'].notna()]['test/valid_output_rate/mean'] * 100
+        ax.plot(test_steps, test_parse, 'r--', linewidth=2, marker='o', markersize=6, label='Test')
+    
+    if 'eval/valid_output_rate/mean' in df.columns:
+        eval_steps = df[df['eval/valid_output_rate/mean'].notna()]['step']
+        eval_parse = df[df['eval/valid_output_rate/mean'].notna()]['eval/valid_output_rate/mean'] * 100
+        ax.plot(eval_steps, eval_parse, 'g--', linewidth=2, marker='s', markersize=6, label='Eval')
+    
+    ax.axhline(y=90, color='orange', linestyle='--', alpha=0.5, label='Target (90%)')
+    ax.set_xlabel('Training Step')
+    ax.set_ylabel('Valid Output Rate (%)')
+    ax.set_title('Valid Output Generation')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # 7. KL Divergence
+    ax = axes[2, 0]
+    ax.plot(df['step'], df['kl_policy_base'], 'purple', linewidth=2)
     ax.axhline(y=4.0, color='orange', linestyle='--', alpha=0.5, label='Target (4.0)')
     ax.set_xlabel('Training Step')
     ax.set_ylabel('KL Divergence')
@@ -105,16 +179,31 @@ def plot_training_curves(df: pd.DataFrame, output_dir: Path):
     ax.legend()
     ax.grid(True, alpha=0.3)
     
-    # 6. Parse Success Rate
-    ax = axes[1, 2]
-    ax.plot(df['step'], df['env/all/parse_success'] * 100, 'teal', linewidth=2)
-    ax.axhline(y=90, color='g', linestyle='--', alpha=0.5, label='Target (90%)')
+    # 8. Detector Comparison (Test vs Eval)
+    ax = axes[2, 1]
+    if 'test/detector_prob/mean' in df.columns and 'eval/detector_prob/mean' in df.columns:
+        test_steps = df[df['test/detector_prob/mean'].notna()]['step']
+        test_prob = df[df['test/detector_prob/mean'].notna()]['test/detector_prob/mean']
+        eval_steps = df[df['eval/detector_prob/mean'].notna()]['step']
+        eval_prob = df[df['eval/detector_prob/mean'].notna()]['eval/detector_prob/mean']
+        
+        ax.plot(test_steps, test_prob, 'r-', linewidth=2, marker='o', markersize=6, label='Test P(AI)')
+        ax.plot(eval_steps, eval_prob, 'g-', linewidth=2, marker='s', markersize=6, label='Eval P(AI)')
+        ax.axhline(y=0.5, color='k', linestyle='--', alpha=0.3, label='Random')
+        ax.set_xlabel('Training Step')
+        ax.set_ylabel('Detector Probability')
+        ax.set_title('Generalization: Test vs Eval')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+    
+    # 9. Learning Rate
+    ax = axes[2, 2]
+    ax.plot(df['step'], df['optim/lr'], 'orange', linewidth=2)
     ax.set_xlabel('Training Step')
-    ax.set_ylabel('Parse Success Rate (%)')
-    ax.set_title('Valid Output Generation')
-    ax.set_ylim([60, 102])
-    ax.legend()
+    ax.set_ylabel('Learning Rate')
+    ax.set_title('Learning Rate Schedule')
     ax.grid(True, alpha=0.3)
+    ax.set_yscale('log')
     
     plt.tight_layout()
     plt.savefig(output_dir / 'training_curves.png', dpi=300, bbox_inches='tight')
@@ -419,35 +508,75 @@ def generate_summary_stats(df: pd.DataFrame, output_dir: Path):
 
     summary = {
         'Metric': [],
-        'Initial': [],
-        'Final': [],
-        'Best': [],
-        'Mean': []
+        'Train Initial': [],
+        'Train Final': [],
+        'Train Best': [],
+        'Test Final': [],
+        'Eval Final': []
     }
     
     metrics = {
-        'Total Reward': 'env/all/reward/total',
-        'Detector Evasion': 'env/all/reward/detector',
-        'Semantic Similarity': 'env/all/semantic_sim',
-        'Perplexity': 'env/all/perplexity',
-        'KL Divergence': 'kl_policy_base',
-        'Parse Success (%)': 'env/all/parse_success',
-        'Detector Prob': 'env/all/detector_prob',
+        'Total Reward': ('env/all/reward/total', 'test/reward/mean', 'eval/reward/mean', True),
+        'Detector Evasion': ('env/all/detector_prob', 'test/detector_prob/mean', 'eval/detector_prob/mean', False),
+        'Semantic Similarity': ('env/all/semantic_sim', 'test/semantic_sim/mean', 'eval/semantic_sim/mean', True),
+        'RoBERTa Evasion': (None, 'test/detector/roberta_openai/mean', 'eval/detector/roberta_openai/mean', False),
+        'Fast-DetectGPT Evasion': (None, 'test/detector/fast_detectgpt/mean', 'eval/detector/fast_detectgpt/mean', False),
+        'KL Divergence': ('kl_policy_base', None, None, False),
+        'Parse Success (%)': ('env/all/parse_success', 'test/valid_output_rate/mean', 'eval/valid_output_rate/mean', True),
     }
     
-    for name, col in metrics.items():
+    for name, (train_col, test_col, eval_col, maximize) in metrics.items():
         summary['Metric'].append(name)
-        summary['Initial'].append(f"{df[col].iloc[0]:.4f}")
-        summary['Final'].append(f"{df[col].iloc[-1]:.4f}")
         
-        if 'reward' in col or 'similarity' in col or 'success' in col:
-            summary['Best'].append(f"{df[col].max():.4f}")
-        elif 'prob' in col or 'perplexity' in col or 'kl' in col:
-            summary['Best'].append(f"{df[col].min():.4f}")
-        else:
-            summary['Best'].append(f"{df[col].max():.4f}")
+        # Train metrics
+        if train_col and train_col in df.columns:
+            # Convert detector prob to evasion for display
+            if 'detector_prob' in train_col:
+                train_data = 1 - df[train_col]
+            else:
+                train_data = df[train_col]
             
-        summary['Mean'].append(f"{df[col].mean():.4f}")
+            summary['Train Initial'].append(f"{train_data.iloc[0]:.4f}")
+            summary['Train Final'].append(f"{train_data.iloc[-1]:.4f}")
+            
+            if maximize:
+                summary['Train Best'].append(f"{train_data.max():.4f}")
+            else:
+                summary['Train Best'].append(f"{train_data.min():.4f}")
+        else:
+            summary['Train Initial'].append('N/A')
+            summary['Train Final'].append('N/A')
+            summary['Train Best'].append('N/A')
+        
+        # Test metrics
+        if test_col and test_col in df.columns:
+            test_data = df[df[test_col].notna()][test_col]
+            if len(test_data) > 0:
+                # Convert detector prob to evasion
+                if 'detector' in test_col and 'reward' not in test_col:
+                    test_final = 1 - test_data.iloc[-1]
+                else:
+                    test_final = test_data.iloc[-1]
+                summary['Test Final'].append(f"{test_final:.4f}")
+            else:
+                summary['Test Final'].append('N/A')
+        else:
+            summary['Test Final'].append('N/A')
+        
+        # Eval metrics
+        if eval_col and eval_col in df.columns:
+            eval_data = df[df[eval_col].notna()][eval_col]
+            if len(eval_data) > 0:
+                # Convert detector prob to evasion
+                if 'detector' in eval_col and 'reward' not in eval_col:
+                    eval_final = 1 - eval_data.iloc[-1]
+                else:
+                    eval_final = eval_data.iloc[-1]
+                summary['Eval Final'].append(f"{eval_final:.4f}")
+            else:
+                summary['Eval Final'].append('N/A')
+        else:
+            summary['Eval Final'].append('N/A')
     
     summary_df = pd.DataFrame(summary)
     
@@ -456,11 +585,23 @@ def generate_summary_stats(df: pd.DataFrame, output_dir: Path):
     
     # Save as formatted text
     with open(output_dir / 'training_summary.txt', 'w') as f:
-        f.write("="*80 + "\n")
+        f.write("="*90 + "\n")
         f.write("STEALTHRL TRAINING SUMMARY\n")
-        f.write("="*80 + "\n\n")
+        f.write("="*90 + "\n\n")
         f.write(summary_df.to_string(index=False))
         f.write("\n\n")
+        f.write("="*90 + "\n")
+        f.write("GENERALIZATION ANALYSIS (Test vs Eval)\n")
+        f.write("="*90 + "\n\n")
+        
+        # Add generalization metrics
+        if 'test/detector_prob/mean' in df.columns and 'eval/detector_prob/mean' in df.columns:
+            test_prob = df[df['test/detector_prob/mean'].notna()]['test/detector_prob/mean'].iloc[-1]
+            eval_prob = df[df['eval/detector_prob/mean'].notna()]['eval/detector_prob/mean'].iloc[-1]
+            f.write(f"Final Test Detector P(AI): {test_prob:.4f} (Evasion: {1-test_prob:.4f})\n")
+            f.write(f"Final Eval Detector P(AI): {eval_prob:.4f} (Evasion: {1-eval_prob:.4f})\n")
+            f.write(f"Generalization Gap: {abs(test_prob - eval_prob):.4f}\n\n")
+        
         f.write(f"Total Training Steps: {len(df)}\n")
         if time_col:
             f.write(f"Total Training Time: {df[time_col].sum() / 3600:.2f} hours\n")
