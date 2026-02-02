@@ -226,7 +226,8 @@ class TinkerCompositeReward:
             )
             semantic_time = time.perf_counter() - semantic_start
             semantic_sim = semantic_result["similarity"]
-            semantic_reward_raw = max(0.0, semantic_sim - self.semantic_min) if semantic_sim >= self.semantic_min else 0.0
+            # Use full [0, 1] range for proper multi-objective RL
+            semantic_reward_raw = semantic_sim
         
         # Compute perplexity reward (only if enabled)
         perplexity = 30.0  # Default to target if disabled
@@ -266,6 +267,10 @@ class TinkerCompositeReward:
             "time/reward/total": total_time,
             "time/reward/detector": detector_time,
         }
+        
+        # Add individual detector scores for analysis
+        for detector_name, score in detector_result.get("detector_scores", {}).items():
+            result[f"detector/{detector_name}"] = score
         
         # Only include semantic/perplexity metrics if enabled (don't waste GPU during training)
         if self.enable_semantic:
@@ -352,7 +357,8 @@ class TinkerCompositeReward:
             detector_reward_raw = 1.0 - detector_prob
 
             semantic_sim = semantic_sims[idx]
-            semantic_reward_raw = max(0.0, semantic_sim - self.semantic_min) if semantic_sim >= self.semantic_min else 0.0
+            # Use full [0, 1] range for proper multi-objective RL
+            semantic_reward_raw = semantic_sim
 
             ppl_reward_raw = ppl_rewards_raw[idx]
             perplexity = perplexities[idx]
@@ -380,6 +386,10 @@ class TinkerCompositeReward:
                 "time/reward/detector": detector_time,
                 "text_length": len(valid_paraphrases[idx]),
             }
+            
+            # Add individual detector scores for analysis
+            for detector_name, score in detector_result.get("detector_scores", {}).items():
+                result[f"detector/{detector_name}"] = score
             
             # Only include semantic/perplexity metrics if enabled
             if self.enable_semantic:

@@ -1,0 +1,136 @@
+# StealthRL Training Configuration - 10K MAGE samples with filtering
+# Optimized for fast iteration with production-quality hyperparameters
+
+# Model settings
+model:
+  name: "Qwen/Qwen3-4B-Instruct-2507"
+  renderer: "qwen3"
+
+# LoRA settings
+lora:
+  rank: 32
+  alpha: 32
+  dropout: 0.05
+  target_modules: null
+
+# Training hyperparameters
+training:
+  learning_rate: 2.8e-4  # Optimized for rank 32
+  batch_size: 64  # Match your old successful run
+  group_size: 8  # Better than 4 for GRPO advantage estimation
+  num_epochs: 5  # Keep your original setting
+  num_substeps: 1
+  max_tokens: 512
+
+# Sampling settings
+sampling:
+  temperature: 1.0
+  temperature_schedule: "constant"
+  temperature_decay: 0.95
+  top_p: 0.95
+  batched_sampling: true
+
+# GRPO settings
+grpo:
+  normalize_advantages: true
+  advantage_clip: 10.0
+  reward_clip: null
+  remove_constant_reward_groups: true
+
+# KL divergence penalty - FIXED (was 0.05 in your old run, too high)
+kl:
+  penalty_coef: 0.01  # Reduced from 0.05 for better exploration
+  target: null
+  adapt_rate: 0.1
+
+# All-negative group handling
+all_negative:
+  min_reward: 0.01
+  downweight: 0.5
+
+# Curriculum learning
+curriculum:
+  enabled: false
+  start_quantile: 0.7
+  end_quantile: 0.0
+  steps: 1000
+
+# Reward function configuration - Multi-objective RL formulation
+reward:
+  # Multi-objective weights: R = α·R_det + β·R_sem
+  # Both components use full [0,1] range for balanced optimization
+  detector_weight: 1.0      # α: detector evasion (1 - P(AI))
+  semantic_weight: 1.0      # β: semantic similarity (E5 cosine)
+  perplexity_weight: 0.0    # Disabled - rely on KL penalty for fluency
+  
+  # Component toggles
+  enable_semantic: true     # Multi-objective RL: evasion + fidelity
+  enable_perplexity: false  # KL penalty handles fluency
+  
+  detectors:
+    names:
+      - "roberta_openai"
+      - "fast_detectgpt"
+    weights:
+      roberta_openai: 0.6
+      fast_detectgpt: 0.4
+    
+    # Batch sizes for detector inference
+    roberta_batch_size: 256
+    fast_detectgpt_batch_size: 64
+    
+    fast_detectgpt_model: "gpt-neo-2.7B"
+    roberta_openai_model: "roberta-large-openai-detector"
+    
+    cache_path: "cache/detectors.db"
+  
+  # Semantic similarity (full [0,1] range in reward)
+  semantic:
+    model: "intfloat/e5-large-v2"
+    threshold: 0.90  # For evaluation only, not used in reward
+  
+  # BERTScore (optional)
+  bertscore:
+    enabled: false
+    model_type: "roberta-large"
+    batch_size: 16
+    num_layers: null
+  
+  # Perplexity
+  perplexity:
+    model: "gpt2"
+    min: 5.0
+    max: 80.0
+    target: 30.0
+  
+  # Normalization
+  normalization:
+    enabled: true
+    detector_zscore: true
+    semantic_min: 0.90
+    quality_min: 0.80
+
+# Dataset settings - 10K samples with NEW FILTERING
+dataset:
+  path: "data/mage"
+  max_train_examples: 10000  # 10K train samples
+  max_test_examples: 100     # Small test set for eval
+  seed: 42
+  few_shot: "standard"
+
+# Logging
+logging:
+  path: "outputs/mage_10k"
+  interval: 10
+  eval_interval: 100
+  save_interval: 500
+  num_groups_to_log: 4
+  debug_mode: false
+
+# Parallel training
+parallel:
+  mode: "stream_minibatch"
+  stream_minibatch:
+    num_minibatches: 4
+  async:
+    max_steps_off_policy: 2
