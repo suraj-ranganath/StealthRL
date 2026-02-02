@@ -358,33 +358,43 @@ def plot_reward_decomposition(df: pd.DataFrame, output_dir: Path):
     fig, axes = plt.subplots(2, 2, figsize=(16, 12))
     fig.suptitle('Reward Component Analysis', fontsize=20, fontweight='bold')
     
+    # Find available reward components
+    all_components = ['env/all/reward/detector', 'env/all/reward/semantic', 
+                      'env/all/reward/perplexity', 'env/all/reward/fairness']
+    components = [c for c in all_components if c in df.columns]
+    colors = ['#ff7f0e', '#2ca02c', '#d62728', '#9467bd'][:len(components)]
+    
     # 1. Stacked area chart of reward components
     ax = axes[0, 0]
-    components = ['env/all/reward/detector', 'env/all/reward/semantic', 
-                  'env/all/reward/perplexity', 'env/all/reward/fairness']
-    colors = ['#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
-    
-    # Stack positive and negative separately
-    positive_data = df[components].clip(lower=0)
-    ax.stackplot(df['step'], positive_data.T, labels=components, 
-                 colors=colors, alpha=0.7)
-    ax.set_xlabel('Training Step', fontsize=14)
-    ax.set_ylabel('Reward Contribution', fontsize=14)
-    ax.set_title('Positive Reward Components', fontsize=16)
-    ax.legend(loc='upper left', fontsize=10)
-    ax.grid(True, alpha=0.3)
+    if components:
+        # Stack positive and negative separately
+        positive_data = df[components].clip(lower=0)
+        ax.stackplot(df['step'], positive_data.T, labels=[c.split('/')[-1] for c in components], 
+                     colors=colors, alpha=0.7)
+        ax.set_xlabel('Training Step', fontsize=14)
+        ax.set_ylabel('Reward Contribution', fontsize=14)
+        ax.set_title('Positive Reward Components', fontsize=16)
+        ax.legend(loc='upper left', fontsize=10)
+        ax.grid(True, alpha=0.3)
+    else:
+        ax.text(0.5, 0.5, 'No reward components found', ha='center', va='center', fontsize=14)
+        ax.axis('off')
     
     # 2. Individual component trajectories
     ax = axes[0, 1]
-    for comp, color in zip(components, colors):
-        ax.plot(df['step'], df[comp], linewidth=2, label=comp.split('/')[-1], 
-                color=color)
-    ax.axhline(y=0, color='k', linestyle='--', alpha=0.3)
-    ax.set_xlabel('Training Step', fontsize=14)
-    ax.set_ylabel('Reward Value', fontsize=14)
-    ax.set_title('Individual Reward Components', fontsize=16)
-    ax.legend(fontsize=10)
-    ax.grid(True, alpha=0.3)
+    if components:
+        for comp, color in zip(components, colors):
+            ax.plot(df['step'], df[comp], linewidth=2, label=comp.split('/')[-1], 
+                    color=color)
+        ax.axhline(y=0, color='k', linestyle='--', alpha=0.3)
+        ax.set_xlabel('Training Step', fontsize=14)
+        ax.set_ylabel('Reward Value', fontsize=14)
+        ax.set_title('Individual Reward Components', fontsize=16)
+        ax.legend(fontsize=10)
+        ax.grid(True, alpha=0.3)
+    else:
+        ax.text(0.5, 0.5, 'No reward components found', ha='center', va='center', fontsize=14)
+        ax.axis('off')
     
     # 3. Detector probability histogram by training phase
     ax = axes[1, 0]
@@ -406,25 +416,33 @@ def plot_reward_decomposition(df: pd.DataFrame, output_dir: Path):
     
     # 4. Correlation heatmap
     ax = axes[1, 1]
-    corr_data = df[['env/all/reward/detector', 'env/all/reward/semantic',
-                    'env/all/reward/perplexity', 'env/all/semantic_sim',
-                    'env/all/detector_prob', 'env/all/perplexity']].corr()
+    # Find available metrics for correlation
+    corr_candidates = ['env/all/reward/detector', 'env/all/reward/semantic',
+                      'env/all/reward/perplexity', 'env/all/semantic_sim',
+                      'env/all/detector_prob', 'env/all/perplexity']
+    corr_cols = [c for c in corr_candidates if c in df.columns]
     
-    im = ax.imshow(corr_data, cmap='coolwarm', aspect='auto', vmin=-1, vmax=1)
-    ax.set_xticks(range(len(corr_data.columns)))
-    ax.set_yticks(range(len(corr_data.columns)))
-    ax.set_xticklabels([c.split('/')[-1] for c in corr_data.columns], 
-                       rotation=45, ha='right', fontsize=10)
-    ax.set_yticklabels([c.split('/')[-1] for c in corr_data.columns], fontsize=10)
-    ax.set_title('Metric Correlations', fontsize=16)
-    
-    # Add correlation values
-    for i in range(len(corr_data.columns)):
-        for j in range(len(corr_data.columns)):
-            text = ax.text(j, i, f'{corr_data.iloc[i, j]:.2f}',
-                          ha="center", va="center", color="black", fontsize=9)
-    
-    plt.colorbar(im, ax=ax)
+    if len(corr_cols) >= 2:
+        corr_data = df[corr_cols].corr()
+        
+        im = ax.imshow(corr_data, cmap='coolwarm', aspect='auto', vmin=-1, vmax=1)
+        ax.set_xticks(range(len(corr_data.columns)))
+        ax.set_yticks(range(len(corr_data.columns)))
+        ax.set_xticklabels([c.split('/')[-1] for c in corr_data.columns], 
+                           rotation=45, ha='right', fontsize=10)
+        ax.set_yticklabels([c.split('/')[-1] for c in corr_data.columns], fontsize=10)
+        ax.set_title('Metric Correlations', fontsize=16)
+        
+        # Add correlation values
+        for i in range(len(corr_data.columns)):
+            for j in range(len(corr_data.columns)):
+                text = ax.text(j, i, f'{corr_data.iloc[i, j]:.2f}',
+                              ha="center", va="center", color="black", fontsize=9)
+        
+        plt.colorbar(im, ax=ax)
+    else:
+        ax.text(0.5, 0.5, 'Insufficient metrics for correlation', ha='center', va='center', fontsize=14)
+        ax.axis('off')
     
     plt.tight_layout()
     plt.savefig(output_dir / 'reward_decomposition.png', dpi=300, bbox_inches='tight')
