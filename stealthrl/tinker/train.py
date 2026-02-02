@@ -932,6 +932,13 @@ async def main():
     with open(output_dir / "run_metadata.json", "w") as f:
         json.dump(run_metadata, f, indent=2)
     
+    # Extract model and LoRA config early (needed for config saving)
+    base_model_name = model_config.get("name", "Qwen/Qwen3-4B-Instruct-2507")
+    lora_rank = int(lora_config.get("rank", 16))
+    lora_alpha = lora_config.get("alpha")
+    if lora_alpha is not None:
+        lora_alpha = int(lora_alpha)
+    
     # Save complete configuration for reproducibility and analysis
     # This includes all training hyperparameters, model settings, and reward weights
     complete_config = {
@@ -1015,11 +1022,7 @@ async def main():
     
     # Initialize Tinker clients (ServiceClient loads API key from environment automatically)
     service_client = tinker.ServiceClient()
-    base_model_name = model_config.get("name", "Qwen/Qwen3-4B-Instruct-2507")
-    lora_rank = int(lora_config.get("rank", 16))
-    lora_alpha = lora_config.get("alpha")
-    if lora_alpha is not None:
-        lora_alpha = int(lora_alpha)
+    # Note: base_model_name, lora_rank, lora_alpha already extracted above for config saving
     training_client = await service_client.create_lora_training_client_async(
         base_model=base_model_name,
         rank=lora_rank,
