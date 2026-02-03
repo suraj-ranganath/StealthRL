@@ -92,8 +92,8 @@ Our evaluation focuses on three detector families (curvature-based, paired-LM, f
 
 \textbf{Safety and dual-use.} Adversarial paraphrasing is dual-use technology. We position StealthRL as a \emph{stress-testing and robustness evaluation tool} for researchers and detector developers, not a production evasion system. The 0\% TPR@1\%FPR result exposes critical vulnerabilities that must be addressed before detectors are deployed in high-stakes applications. Our released code enables reproducible robustness evaluation and motivates defensive research into adversarially robust detection methods.
 
-\section{Conclusion}
-StealthRL demonstrates catastrophic detector failure under adaptive attacks, revealing fundamental robustness gaps. Results motivate development of adversarially robust detection methods and establish rigorous evaluation protocols for AI-text detection security.
+\section{Conclusion and Future Work}
+StealthRL demonstrates catastrophic detector failure under adaptive attacks, revealing fundamental robustness gaps. Results motivate development of adversarially robust detection methods and establish rigorous evaluation protocols for AI-text detection security. Future work should explore adversarial training strategies, semantic-aware detectors, and provable robustness guarantees to defend against adaptive paraphrasing attacks.
 
 \section*{Acknowledgments}
 We gratefully acknowledge Thinking Machines for providing access to their Tinker API framework, which was essential for the reinforcement learning training in this work. We also thank the open-source community for the detector implementations and model checkpoints that enabled this evaluation.
