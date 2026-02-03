@@ -5,44 +5,44 @@ Reallocating 'name_of_file' (item size: 1) to 20 items.
 The style file: iclr2026_conference.bst
 Reallocating 'name_of_file' (item size: 1) to 15 items.
 Database file #1: stealthrl_refs.bib
-You've used 8 entries,
+You've used 6 entries,
             2773 wiz_defined-function locations,
-            629 strings with 6772 characters,
-and the built_in function-call counts, 4329 in all, are:
-= -- 334
-> -- 420
-< -- 2
-+ -- 140
-- -- 132
-* -- 386
-:= -- 694
-add.period$ -- 24
-call.type$ -- 8
-change.case$ -- 68
-chr.to.int$ -- 8
-cite$ -- 16
-duplicate$ -- 126
-empty$ -- 263
-format.name$ -- 144
-if$ -- 871
+            620 strings with 6369 characters,
+and the built_in function-call counts, 3305 in all, are:
+= -- 253
+> -- 324
+< -- 1
++ -- 108
+- -- 102
+* -- 298
+:= -- 532
+add.period$ -- 18
+call.type$ -- 6
+change.case$ -- 52
+chr.to.int$ -- 6
+cite$ -- 12
+duplicate$ -- 95
+empty$ -- 198
+format.name$ -- 110
+if$ -- 662
 int.to.chr$ -- 1
 int.to.str$ -- 1
 missing$ -- 0
-newline$ -- 48
-num.names$ -- 32
-pop$ -- 158
+newline$ -- 38
+num.names$ -- 24
+pop$ -- 121
 preamble$ -- 1
-purify$ -- 60
+purify$ -- 46
 quote$ -- 0
-skip$ -- 153
+skip$ -- 115
 stack$ -- 0
-substring$ -- 16
-swap$ -- 8
+substring$ -- 12
+swap$ -- 6
 text.length$ -- 0
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 88
+type$ -- 66
 warning$ -- 0
-while$ -- 24
+while$ -- 18
 width$ -- 0
-write$ -- 103
+write$ -- 79

@@ -1,4 +1,4 @@
-\begin{thebibliography}{8}
+\begin{thebibliography}{6}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -27,13 +27,6 @@ Aldan Creo and Shushanta Pudasaini.
   2025.
 \newblock URL \url{https://arxiv.org/abs/2406.11239}.
 
-\bibitem[David \& Gervais(2025)David and
-  Gervais]{david2025authormistevadingaitext}
-Isaac David and Arthur Gervais.
-\newblock Authormist: Evading ai text detectors with reinforcement learning,
-  2025.
-\newblock URL \url{https://arxiv.org/abs/2503.08716}.
-
 \bibitem[Hans et~al.(2024)Hans, Schwarzschild, Cherepanova, Kazemi, Saha,
   Goldblum, Geiping, and Goldstein]{hans2024spottingllmsbinocularszeroshot}
 Abhimanyu Hans, Avi Schwarzschild, Valeriia Cherepanova, Hamid Kazemi,
@@ -41,13 +34,6 @@ Abhimanyu Hans, Avi Schwarzschild, Valeriia Cherepanova, Hamid Kazemi,
 \newblock Spotting llms with binoculars: Zero-shot detection of
   machine-generated text, 2024.
 \newblock URL \url{https://arxiv.org/abs/2401.12070}.
-
-\bibitem[Hu et~al.(2021)Hu, Shen, Wallis, Allen-Zhu, Li, Wang, Wang, and
-  Chen]{hu2021loralowrankadaptationlarge}
-Edward~J. Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean
-  Wang, Lu~Wang, and Weizhu Chen.
-\newblock Lora: Low-rank adaptation of large language models, 2021.
-\newblock URL \url{https://arxiv.org/abs/2106.09685}.
 
 \bibitem[Li et~al.(2024)Li, Li, Cui, Bi, Wang, Wang, Yang, Shi, and
   Zhang]{li2024magemachinegeneratedtextdetection}

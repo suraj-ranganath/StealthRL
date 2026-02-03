@@ -1,6 +1,6 @@
 PWD /Users/suraj/Desktop/StealthRL/iclr2026
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/data/miktex/data/le/pdftex/pdflatex.fmt
-INPUT stealthrl_workshop.tex
+INPUT /Users/suraj/Desktop/StealthRL/iclr2026/stealthrl_workshop.tex
 OUTPUT stealthrl_workshop.log
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/base/article.cls
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/base/article.cls
@@ -234,20 +234,13 @@ INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/tfm/p
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/tfm/public/amsfonts/cmextra/cmbsy9.tfm
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/tfm/public/amsfonts/cmextra/cmbsy6.tfm
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/tfm/adobe/times/ptmb7t.tfm
-INPUT ./figures/fig_heatmap_tpr.png
-INPUT ./figures/fig_heatmap_tpr.png
-INPUT ./figures/fig_heatmap_tpr.png
-INPUT ./figures/fig_heatmap_tpr.png
-INPUT ./figures/fig_heatmap_tpr.png
-INPUT ./figures/fig_heatmap_tpr.png
-INPUT ./figures/fig_heatmap_tpr.png
-INPUT ./figures/fig_tradeoff.png
-INPUT ./figures/fig_tradeoff.png
-INPUT ./figures/fig_tradeoff.png
-INPUT ./figures/fig_tradeoff.png
-INPUT ./figures/fig_tradeoff.png
-INPUT ./figures/fig_tradeoff.png
-INPUT ./figures/fig_tradeoff.png
+INPUT ./figures/fig_method_comparison.png
+INPUT ./figures/fig_method_comparison.png
+INPUT ./figures/fig_method_comparison.png
+INPUT ./figures/fig_method_comparison.png
+INPUT ./figures/fig_method_comparison.png
+INPUT ./figures/fig_method_comparison.png
+INPUT ./figures/fig_method_comparison.png
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/vf/adobe/times/ptmr7t.vf
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/tfm/adobe/times/ptmr8r.tfm
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/vf/adobe/times/ptmb7t.vf
@@ -255,6 +248,9 @@ INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/tfm/a
 INPUT ./stealthrl_workshop.bbl
 INPUT ./stealthrl_workshop.bbl
 INPUT stealthrl_workshop.bbl
+INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/tfm/adobe/times/ptmri7t.tfm
+INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/vf/adobe/times/ptmri7t.vf
+INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/tfm/adobe/times/ptmri8r.tfm
 INPUT stealthrl_workshop.aux
 INPUT ./stealthrl_workshop.out
 INPUT ./stealthrl_workshop.out
@@ -263,14 +259,18 @@ INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmmi10.pfb
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmmi7.pfb
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmmi7.pfb
+INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmmi9.pfb
+INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmmi9.pfb
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmr10.pfb
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmr10.pfb
-INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmr7.pfb
-INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmr7.pfb
+INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmr6.pfb
+INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmr6.pfb
+INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmr9.pfb
+INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmr9.pfb
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmsy10.pfb
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmsy10.pfb
-INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmsy7.pfb
-INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmsy7.pfb
+INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmsy6.pfb
+INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmsy6.pfb
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmsy9.pfb
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmsy9.pfb
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/urw/courier/ucrr8a.pfb
