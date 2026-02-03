@@ -23,7 +23,7 @@ from pathlib import Path
 
 
 class ResearchPipeline:
-    """Automated research pipeline for StealthRL DSC 291 project."""
+    """Automated research pipeline for StealthRL."""
     
     def __init__(self, base_dir: Path, data_dir: Path = None):
         self.base_dir = base_dir
@@ -218,7 +218,7 @@ class ResearchPipeline:
     def run_full_pipeline(self):
         """Run complete research pipeline."""
         print("\n" + "="*60)
-        print("STEALTHRL RESEARCH PIPELINE - DSC 291")
+        print("STEALTHRL RESEARCH PIPELINE")
         print("="*60)
         print("\nThis will run the complete research pipeline:")
         print("  1. Data preparation")

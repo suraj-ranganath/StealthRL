@@ -131,7 +131,7 @@ def test_stealthrl_checkpoint():
     print("\n=== Testing StealthRL Checkpoint ===")
     try:
         import json
-        checkpoint_path = "checkpoints/atharv_checkpoint_1.json"
+        checkpoint_path = "checkpoints/ckpt_example.json"
         
         if not os.path.exists(checkpoint_path):
             print(f"✗ Checkpoint not found: {checkpoint_path}")

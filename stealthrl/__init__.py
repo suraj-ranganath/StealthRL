@@ -14,5 +14,5 @@ Key modules:
 """
 
 __version__ = "0.1.0"
-__author__ = "Suraj Ranganath, Nishchay Mahor, Sibo Zhu"
-__affiliation__ = "University of California, San Diego"
+__author__ = "Anonymous"
+__affiliation__ = "Anonymous"

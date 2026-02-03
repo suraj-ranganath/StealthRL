@@ -11,14 +11,14 @@ This script runs a comprehensive set of ablation studies:
 
 Usage:
     python scripts/run_ablations.py \
-        --stealthrl-checkpoint checkpoints/atharv_checkpoint_1.json \
+        --stealthrl-checkpoint checkpoints/ckpt_example.json \
         --n-human 100 --n-ai 100 \
         --out-dir outputs/ablations
         
     # Run specific ablations only:
     python scripts/run_ablations.py \
         --ablations guidance budget sanitize padben \
-        --stealthrl-checkpoint checkpoints/atharv_checkpoint_1.json
+        --stealthrl-checkpoint checkpoints/ckpt_example.json
 """
 
 import argparse
