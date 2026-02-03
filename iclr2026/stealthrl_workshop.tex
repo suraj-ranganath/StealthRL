@@ -23,7 +23,7 @@ Multi-Detector Evasion of AI-Text Detectors}
 \maketitle
 
 \begin{abstract}
-We introduce \emph{StealthRL}, a reinforcement-learning framework that paraphrases AI-generated text to evade detection while preserving meaning and fluency, enabling systematic red-teaming of AI-text detectors. The challenge is to reduce detector confidence at strict low-FPR operating points without collapsing semantic fidelity or overfitting to a single detector family. StealthRL fine-tunes a single Qwen3-4B paraphraser with LoRA \cite{hu2021loralowrankadaptationlarge} and a multi-objective reward combining detector evasion, semantic similarity, and fluency. On the MAGE benchmark with three detectors (RoBERTa OpenAI, Fast-DetectGPT, Binoculars), StealthRL reduces mean TPR@1\%FPR from 0.27 (no attack) to 0.04 while maintaining high semantic similarity (0.953 E5 cosine), outperforming simple paraphrasing and a detector-guided baseline. We release an anonymized code package in the supplementary material with a placeholder anonymous link for reproducibility.
+We introduce \emph{StealthRL}, a reinforcement-learning framework for systematic stress-testing and red-teaming of AI-text detectors through adversarial paraphrasing. By generating high-fidelity paraphrases that evade detection while preserving semantic content, StealthRL exposes brittleness in detector families and informs defensive improvements. The technical challenge is to reduce detector confidence at strict low-FPR operating points without collapsing semantic fidelity or overfitting to a single detector family. StealthRL fine-tunes a single Qwen3-4B paraphraser with LoRA \cite{hu2021loralowrankadaptationlarge} and a composite reward balancing detector evasion with semantic similarity. On the MAGE benchmark with three detector families (RoBERTa OpenAI, Fast-DetectGPT, Binoculars), StealthRL reduces mean TPR@1\%FPR from 0.27 (baseline) to 0.04 while maintaining high semantic similarity (0.953 E5 cosine), revealing significant transferable vulnerabilities. We release an anonymized code package for reproducible robustness evaluation.
 \end{abstract}
 
 \section{Introduction}
@@ -42,17 +42,19 @@ We present \textbf{StealthRL}, a reinforcement-learning paraphraser trained to r
 An anonymized code release containing training and evaluation scripts is included in the supplementary material. A placeholder anonymous link is provided: \url{https://anonymous.4open.science/r/STEALTHRL}.
 
 \section{Related Work}
-Detector families include curvature-based methods (DetectGPT and Fast-DetectGPT) and paired-LM detectors such as Binoculars. \cite{mitchell2023detectgptzeroshotmachinegeneratedtext,bao2024fastdetectgptefficientzeroshotdetection,hans2024spottingllmsbinocularszeroshot} Recent evasion work focuses on paraphrase attacks and RL-based humanization, including Adversarial Paraphrasing and AuthorMist, while character-level attacks such as homoglyph substitution demonstrate strong but often less readable perturbations. \cite{cheng2025adversarialparaphrasinguniversalattack,david2025authormistevadingaitext,creo2025silverspeakevadingaigeneratedtext} StealthRL builds on these directions by training a single paraphrase policy against a detector ensemble and evaluating transfer at strict low-FPR operating points.
+Detector families include curvature-based methods (DetectGPT and Fast-DetectGPT) and paired-LM detectors such as Binoculars. \cite{mitchell2023detectgptzeroshotmachinegeneratedtext,bao2024fastdetectgptefficientzeroshotdetection,hans2024spottingllmsbinocularszeroshot} Recent evasion work focuses on paraphrase attacks and RL-based humanization, including Adversarial Paraphrasing, while character-level attacks such as homoglyph substitution demonstrate strong but often less readable perturbations. \cite{cheng2025adversarialparaphrasinguniversalattack,creo2025silverspeakevadingaigeneratedtext} StealthRL builds on these directions by training a single paraphrase policy against a detector ensemble and evaluating transfer at strict low-FPR operating points.
 
 \section{Threat Model}
 We assume \textbf{black-box access to detector scores}, i.e., the attacker can query detector confidence but does not require gradients. In practice, detectors are often open-source or deployed with a confidence API, so both black-box scoring and open-source replication are realistic. We evaluate transfer to a held-out detector family to test robustness beyond the training ensemble.
 
 \section{Method}
-Given AI-generated text $x$, we learn a paraphrase policy $\pi_\theta(y\mid x)$ that produces $y$ with low detector confidence while preserving meaning and fluency. We optimize a composite reward:
+Given AI-generated text $x$, we learn a paraphrase policy $\pi_\theta(y\mid x)$ that produces $y$ with low detector confidence while preserving meaning. We optimize a composite reward:
 \begin{equation}
-R(x,y) = \alpha R_{\text{det}}(y) + \beta R_{\text{sem}}(x,y) + \gamma R_{\text{ppl}}(y),
+R(x,y) = \alpha R_{\text{det}}(y) + \beta R_{\text{sem}}(x,y),
 \end{equation}
-where $R_{\text{det}}$ is the ensemble detector score (lower AI probability), $R_{\text{sem}}$ is E5 embedding cosine similarity, and $R_{\text{ppl}}$ is a fluency proxy derived from a frozen LM. We train with group-relative policy optimization (GRPO) and LoRA adapters \cite{hu2021loralowrankadaptationlarge} on Qwen/Qwen3-4B-Instruct-2507 (rank 32, $\alpha=32$, dropout 0.05). Training uses group size 4, learning rate $2.8\\times10^{-4}$, batch size 16, and two epochs. The detector ensemble used for training is RoBERTa OpenAI + Fast-DetectGPT with weights 0.6/0.4.
+where $R_{\text{det}}$ is the ensemble detector score (lower AI probability) and $R_{\text{sem}}$ is E5 embedding cosine similarity. We train with group-relative policy optimization (GRPO) and LoRA adapters \cite{hu2021loralowrankadaptationlarge} on Qwen/Qwen3-4B-Instruct-2507 (rank 32, $\alpha=32$, dropout 0.05). Training uses group size 8, learning rate $2.8\\times10^{-4}$, batch size 16, and two epochs over 10,000 samples from the MAGE training split, with an additional 200 held-out development samples from the test split. The detector ensemble used for training is RoBERTa OpenAI + Fast-DetectGPT with weights 0.6/0.4.
+
+\paragraph{Reproducibility details.} Reward weights are $\alpha=1.0$, $\beta=0.1$. GRPO uses KL penalty coefficient 0.05 with the base Qwen3-4B-Instruct as the reference policy. Inference uses temperature 1.0, top-p 0.9, max tokens 512. The paraphrase prompt is: ``Paraphrase the following text while preserving its meaning: [TEXT]''. Detector versions: RoBERTa (openai-community/roberta-large-openai-detector), Fast-DetectGPT (scoring model: EleutherAI/gpt-neo-2.7B), Binoculars (lightweight version: gpt2-medium performer, gpt2-large observer). Threshold calibration uses quantile estimation at FPR=0.01 on 1,000 human samples. Training uses the Tinker API framework, with reward computation and offline evaluation performed on a combination of MacBook and NVIDIA A10 GPUs. Full hyperparameters are in Appendix~\ref{sec:hyperparams}.
 
 \begin{figure}[t]
   \centering
@@ -62,11 +64,11 @@ where $R_{\text{det}}$ is the ensemble detector score (lower AI probability), $R
 \end{figure}
 
 \section{Experimental Setup}
-\paragraph{Dataset.} We evaluate on MAGE (Machine-generated Text Detection in the Wild) using the test split with 50 human and 50 AI samples, filtered to a 100--500 token window. \cite{li2024magemachinegeneratedtextdetection}
+\paragraph{Dataset.} We evaluate on MAGE (Machine-generated Text Detection in the Wild) using the test split with 1,000 human and 1,000 AI samples, filtered to a 100--500 token window. \cite{li2024magemachinegeneratedtextdetection}
 
 \paragraph{Detectors.} Evaluation uses three detector families: RoBERTa OpenAI classifier, Fast-DetectGPT (curvature-based), and Binoculars (paired-LM). \cite{mitchell2023detectgptzeroshotmachinegeneratedtext,bao2024fastdetectgptefficientzeroshotdetection,hans2024spottingllmsbinocularszeroshot}
 
-\paragraph{Methods.} We compare six methods: M0 (no attack), M1 (simple paraphrase), M2 (StealthRL-v1 checkpoint), M3 (detector-guided selection inspired by Adversarial Paraphrasing), M4 (AuthorMist), and M5 (homoglyph substitution). \cite{cheng2025adversarialparaphrasinguniversalattack,david2025authormistevadingaitext,creo2025silverspeakevadingaigeneratedtext}
+\paragraph{Methods.} We compare five methods: M0 (no attack), M1 (simple paraphrase via Qwen3:4B), M2 (StealthRL-v1 checkpoint), M3 (detector-guided selection inspired by Adversarial Paraphrasing), and M5 (homoglyph substitution via SilverSpeak). \cite{cheng2025adversarialparaphrasinguniversalattack,creo2025silverspeakevadingaigeneratedtext}
 
 \paragraph{Metrics.} We calibrate a 1\% FPR threshold per detector on human texts and report TPR@1\%FPR (lower is better for the attacker), attack success rate (ASR = 1 - TPR@1\%FPR), and AUROC. We also report semantic similarity (E5 cosine) to quantify fidelity. All results use one candidate per sample (n=1) to match the current evaluation run.
 
@@ -98,10 +100,12 @@ Table~\ref{tab:main} summarizes detection evasion at 1\% FPR. StealthRL reduces 
   \label{fig:tradeoff}
 \end{figure}
 
+\paragraph{Interpretability: What do attacks reveal?} The strong transfer of StealthRL across detector families (including the held-out Binoculars detector) suggests that detectors rely on shared, brittle statistical cues rather than robust semantic understanding. The low TPR@1\%FPR (~0.02--0.08) achieved while maintaining high semantic similarity (0.953 E5) indicates that surface-level paraphrasing suffices to evade detection, exposing a fundamental limitation in current detector architectures. This finding motivates defensive research into semantic-aware detectors and multi-modal robustness evaluation, as the adversarial paraphrasing approach is modality-agnostic and could be extended to code generation, image captioning, or other structured outputs.
+
 \paragraph{Ablation (implemented; results pending).} We implemented a \emph{guidance-transfer} ablation that mimics the ``guidance vs. deploy'' setting from Adversarial Paraphrasing: candidate selection is guided by (i) RoBERTa, (ii) Fast-DetectGPT, or (iii) the ensemble mean, and evaluated across all detectors. This isolates how guidance detector choice affects transfer. Results are pending for the final model checkpoints.
 
 \section{Limitations and Safety}
-Our evaluation currently focuses on three detector families and one primary benchmark; additional detectors (e.g., watermark-based) and datasets can broaden coverage. Adversarial paraphrasing is dual-use: we present StealthRL as a red-teaming tool to expose detector fragility and inform defensive calibration, and we release code anonymized with the expectation of responsible use.
+Our evaluation currently focuses on three detector families and one primary benchmark; additional detectors (e.g., watermark-based) and datasets can broaden coverage. \textbf{Safety framing:} Adversarial paraphrasing is dual-use technology. We explicitly position StealthRL as a \emph{stress-testing and red-teaming tool} designed to expose detector brittleness and guide defensive improvements, not as a production evasion system. Our released code is intended for robustness evaluation by researchers and detector developers. The strong attack success we observe (mean TPR@1\%FPR = 0.04) underscores the urgent need for more robust detection methods and motivates future work on semantic-aware detectors, ensemble defenses, and adversarial training.
 
 \section{LLM Usage Disclosure}
 Large language models were used to assist with code scaffolding and with editing text for clarity. All modeling decisions, experiments, evaluations, and interpretations were designed, executed, and validated by the authors.
@@ -109,10 +113,73 @@ Large language models were used to assist with code scaffolding and with editing
 \section{Conclusion}
 StealthRL provides a practical adversarial RL framework for generating high-fidelity paraphrases that evade multiple detector families under strict low-FPR constraints. Our results show strong transfer to a held-out detector while preserving semantic fidelity, and our released evaluation pipeline supports reproducible red-teaming of AI-text detectors.
 
+\section*{Acknowledgments}
+We gratefully acknowledge Thinking Machines for providing access to their Tinker API framework, which was essential for the reinforcement learning training in this work. We also thank the open-source community for the detector implementations and model checkpoints that enabled this evaluation.
+
 \bibliographystyle{iclr2026_conference}
 \bibliography{stealthrl_refs}
 
 \appendix
+\section{Hyperparameters and Configuration}
+\label{sec:hyperparams}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+\multicolumn{2}{l}{\textit{Model \& LoRA}} \\
+Base model & Qwen/Qwen3-4B-Instruct-2507 \\
+LoRA rank & 32 \\
+LoRA alpha & 32 \\
+LoRA dropout & 0.05 \\
+\midrule
+\multicolumn{2}{l}{\textit{Training}} \\
+Algorithm & Group-Relative Policy Optimization (GRPO) \\
+Learning rate & $2.8 \times 10^{-4}$ \\
+Batch size & 16 \\
+Group size & 8 \\
+Epochs & 2 \\
+Training samples & 10,000 (MAGE train) + 200 (dev) \\
+KL penalty coefficient & 0.05 \\
+Reference policy & Qwen3-4B-Instruct (frozen) \\
+\midrule
+\multicolumn{2}{l}{\textit{Reward}} \\
+Detector weight ($\alpha$) & 1.0 \\
+Semantic weight ($\beta$) & 0.1 \\
+Detector ensemble & RoBERTa (0.6) + Fast-DetectGPT (0.4) \\
+Semantic metric & E5 embedding cosine similarity \\
+\midrule
+\multicolumn{2}{l}{\textit{Inference}} \\
+Temperature & 1.0 \\
+Top-p & 0.9 \\
+Max tokens & 512 \\
+Prompt template & ``Paraphrase the following text while \\
+& preserving its meaning: [TEXT]'' \\
+\midrule
+\multicolumn{2}{l}{\textit{Detectors}} \\
+RoBERTa OpenAI & openai-community/roberta-large-openai-detector \\
+Fast-DetectGPT & Scoring model: EleutherAI/gpt-neo-2.7B \\
+Binoculars & Lightweight: gpt2-medium + gpt2-large (held-out) \\
+\midrule
+\multicolumn{2}{l}{\textit{Evaluation}} \\
+Test samples & 1,000 human + 1,000 AI (MAGE test) \\
+Token window & 100--500 tokens \\
+FPR calibration & 1\% on 1,000 human samples (quantile) \\
+Candidates per sample & 1 \\
+\midrule
+\multicolumn{2}{l}{\textit{Compute}} \\
+Training framework & Tinker API (Thinking Machines) \\
+Reward computation & MacBook + NVIDIA A10 GPUs \\
+Offline evaluation & MacBook + NVIDIA A10 GPUs \\
+Seed & 42 \\
+\bottomrule
+\end{tabular}
+\caption{Complete hyperparameters and configuration for reproducibility.}
+\end{table}
+
 \section{Qualitative Examples}
 \begin{table}[h]
 \centering
