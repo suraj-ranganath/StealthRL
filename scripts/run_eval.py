@@ -77,6 +77,18 @@ Examples:
         default=None,
         help="Reuse exact sample ids from a prior run directory (ensures identical samples)",
     )
+    parser.add_argument(
+        "--reuse-human-scores-from",
+        type=str,
+        default=None,
+        help="Reuse human detector scores from a prior run directory (skips re-scoring humans)",
+    )
+    parser.add_argument(
+        "--reuse-thresholds-from",
+        type=str,
+        default=None,
+        help="Reuse detector thresholds from a prior run directory (skips calibration)",
+    )
     
     # Method options
     parser.add_argument(
@@ -84,6 +96,18 @@ Examples:
         nargs="+",
         default=["m0", "m1"],
         help="Attack methods (m0=no_attack, m1=simple, m2=stealthrl, m3=adv_para, m4=authormist, m5=homoglyph)",
+    )
+    parser.add_argument(
+        "--m1-backend",
+        choices=["ollama", "tinker"],
+        default="ollama",
+        help="Backend for M1 simple paraphrase (ollama=local, tinker=cloud)",
+    )
+    parser.add_argument(
+        "--m1-base-model",
+        type=str,
+        default=None,
+        help="Tinker base model for M1 (default: Qwen/Qwen3-4B-Instruct-2507)",
     )
     parser.add_argument(
         "--stealthrl-checkpoint",
@@ -134,6 +158,54 @@ Examples:
         type=str,
         default=None,
         help="Optional path for M2 resume cache (JSONL). Overrides --tinker-resume",
+    )
+
+    # M4 (AuthorMist via Ollama) concurrency options
+    parser.add_argument(
+        "--m4-concurrency",
+        type=int,
+        default=None,
+        help="Max concurrent Ollama requests for M4 (default: 4)",
+    )
+    parser.add_argument(
+        "--m4-chunk-size",
+        type=int,
+        default=None,
+        help="Chunk size for M4 concurrent requests (default: 256)",
+    )
+    parser.add_argument(
+        "--m4-max-retries",
+        type=int,
+        default=None,
+        help="Max retries per M4 request (default: 3)",
+    )
+    parser.add_argument(
+        "--m4-backoff-s",
+        type=float,
+        default=None,
+        help="Base backoff seconds for M4 retries (default: 0.5)",
+    )
+    parser.add_argument(
+        "--m4-keep-alive",
+        type=int,
+        default=None,
+        help="Ollama keep_alive for M4 (negative keeps model loaded; default: -1)",
+    )
+    parser.add_argument(
+        "--m4-timeout-s",
+        type=int,
+        default=None,
+        help="Ollama request timeout seconds for M4 (default: 120)",
+    )
+    parser.add_argument(
+        "--m4-use-chat",
+        action="store_true",
+        help="Use /api/chat for M4 instead of /api/generate",
+    )
+    parser.add_argument(
+        "--m4-no-warmup",
+        action="store_true",
+        help="Disable M4 warmup request",
     )
     
     # Detector options
@@ -229,8 +301,14 @@ def main():
     logger.info(f"Samples: {args.n_human} human, {args.n_ai} AI per dataset")
     logger.info(f"Candidates: {args.n_candidates}")
     logger.info(f"Output: {args.out_dir}")
+    if "m1" in args.methods or "simple_paraphrase" in args.methods or "m1_tinker" in args.methods:
+        logger.info(f"M1 backend: {args.m1_backend}")
     if args.reuse_samples_from:
         logger.info(f"Reusing samples from: {args.reuse_samples_from}")
+    if args.reuse_human_scores_from:
+        logger.info(f"Reusing human scores from: {args.reuse_human_scores_from}")
+    if args.reuse_thresholds_from:
+        logger.info(f"Reusing thresholds from: {args.reuse_thresholds_from}")
     logger.info("=" * 70)
     
     # Check for StealthRL checkpoint if needed
@@ -297,6 +375,8 @@ def main():
             n_human=args.n_human,
             n_ai=args.n_ai,
             stealthrl_checkpoint=args.stealthrl_checkpoint,
+            m1_backend=args.m1_backend,
+            m1_base_model=args.m1_base_model,
             cache_dir=args.cache_dir,
             roberta_batch_size=args.roberta_batch_size,
             fast_detectgpt_batch_size=args.fast_detectgpt_batch_size,
@@ -308,6 +388,14 @@ def main():
             tinker_max_retries=args.tinker_max_retries,
             tinker_backoff_s=args.tinker_backoff_s,
             tinker_resume_path=tinker_resume_path,
+            m4_concurrency=args.m4_concurrency,
+            m4_chunk_size=args.m4_chunk_size,
+            m4_max_retries=args.m4_max_retries,
+            m4_backoff_s=args.m4_backoff_s,
+            m4_keep_alive=args.m4_keep_alive,
+            m4_timeout_s=args.m4_timeout_s,
+            m4_use_chat=args.m4_use_chat,
+            m4_warmup=not args.m4_no_warmup,
             setting_suffix=f"N={n_cand}" if len(args.n_candidates) > 1 else None,
             gpt_quality=args.gpt_quality,
             gpt_quality_methods=args.gpt_quality_methods,
@@ -316,6 +404,8 @@ def main():
             openai_api_key=openai_key,
             gpt_quality_cache=not args.gpt_quality_no_cache,
             sample_ids=sample_ids,
+            reuse_human_scores_from=args.reuse_human_scores_from,
+            reuse_thresholds_from=args.reuse_thresholds_from,
         )
         
         logger.info("Evaluation completed successfully!")

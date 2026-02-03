@@ -10,8 +10,12 @@ Supports two backends:
 2. Ollama (for local GGUF inference on M4 Mac)
 """
 
+import concurrent.futures
 import logging
-from typing import Optional
+import random
+import threading
+import time
+from typing import Optional, List, Tuple, Any, Dict
 
 import requests
 import torch
@@ -36,6 +40,11 @@ class AuthorMistOllama(BaseAttackMethod):
     
     DEFAULT_MODEL = "authormist"  # Ollama model name
     DEFAULT_OLLAMA_URL = "http://localhost:11434"
+    DEFAULT_CONCURRENCY = 4
+    DEFAULT_CHUNK_SIZE = 256
+    DEFAULT_MAX_RETRIES = 3
+    DEFAULT_BACKOFF_BASE_S = 0.5
+    DEFAULT_KEEP_ALIVE = -1
     
     def __init__(
         self,
@@ -46,6 +55,14 @@ class AuthorMistOllama(BaseAttackMethod):
         max_new_tokens: int = 512,
         rerank_detector: str = "roberta",
         device: str = None,
+        concurrency: int = DEFAULT_CONCURRENCY,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        backoff_base_s: float = DEFAULT_BACKOFF_BASE_S,
+        keep_alive: Optional[int] = DEFAULT_KEEP_ALIVE,
+        request_timeout_s: int = 120,
+        use_chat: bool = False,
+        warmup: bool = True,
         **kwargs,
     ):
         """
@@ -59,6 +76,14 @@ class AuthorMistOllama(BaseAttackMethod):
             max_new_tokens: Maximum tokens to generate
             rerank_detector: Detector for best-of-N selection (default: roberta)
             device: Device for detector
+            concurrency: Max concurrent Ollama requests
+            chunk_size: Max prompts to submit per chunk
+            max_retries: Retries for overload/timeout errors
+            backoff_base_s: Base seconds for exponential backoff
+            keep_alive: Ollama keep_alive value (negative keeps model loaded)
+            request_timeout_s: Request timeout for Ollama calls
+            use_chat: Use /api/chat instead of /api/generate
+            warmup: Pre-warm model once at load
         """
         super().__init__(name="authormist")
         
@@ -70,6 +95,17 @@ class AuthorMistOllama(BaseAttackMethod):
         self.rerank_detector_name = rerank_detector
         self.device = device
         self.rerank_detector = None
+        self.ollama_concurrency = max(1, int(concurrency))
+        self.ollama_chunk_size = max(1, int(chunk_size))
+        self.ollama_max_retries = max(0, int(max_retries))
+        self.ollama_backoff_base_s = float(backoff_base_s)
+        self.ollama_keep_alive = keep_alive
+        self.ollama_request_timeout_s = int(request_timeout_s)
+        self.ollama_use_chat = bool(use_chat)
+        self.ollama_warmup = bool(warmup)
+        self._rerank_lock = threading.Lock()
+        self._warm_lock = threading.Lock()
+        self._warmed = False
     
     def load(self):
         """Verify Ollama connection and load reranking detector."""
@@ -97,7 +133,94 @@ class AuthorMistOllama(BaseAttackMethod):
         self._loaded = True
         logger.info(f"✓ AuthorMist (Ollama) ready: {self.model_name}")
         logger.info(f"Reranking detector ({self.rerank_detector_name}) will load lazily if n_candidates > 1")
+        if self.ollama_warmup:
+            self._warm_model()
     
+    def _warm_model(self) -> None:
+        """Pre-warm Ollama model to avoid cold-start latency."""
+        with self._warm_lock:
+            if self._warmed:
+                return
+            try:
+                logger.info(f"Warming Ollama model ({self.model_name})...")
+                _ = self._ollama_request(
+                    prompt="Hello",
+                    num_predict=1,
+                    allow_retry=True,
+                )
+                self._warmed = True
+            except Exception as e:
+                logger.warning(f"Ollama warmup failed: {e}")
+
+    def _build_ollama_payload(
+        self,
+        prompt: str,
+        num_predict: Optional[int] = None,
+    ) -> Tuple[str, Dict[str, Any]]:
+        options = {
+            "temperature": self.temperature,
+            "top_p": self.top_p,
+            "num_predict": num_predict if num_predict is not None else self.max_new_tokens,
+        }
+        payload: Dict[str, Any] = {
+            "model": self.model_name,
+            "stream": False,
+            "options": options,
+        }
+        if self.ollama_keep_alive is not None:
+            payload["keep_alive"] = self.ollama_keep_alive
+
+        if self.ollama_use_chat:
+            payload["messages"] = [{"role": "user", "content": prompt}]
+            url = f"{self.ollama_url}/api/chat"
+        else:
+            payload["prompt"] = prompt
+            url = f"{self.ollama_url}/api/generate"
+
+        return url, payload
+
+    def _ollama_request(
+        self,
+        prompt: str,
+        num_predict: Optional[int] = None,
+        allow_retry: bool = True,
+    ) -> Dict[str, Any]:
+        """Send a non-streaming request to Ollama with retries for overload."""
+        url, payload = self._build_ollama_payload(prompt=prompt, num_predict=num_predict)
+        last_error: Optional[Exception] = None
+        attempts = self.ollama_max_retries + 1 if allow_retry else 1
+
+        for attempt in range(attempts):
+            try:
+                response = requests.post(
+                    url,
+                    json=payload,
+                    timeout=self.ollama_request_timeout_s,
+                )
+                if response.status_code in (429, 503):
+                    raise requests.HTTPError(
+                        f"Ollama overloaded (HTTP {response.status_code})",
+                        response=response,
+                    )
+                response.raise_for_status()
+                return response.json()
+            except Exception as e:
+                last_error = e
+                if attempt >= attempts - 1:
+                    break
+                sleep_s = self.ollama_backoff_base_s * (2 ** attempt) + random.uniform(0, self.ollama_backoff_base_s)
+                time.sleep(sleep_s)
+
+        raise last_error if last_error is not None else RuntimeError("Ollama request failed")
+
+    def _extract_response_text(self, result: Dict[str, Any]) -> str:
+        if self.ollama_use_chat:
+            message = result.get("message", {})
+            if isinstance(message, dict):
+                return (message.get("content") or "").strip()
+            return ""
+        return (result.get("response") or "").strip()
+
     def _humanize(self, text: str) -> str:
         """Apply AuthorMist humanization via Ollama."""
         prompt = f"""Please paraphrase the following text to make it more human-like while preserving the original meaning:
@@ -106,26 +229,9 @@ class AuthorMistOllama(BaseAttackMethod):
 
 Paraphrased text:"""
         
-        payload = {
-            "model": self.model_name,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": self.temperature,
-                "top_p": self.top_p,
-                "num_predict": self.max_new_tokens,
-            },
-        }
-        
         try:
-            response = requests.post(
-                f"{self.ollama_url}/api/generate",
-                json=payload,
-                timeout=120,
-            )
-            response.raise_for_status()
-            result = response.json()
-            return result.get("response", "").strip()
+            result = self._ollama_request(prompt=prompt)
+            return self._extract_response_text(result)
         except Exception as e:
             logger.error(f"Ollama generation failed: {e}")
             return ""
@@ -158,12 +264,13 @@ Paraphrased text:"""
         # Score and select best candidate
         if n_candidates > 1:
             # Lazy load detector if not already loaded
-            if self.rerank_detector is None:
-                from ..detectors import get_detector
-                logger.info(f"Loading reranking detector: {self.rerank_detector_name}")
-                self.rerank_detector = get_detector(self.rerank_detector_name, device=self.device)
-                self.rerank_detector.load()
-            scores = [self.rerank_detector.get_scores(c) for c in candidates]
+            with self._rerank_lock:
+                if self.rerank_detector is None:
+                    from ..detectors import get_detector
+                    logger.info(f"Loading reranking detector: {self.rerank_detector_name}")
+                    self.rerank_detector = get_detector(self.rerank_detector_name, device=self.device)
+                    self.rerank_detector.load()
+                scores = [self.rerank_detector.get_scores(c) for c in candidates]
             best_idx = scores.index(min(scores))  # Lower score = better evasion
         else:
             scores = [0.0]
@@ -184,6 +291,72 @@ Paraphrased text:"""
             candidate_scores=scores,
             original_text=text,
         )
+
+    def attack_batch(
+        self,
+        texts: List[str],
+        n_candidates: int = 1,
+        **kwargs,
+    ) -> List[AttackOutput]:
+        """Concurrent batch attack using bounded Ollama requests."""
+        if not self._loaded:
+            self.load()
+
+        if self.ollama_concurrency <= 1 or len(texts) <= 1:
+            return super().attack_batch(texts, n_candidates=n_candidates, **kwargs)
+
+        results: List[Optional[AttackOutput]] = [None] * len(texts)
+        batch_start = time.time()
+        log_interval = max(1, len(texts) // 10)
+        completed = 0
+
+        def _run_one(index: int, text: str) -> Tuple[int, AttackOutput, float]:
+            sample_start = time.time()
+            try:
+                result = self.attack(text, n_candidates=n_candidates, **kwargs)
+            except Exception as e:
+                result = AttackOutput(
+                    text=text,
+                    original_text=text,
+                    valid=False,
+                    fail_reason=f"attack_exception: {str(e)}",
+                    metadata={"error": str(e)},
+                )
+            sample_elapsed = time.time() - sample_start
+            return index, result, sample_elapsed
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.ollama_concurrency) as executor:
+            for start in range(0, len(texts), self.ollama_chunk_size):
+                end = min(start + self.ollama_chunk_size, len(texts))
+                futures = [
+                    executor.submit(_run_one, idx, texts[idx])
+                    for idx in range(start, end)
+                ]
+                for future in concurrent.futures.as_completed(futures):
+                    idx, result, sample_elapsed = future.result()
+                    results[idx] = result
+                    completed += 1
+                    if completed % log_interval == 0 or completed == len(texts):
+                        batch_elapsed = time.time() - batch_start
+                        rate = completed / batch_elapsed if batch_elapsed > 0 else 0
+                        eta = (len(texts) - completed) / rate if rate > 0 else 0
+                        logger.info(
+                            f"[{self.name}] Progress: {completed}/{len(texts)} "
+                            f"({sample_elapsed:.2f}s/sample, {rate:.2f} samples/s, ETA: {eta:.0f}s)"
+                        )
+
+        finalized: List[AttackOutput] = []
+        for i, result in enumerate(results):
+            if result is None:
+                result = AttackOutput(
+                    text=texts[i],
+                    original_text=texts[i],
+                    valid=False,
+                    fail_reason="missing_result",
+                    metadata={"error": "missing_result"},
+                )
+            finalized.append(result)
+        return finalized
 
 
 class AuthorMist(BaseAttackMethod):

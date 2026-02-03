@@ -12,7 +12,7 @@ Implements baseline methods as specified in SPEC.md:
 
 from .base import BaseAttackMethod, AttackOutput
 from .no_attack import NoAttack
-from .simple_paraphrase import SimpleParaphrase, SimpleParaphraseWithReranking
+from .simple_paraphrase import SimpleParaphrase, SimpleParaphraseWithReranking, SimpleParaphraseTinker
 from .stealthrl import (
     StealthRLAttack, 
     StealthRLAttackWithReranking, 
@@ -31,6 +31,7 @@ __all__ = [
     "NoAttack",
     "SimpleParaphrase",
     "SimpleParaphraseWithReranking",
+    "SimpleParaphraseTinker",
     "StealthRLAttack",
     "StealthRLAttackWithReranking",
     "StealthRLTinker",
@@ -52,6 +53,8 @@ METHOD_REGISTRY = {
     "no_attack": NoAttack,
     "m1": SimpleParaphrase,
     "simple_paraphrase": SimpleParaphrase,
+    "m1_tinker": SimpleParaphraseTinker,
+    "simple_paraphrase_tinker": SimpleParaphraseTinker,
     "m2": StealthRLTinker,  # Default to Tinker for cloud inference
     "stealthrl": StealthRLTinker,
     "m2_local": StealthRLAttack,  # Local PEFT version

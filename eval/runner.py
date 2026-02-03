@@ -27,7 +27,7 @@ import pandas as pd
 
 from .data import load_eval_dataset, load_eval_dataset_with_ids, BaseEvalDataset, EvalSample
 from .detectors import get_detector, load_detectors, BaseEvalDetector
-from .methods import get_method, NoAttack, METHOD_REGISTRY
+from .methods import get_method, NoAttack, METHOD_REGISTRY, SimpleParaphraseTinker
 from .metrics import (
     compute_detector_metrics,
     compute_quality_metrics,
@@ -173,11 +173,21 @@ class EvalRunner:
         self,
         method_names: List[str],
         stealthrl_checkpoint: str = None,
+        m1_backend: str = "ollama",
+        m1_base_model: Optional[str] = None,
         tinker_concurrency: int = 64,
         tinker_chunk_size: int = 256,
         tinker_max_retries: int = 2,
         tinker_backoff_s: float = 0.5,
         tinker_resume_path: Optional[str] = None,
+        m4_concurrency: Optional[int] = None,
+        m4_chunk_size: Optional[int] = None,
+        m4_max_retries: Optional[int] = None,
+        m4_backoff_s: Optional[float] = None,
+        m4_keep_alive: Optional[int] = None,
+        m4_timeout_s: Optional[int] = None,
+        m4_use_chat: Optional[bool] = None,
+        m4_warmup: Optional[bool] = None,
         **method_kwargs,
     ):
         """Load attack methods."""
@@ -189,7 +199,20 @@ class EvalRunner:
                 method_start = time.time()
                 logger.info(f"[LOAD] Loading method {name}...")
                 
-                if name in ("m2", "stealthrl") and stealthrl_checkpoint:
+                if (name in ("m1", "simple_paraphrase") and m1_backend == "tinker") or name in ("m1_tinker", "simple_paraphrase_tinker"):
+                    m1_resume_path = None
+                    if tinker_resume_path:
+                        m1_resume_path = str(self.output_dir / "tinker_m1_cache.jsonl")
+                    method = SimpleParaphraseTinker(
+                        base_model=m1_base_model,
+                        device=self.device,
+                        tinker_concurrency=tinker_concurrency,
+                        tinker_chunk_size=tinker_chunk_size,
+                        tinker_max_retries=tinker_max_retries,
+                        tinker_backoff_s=tinker_backoff_s,
+                        tinker_resume_path=m1_resume_path,
+                    )
+                elif name in ("m2", "stealthrl") and stealthrl_checkpoint:
                     method = get_method(
                         name,
                         checkpoint_json=stealthrl_checkpoint,
@@ -200,6 +223,25 @@ class EvalRunner:
                         tinker_resume_path=tinker_resume_path,
                         **method_kwargs,
                     )
+                elif name in ("m4", "authormist"):
+                    m4_kwargs = {}
+                    if m4_concurrency is not None:
+                        m4_kwargs["concurrency"] = m4_concurrency
+                    if m4_chunk_size is not None:
+                        m4_kwargs["chunk_size"] = m4_chunk_size
+                    if m4_max_retries is not None:
+                        m4_kwargs["max_retries"] = m4_max_retries
+                    if m4_backoff_s is not None:
+                        m4_kwargs["backoff_base_s"] = m4_backoff_s
+                    if m4_keep_alive is not None:
+                        m4_kwargs["keep_alive"] = m4_keep_alive
+                    if m4_timeout_s is not None:
+                        m4_kwargs["request_timeout_s"] = m4_timeout_s
+                    if m4_use_chat is not None:
+                        m4_kwargs["use_chat"] = m4_use_chat
+                    if m4_warmup is not None:
+                        m4_kwargs["warmup"] = m4_warmup
+                    method = get_method(name, **m4_kwargs, **method_kwargs)
                 else:
                     method = get_method(name, **method_kwargs)
                 
@@ -323,12 +365,26 @@ class EvalRunner:
         self,
         outputs: Dict[str, Dict[str, List[str]]],
         save_intermediate: bool = False,
+        reuse_human_scores_from: Optional[str] = None,
     ):
         """
         Score all outputs with detector panel.
         """
         score_start = time.time()
         logger.info("[SCORE] Scoring outputs with detectors...")
+
+        reuse_human_df = None
+        if reuse_human_scores_from:
+            reuse_dir = Path(reuse_human_scores_from)
+            scores_path = reuse_dir / "scores.parquet"
+            if not scores_path.exists():
+                scores_path = reuse_dir / "scores.csv"
+            if not scores_path.exists():
+                raise FileNotFoundError("reuse-human-scores-from requires scores.parquet or scores.csv")
+            reuse_df = pd.read_parquet(scores_path) if scores_path.suffix == ".parquet" else pd.read_csv(scores_path)
+            if "detector_score" not in reuse_df.columns and "detector_score_ai" in reuse_df.columns:
+                reuse_df["detector_score"] = reuse_df["detector_score_ai"]
+            reuse_human_df = reuse_df[reuse_df["label"] == "human"].copy()
         
         for dataset_name, dataset in self.datasets.items():
             # Get human texts for this dataset
@@ -336,24 +392,48 @@ class EvalRunner:
             human_ids = [s.id for s in dataset.human_samples]
             
             for det_name, detector in self.detectors.items():
-                # Score human samples
-                det_start = time.time()
-                human_scores = detector.get_scores(human_texts)
-                det_elapsed = time.time() - det_start
-                logger.info(f"[SCORE] {det_name} scored {len(human_texts)} human texts in {det_elapsed:.2f}s")
-                
-                if isinstance(human_scores, float):
-                    human_scores = [human_scores]
-                
-                for sample_id, text, score in zip(human_ids, human_texts, human_scores):
-                    self.all_scores.append({
-                        "sample_id": sample_id,
-                        "dataset": dataset_name,
-                        "method": "human",
-                        "label": "human",
-                        "detector_name": det_name,
-                        "detector_score": score,
-                    })
+                if reuse_human_df is not None:
+                    ds_df = reuse_human_df[reuse_human_df["dataset"] == dataset_name]
+                    reuse_ids = set(ds_df["sample_id"].unique())
+                    expected_ids = set(human_ids)
+                    if reuse_ids != expected_ids:
+                        raise ValueError(
+                            f"Human sample_id mismatch for dataset '{dataset_name}' when reusing scores."
+                        )
+                    det_df = ds_df[ds_df["detector_name"] == det_name]
+                    if det_df.empty:
+                        raise ValueError(
+                            f"Missing human scores for detector '{det_name}' in reuse-human-scores-from."
+                        )
+                    for _, row in det_df.iterrows():
+                        self.all_scores.append({
+                            "sample_id": row["sample_id"],
+                            "dataset": dataset_name,
+                            "method": "human",
+                            "label": "human",
+                            "detector_name": det_name,
+                            "detector_score": row["detector_score"],
+                        })
+                    logger.info(f"[SCORE] {det_name} reused {len(det_df)} human scores")
+                else:
+                    # Score human samples
+                    det_start = time.time()
+                    human_scores = detector.get_scores(human_texts)
+                    det_elapsed = time.time() - det_start
+                    logger.info(f"[SCORE] {det_name} scored {len(human_texts)} human texts in {det_elapsed:.2f}s")
+                    
+                    if isinstance(human_scores, float):
+                        human_scores = [human_scores]
+                    
+                    for sample_id, text, score in zip(human_ids, human_texts, human_scores):
+                        self.all_scores.append({
+                            "sample_id": sample_id,
+                            "dataset": dataset_name,
+                            "method": "human",
+                            "label": "human",
+                            "detector_name": det_name,
+                            "detector_score": score,
+                        })
                 
                 # Score attacked outputs for each method
                 for method_name, attacked_texts in outputs.get(dataset_name, {}).items():
@@ -619,6 +699,8 @@ class EvalRunner:
         n_human: int = 1000,
         n_ai: int = 1000,
         stealthrl_checkpoint: str = None,
+        m1_backend: str = "ollama",
+        m1_base_model: Optional[str] = None,
         cache_dir: str = None,
         binoculars_full: bool = False,
         roberta_batch_size: Optional[int] = None,
@@ -630,6 +712,14 @@ class EvalRunner:
         tinker_max_retries: int = 2,
         tinker_backoff_s: float = 0.5,
         tinker_resume_path: Optional[str] = None,
+        m4_concurrency: Optional[int] = None,
+        m4_chunk_size: Optional[int] = None,
+        m4_max_retries: Optional[int] = None,
+        m4_backoff_s: Optional[float] = None,
+        m4_keep_alive: Optional[int] = None,
+        m4_timeout_s: Optional[int] = None,
+        m4_use_chat: Optional[bool] = None,
+        m4_warmup: Optional[bool] = None,
         save_intermediate: bool = False,
         setting_suffix: str = None,
         gpt_quality: bool = False,
@@ -639,6 +729,8 @@ class EvalRunner:
         openai_api_key: Optional[str] = None,
         gpt_quality_cache: bool = True,
         sample_ids: Optional[Dict[str, Dict[str, List[str]]]] = None,
+        reuse_human_scores_from: Optional[str] = None,
+        reuse_thresholds_from: Optional[str] = None,
     ):
         """
         Run complete evaluation pipeline.
@@ -709,11 +801,21 @@ class EvalRunner:
         self.load_methods(
             methods,
             stealthrl_checkpoint=stealthrl_checkpoint,
+            m1_backend=m1_backend,
+            m1_base_model=m1_base_model,
             tinker_concurrency=tinker_concurrency,
             tinker_chunk_size=tinker_chunk_size,
             tinker_max_retries=tinker_max_retries,
             tinker_backoff_s=tinker_backoff_s,
             tinker_resume_path=tinker_resume_path,
+            m4_concurrency=m4_concurrency,
+            m4_chunk_size=m4_chunk_size,
+            m4_max_retries=m4_max_retries,
+            m4_backoff_s=m4_backoff_s,
+            m4_keep_alive=m4_keep_alive,
+            m4_timeout_s=m4_timeout_s,
+            m4_use_chat=m4_use_chat,
+            m4_warmup=m4_warmup,
         )
         step_times["3_load_methods"] = time.time() - step_start
         logger.info(f"[TIMING] Step 3 (Load methods): {step_times['3_load_methods']:.2f}s")
@@ -722,9 +824,22 @@ class EvalRunner:
             logger.error("No methods loaded. Exiting.")
             return
         
-        # Step 4: Calibrate thresholds
+        # Step 4: Calibrate thresholds (or reuse)
         step_start = time.time()
-        self.calibrate_detector_thresholds()
+        if reuse_thresholds_from:
+            reuse_dir = Path(reuse_thresholds_from)
+            thresholds_path = reuse_dir / "thresholds.json"
+            if not thresholds_path.exists():
+                raise FileNotFoundError("reuse-thresholds-from requires thresholds.json")
+            self.thresholds = json.loads(thresholds_path.read_text())
+            missing = [d for d in self.detectors.keys() if d not in self.thresholds]
+            if missing:
+                raise ValueError(f"Missing thresholds for detectors: {missing}")
+            # Save a copy into this run dir for consistency
+            save_thresholds(self.thresholds, str(self.output_dir / "thresholds.json"))
+            logger.info(f"[CALIBRATE] Reused thresholds from {thresholds_path}")
+        else:
+            self.calibrate_detector_thresholds()
         step_times["4_calibrate_thresholds"] = time.time() - step_start
         logger.info(f"[TIMING] Step 4 (Calibrate thresholds): {step_times['4_calibrate_thresholds']:.2f}s")
         
@@ -736,7 +851,11 @@ class EvalRunner:
         
         # Step 6: Score outputs
         step_start = time.time()
-        self.score_outputs(outputs, save_intermediate=save_intermediate)
+        self.score_outputs(
+            outputs,
+            save_intermediate=save_intermediate,
+            reuse_human_scores_from=reuse_human_scores_from,
+        )
         step_times["6_score_outputs"] = time.time() - step_start
         logger.info(f"[TIMING] Step 6 (Score outputs): {step_times['6_score_outputs']:.2f}s")
         

@@ -25,6 +25,12 @@ python scripts/run_eval.py \
     --tinker-chunk-size 256 \
     --tinker-resume
 
+# M1 using Tinker (cloud base model, no local Ollama)
+python scripts/run_eval.py \
+    --methods m1 \
+    --m1-backend tinker \
+    --tinker-concurrency 64
+
 # All methods and detectors
 python scripts/run_eval.py \
     --datasets mage raid \
@@ -54,14 +60,14 @@ python -m eval \
     --out-dir artifacts/
 ```
 
-### Tinker Concurrency Flags (M2 only)
+### Tinker Concurrency Flags (M2 + M1 Tinker)
 
 ```bash
 --tinker-concurrency 64     # max concurrent requests (default: 64)
 --tinker-chunk-size 256     # chunk size for batching (default: 256)
 --tinker-max-retries 2      # retries per request (default: 2)
 --tinker-backoff-s 0.5      # base backoff seconds (default: 0.5)
---tinker-resume             # enable resume cache (output_dir/tinker_m2_cache.jsonl)
+--tinker-resume             # enable resume cache (output_dir/tinker_m2_cache.jsonl + tinker_m1_cache.jsonl)
 --tinker-resume-path PATH   # custom resume cache path
 ```
 
@@ -91,7 +97,7 @@ artifacts/
 | ID | Name | Description |
 |----|------|-------------|
 | M0 | `no_attack` | Original AI text (baseline) |
-| M1 | `simple_paraphrase` | Base LM paraphrase without RL |
+| M1 | `simple_paraphrase` | Base LM paraphrase without RL (Ollama by default; use `--m1-backend tinker` for cloud) |
 | M2 | `stealthrl` | RL-trained policy (requires checkpoint) |
 | M3 | `adversarial_paraphrasing` | Detector-guided selection |
 | M4 | `authormist` | AuthorMist HF model |
