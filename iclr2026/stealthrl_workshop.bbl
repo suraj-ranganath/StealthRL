@@ -1,4 +1,4 @@
-\begin{thebibliography}{7}
+\begin{thebibliography}{10}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -34,6 +34,12 @@ Isaac David and Arthur Gervais.
   2025.
 \newblock URL \url{https://arxiv.org/abs/2503.08716}.
 
+\bibitem[Dettmers et~al.(2023)Dettmers, Pagnoni, Holtzman, and
+  Zettlemoyer]{dettmers2023qlora}
+Tim Dettmers, Artidoro Pagnoni, Ari Holtzman, and Luke Zettlemoyer.
+\newblock Qlora: Efficient finetuning of quantized llms, 2023.
+\newblock URL \url{https://arxiv.org/abs/2305.14314}.
+
 \bibitem[Hans et~al.(2024)Hans, Schwarzschild, Cherepanova, Kazemi, Saha,
   Goldblum, Geiping, and Goldstein]{hans2024spottingllmsbinocularszeroshot}
 Abhimanyu Hans, Avi Schwarzschild, Valeriia Cherepanova, Hamid Kazemi,
@@ -41,6 +47,13 @@ Abhimanyu Hans, Avi Schwarzschild, Valeriia Cherepanova, Hamid Kazemi,
 \newblock Spotting llms with binoculars: Zero-shot detection of
   machine-generated text, 2024.
 \newblock URL \url{https://arxiv.org/abs/2401.12070}.
+
+\bibitem[Hu et~al.(2021)Hu, Shen, Wallis, Allen-Zhu, Li, Wang, Wang, and
+  Chen]{hu2021loralowrankadaptationlarge}
+Edward~J. Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean
+  Wang, Lu~Wang, and Weizhu Chen.
+\newblock Lora: Low-rank adaptation of large language models, 2021.
+\newblock URL \url{https://arxiv.org/abs/2106.09685}.
 
 \bibitem[Li et~al.(2024)Li, Li, Cui, Bi, Wang, Wang, Yang, Shi, and
   Zhang]{li2024magemachinegeneratedtextdetection}
@@ -56,5 +69,11 @@ Eric Mitchell, Yoonho Lee, Alexander Khazatsky, Christopher~D. Manning, and
 \newblock Detectgpt: Zero-shot machine-generated text detection using
   probability curvature, 2023.
 \newblock URL \url{https://arxiv.org/abs/2301.11305}.
+
+\bibitem[Pang \& Jin(2025)Pang and Jin]{pang2025grpo}
+Lei Pang and Ruinan Jin.
+\newblock On the theory and practice of grpo: A trajectory-corrected approach
+  with fast convergence, 2025.
+\newblock URL \url{https://arxiv.org/abs/2508.02833}.
 
 \end{thebibliography}
