@@ -140,7 +140,15 @@ class EvalRunner:
             except Exception as e:
                 logger.error(f"Failed to load {name}: {e}")
     
-    def load_detectors(self, detector_names: List[str], binoculars_full: bool = False):
+    def load_detectors(
+        self,
+        detector_names: List[str],
+        binoculars_full: bool = False,
+        roberta_batch_size: Optional[int] = None,
+        fast_detectgpt_batch_size: Optional[int] = None,
+        mage_batch_size: Optional[int] = None,
+        binoculars_batch_size: Optional[int] = None,
+    ):
         """Load detector panel."""
         logger.info(f"Loading detectors: {detector_names}")
         
@@ -148,6 +156,10 @@ class EvalRunner:
             detector_names, 
             device=self.device,
             binoculars_full=binoculars_full,
+            roberta_batch_size=roberta_batch_size,
+            fast_detectgpt_batch_size=fast_detectgpt_batch_size,
+            mage_batch_size=mage_batch_size,
+            binoculars_batch_size=binoculars_batch_size,
         )
         
         # Pre-load all detectors
@@ -161,6 +173,11 @@ class EvalRunner:
         self,
         method_names: List[str],
         stealthrl_checkpoint: str = None,
+        tinker_concurrency: int = 64,
+        tinker_chunk_size: int = 256,
+        tinker_max_retries: int = 2,
+        tinker_backoff_s: float = 0.5,
+        tinker_resume_path: Optional[str] = None,
         **method_kwargs,
     ):
         """Load attack methods."""
@@ -173,7 +190,16 @@ class EvalRunner:
                 logger.info(f"[LOAD] Loading method {name}...")
                 
                 if name in ("m2", "stealthrl") and stealthrl_checkpoint:
-                    method = get_method(name, checkpoint_json=stealthrl_checkpoint, **method_kwargs)
+                    method = get_method(
+                        name,
+                        checkpoint_json=stealthrl_checkpoint,
+                        tinker_concurrency=tinker_concurrency,
+                        tinker_chunk_size=tinker_chunk_size,
+                        tinker_max_retries=tinker_max_retries,
+                        tinker_backoff_s=tinker_backoff_s,
+                        tinker_resume_path=tinker_resume_path,
+                        **method_kwargs,
+                    )
                 else:
                     method = get_method(name, **method_kwargs)
                 
@@ -223,6 +249,7 @@ class EvalRunner:
         self,
         n_candidates: int = 4,
         save_outputs: bool = True,
+        save_intermediate: bool = False,
     ) -> Dict[str, Dict[str, List[str]]]:
         """
         Run all attack methods on AI samples.
@@ -270,7 +297,15 @@ class EvalRunner:
                     method_elapsed = time.time() - method_start
                     rate = len(attacked_texts) / method_elapsed if method_elapsed > 0 else 0
                     logger.info(f"[ATTACKS] Completed {method_name}: {len(attacked_texts)} outputs in {method_elapsed:.2f}s ({rate:.2f} texts/s)")
-                    
+
+                    if save_intermediate:
+                        outputs_path = self.output_dir / "raw_outputs.json"
+                        with open(outputs_path, "w") as f:
+                            json.dump(outputs, f, indent=2, ensure_ascii=False)
+                        progress = {k: list(v.keys()) for k, v in outputs.items()}
+                        with open(self.output_dir / "attacks_progress.json", "w") as f:
+                            json.dump(progress, f, indent=2)
+                
                 except Exception as e:
                     logger.error(f"[ATTACKS] Failed {method_name} on {dataset_name}: {e}")
                     outputs[dataset_name][method_name] = ai_texts  # Fallback to original
@@ -287,6 +322,7 @@ class EvalRunner:
     def score_outputs(
         self,
         outputs: Dict[str, Dict[str, List[str]]],
+        save_intermediate: bool = False,
     ):
         """
         Score all outputs with detector panel.
@@ -349,6 +385,11 @@ class EvalRunner:
                                 "detector_name": det_name,
                                 "detector_score": score,
                             })
+
+                if save_intermediate:
+                    scores_df = pd.DataFrame(self.all_scores)
+                    scores_df.to_parquet(self.output_dir / "scores_partial.parquet")
+                    scores_df.to_csv(self.output_dir / "scores_partial.csv", index=False)
         
         score_elapsed = time.time() - score_start
         logger.info(f"[SCORE] Scoring complete: {len(self.all_scores)} records in {score_elapsed:.2f}s")
@@ -580,6 +621,16 @@ class EvalRunner:
         stealthrl_checkpoint: str = None,
         cache_dir: str = None,
         binoculars_full: bool = False,
+        roberta_batch_size: Optional[int] = None,
+        fast_detectgpt_batch_size: Optional[int] = None,
+        mage_batch_size: Optional[int] = None,
+        binoculars_batch_size: Optional[int] = None,
+        tinker_concurrency: int = 64,
+        tinker_chunk_size: int = 256,
+        tinker_max_retries: int = 2,
+        tinker_backoff_s: float = 0.5,
+        tinker_resume_path: Optional[str] = None,
+        save_intermediate: bool = False,
         setting_suffix: str = None,
         gpt_quality: bool = False,
         gpt_quality_methods: Optional[List[str]] = None,
@@ -620,6 +671,15 @@ class EvalRunner:
             cache_dir=cache_dir,
             sample_ids=sample_ids,
         )
+        if save_intermediate:
+            sample_ids_out = {}
+            for name, dataset in self.datasets.items():
+                sample_ids_out[name] = {
+                    "human_ids": [s.id for s in dataset.human_samples],
+                    "ai_ids": [s.id for s in dataset.ai_samples],
+                }
+            with open(self.output_dir / "dataset_samples.json", "w") as f:
+                json.dump(sample_ids_out, f, indent=2)
         step_times["1_load_datasets"] = time.time() - step_start
         logger.info(f"[TIMING] Step 1 (Load datasets): {step_times['1_load_datasets']:.2f}s")
         
@@ -629,7 +689,14 @@ class EvalRunner:
         
         # Step 2: Load detectors
         step_start = time.time()
-        self.load_detectors(detectors, binoculars_full=binoculars_full)
+        self.load_detectors(
+            detectors,
+            binoculars_full=binoculars_full,
+            roberta_batch_size=roberta_batch_size,
+            fast_detectgpt_batch_size=fast_detectgpt_batch_size,
+            mage_batch_size=mage_batch_size,
+            binoculars_batch_size=binoculars_batch_size,
+        )
         step_times["2_load_detectors"] = time.time() - step_start
         logger.info(f"[TIMING] Step 2 (Load detectors): {step_times['2_load_detectors']:.2f}s")
         
@@ -639,7 +706,15 @@ class EvalRunner:
         
         # Step 3: Load methods
         step_start = time.time()
-        self.load_methods(methods, stealthrl_checkpoint=stealthrl_checkpoint)
+        self.load_methods(
+            methods,
+            stealthrl_checkpoint=stealthrl_checkpoint,
+            tinker_concurrency=tinker_concurrency,
+            tinker_chunk_size=tinker_chunk_size,
+            tinker_max_retries=tinker_max_retries,
+            tinker_backoff_s=tinker_backoff_s,
+            tinker_resume_path=tinker_resume_path,
+        )
         step_times["3_load_methods"] = time.time() - step_start
         logger.info(f"[TIMING] Step 3 (Load methods): {step_times['3_load_methods']:.2f}s")
         
@@ -655,13 +730,13 @@ class EvalRunner:
         
         # Step 5: Run attacks
         step_start = time.time()
-        outputs = self.run_attacks(n_candidates=n_candidates)
+        outputs = self.run_attacks(n_candidates=n_candidates, save_intermediate=save_intermediate)
         step_times["5_run_attacks"] = time.time() - step_start
         logger.info(f"[TIMING] Step 5 (Run attacks): {step_times['5_run_attacks']:.2f}s")
         
         # Step 6: Score outputs
         step_start = time.time()
-        self.score_outputs(outputs)
+        self.score_outputs(outputs, save_intermediate=save_intermediate)
         step_times["6_score_outputs"] = time.time() - step_start
         logger.info(f"[TIMING] Step 6 (Score outputs): {step_times['6_score_outputs']:.2f}s")
         
@@ -775,6 +850,10 @@ def main():
         action="store_true",
         help="Use full Falcon-7B models for Binoculars (requires ~14GB VRAM). Default uses lightweight GPT-2 pair.",
     )
+    parser.add_argument("--roberta-batch-size", type=int, default=None, help="Batch size for RoBERTa detector")
+    parser.add_argument("--fast-detectgpt-batch-size", type=int, default=None, help="Batch size for Fast-DetectGPT detector")
+    parser.add_argument("--mage-batch-size", type=int, default=None, help="Batch size for MAGE detector")
+    parser.add_argument("--binoculars-batch-size", type=int, default=None, help="Batch size for Binoculars detector")
     
     # Output arguments
     parser.add_argument(
@@ -814,6 +893,11 @@ def main():
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--n-bootstrap", type=int, default=1000, help="Bootstrap samples")
     parser.add_argument("--log-level", type=str, default="INFO", help="Logging level")
+    parser.add_argument(
+        "--save-intermediate",
+        action="store_true",
+        help="Save intermediate outputs after each method/detector (safer for long runs)",
+    )
     
     # Optional GPT quality evaluation
     parser.add_argument(
@@ -906,6 +990,11 @@ def main():
             stealthrl_checkpoint=args.stealthrl_checkpoint,
             cache_dir=args.cache_dir,
             binoculars_full=args.binoculars_full,
+            roberta_batch_size=args.roberta_batch_size,
+            fast_detectgpt_batch_size=args.fast_detectgpt_batch_size,
+            mage_batch_size=args.mage_batch_size,
+            binoculars_batch_size=args.binoculars_batch_size,
+            save_intermediate=args.save_intermediate,
             setting_suffix=f"N={n_cand}",
             gpt_quality=args.gpt_quality,
             gpt_quality_methods=args.gpt_quality_methods,

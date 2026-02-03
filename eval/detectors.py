@@ -1171,6 +1171,10 @@ def load_detectors(
     names: List[str],
     device: Optional[str] = None,
     binoculars_full: bool = False,
+    roberta_batch_size: Optional[int] = None,
+    fast_detectgpt_batch_size: Optional[int] = None,
+    mage_batch_size: Optional[int] = None,
+    binoculars_batch_size: Optional[int] = None,
     **kwargs,
 ) -> Dict[str, BaseEvalDetector]:
     """
@@ -1193,6 +1197,14 @@ def load_detectors(
         
         # Handle detector-specific kwargs
         det_kwargs = dict(kwargs)
+        if name == "roberta" and roberta_batch_size:
+            det_kwargs["batch_size"] = roberta_batch_size
+        if name == "fast_detectgpt" and fast_detectgpt_batch_size:
+            det_kwargs["batch_size"] = fast_detectgpt_batch_size
+        if name == "mage" and mage_batch_size:
+            det_kwargs["batch_size"] = mage_batch_size
+        if name == "binoculars" and binoculars_batch_size:
+            det_kwargs["batch_size"] = binoculars_batch_size
         if name == "binoculars":
             det_kwargs["use_lightweight"] = not binoculars_full
             if binoculars_full:

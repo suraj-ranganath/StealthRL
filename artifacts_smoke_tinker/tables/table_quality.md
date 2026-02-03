@@ -1,0 +1,3 @@
+| method   |   sim_e5_mean |   sim_e5_std |   ppl_score_mean |   ppl_score_std |   edit_rate_mean |   edit_rate_std |   valid_mean |   quality_rating_mean |   quality_rating_std |   similarity_rating_mean |   similarity_rating_std |
+|:---------|--------------:|-------------:|-----------------:|----------------:|-----------------:|----------------:|-------------:|----------------------:|---------------------:|-------------------------:|------------------------:|
+| m2       |         0.848 |        0.078 |          123.387 |          70.936 |            0.805 |           0.115 |            1 |                   nan |                  nan |                      nan |                     nan |

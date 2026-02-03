@@ -98,6 +98,43 @@ Examples:
         default=[2],
         help="Candidates per sample (supports budget sweep: --n-candidates 1 2 4 8)",
     )
+
+    # Tinker concurrency options (StealthRL / M2 only)
+    parser.add_argument(
+        "--tinker-concurrency",
+        type=int,
+        default=64,
+        help="Max concurrent Tinker sampling requests for M2 (default: 64)",
+    )
+    parser.add_argument(
+        "--tinker-chunk-size",
+        type=int,
+        default=256,
+        help="Chunk size for concurrent Tinker sampling (default: 256)",
+    )
+    parser.add_argument(
+        "--tinker-max-retries",
+        type=int,
+        default=2,
+        help="Max retries per Tinker request (default: 2)",
+    )
+    parser.add_argument(
+        "--tinker-backoff-s",
+        type=float,
+        default=0.5,
+        help="Base backoff seconds for retries (default: 0.5)",
+    )
+    parser.add_argument(
+        "--tinker-resume",
+        action="store_true",
+        help="Enable resume cache for M2 sampling (writes to output dir)",
+    )
+    parser.add_argument(
+        "--tinker-resume-path",
+        type=str,
+        default=None,
+        help="Optional path for M2 resume cache (JSONL). Overrides --tinker-resume",
+    )
     
     # Detector options
     parser.add_argument(
@@ -105,6 +142,15 @@ Examples:
         nargs="+",
         default=["roberta", "fast_detectgpt"],
         help="Detectors to use (roberta, fast_detectgpt, detectgpt, binoculars, ghostbuster, mage)",
+    )
+    parser.add_argument("--roberta-batch-size", type=int, default=None, help="Batch size for RoBERTa detector")
+    parser.add_argument("--fast-detectgpt-batch-size", type=int, default=None, help="Batch size for Fast-DetectGPT detector")
+    parser.add_argument("--mage-batch-size", type=int, default=None, help="Batch size for MAGE detector")
+    parser.add_argument("--binoculars-batch-size", type=int, default=None, help="Batch size for Binoculars detector")
+    parser.add_argument(
+        "--save-intermediate",
+        action="store_true",
+        help="Save intermediate outputs after each method/detector (safer for long runs)",
     )
     
     # Output options
@@ -198,6 +244,13 @@ def main():
     # Resolve OpenAI key if needed
     openai_key = args.openai_api_key or os.getenv("OPENAI_API_KEY")
 
+    # Resolve Tinker resume path (if enabled)
+    tinker_resume_path = None
+    if args.tinker_resume_path:
+        tinker_resume_path = args.tinker_resume_path
+    elif args.tinker_resume:
+        tinker_resume_path = str(Path(args.out_dir) / "tinker_m2_cache.jsonl")
+
     # Load fixed samples if requested
     sample_ids = None
     if args.reuse_samples_from:
@@ -245,6 +298,16 @@ def main():
             n_ai=args.n_ai,
             stealthrl_checkpoint=args.stealthrl_checkpoint,
             cache_dir=args.cache_dir,
+            roberta_batch_size=args.roberta_batch_size,
+            fast_detectgpt_batch_size=args.fast_detectgpt_batch_size,
+            mage_batch_size=args.mage_batch_size,
+            binoculars_batch_size=args.binoculars_batch_size,
+            save_intermediate=args.save_intermediate,
+            tinker_concurrency=args.tinker_concurrency,
+            tinker_chunk_size=args.tinker_chunk_size,
+            tinker_max_retries=args.tinker_max_retries,
+            tinker_backoff_s=args.tinker_backoff_s,
+            tinker_resume_path=tinker_resume_path,
             setting_suffix=f"N={n_cand}" if len(args.n_candidates) > 1 else None,
             gpt_quality=args.gpt_quality,
             gpt_quality_methods=args.gpt_quality_methods,

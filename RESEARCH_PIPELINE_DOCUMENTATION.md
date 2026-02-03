@@ -696,6 +696,20 @@ python scripts/run_eval.py \
   --gpt-quality-model gpt-5-mini
 ```
 
+### Fast StealthRL (M2) Tinker Evals
+
+```bash
+# Concurrent Tinker sampling with resumable cache
+python scripts/run_eval.py \
+  --methods m2 \
+  --stealthrl-checkpoint checkpoints/atharv_checkpoint_1.json \
+  --detectors roberta fast_detectgpt binoculars \
+  --n-human 1000 --n-ai 1000 \
+  --tinker-concurrency 64 \
+  --tinker-chunk-size 256 \
+  --tinker-resume
+```
+
 ### CLI Arguments
 
 | Argument | Default | Description |
@@ -721,6 +735,12 @@ python scripts/run_eval.py \
 | `--gpt-quality-methods` | None | Methods to judge (default: `m2`/`stealthrl`) |
 | `--openai-api-key` | None | API key override (else uses `OPENAI_API_KEY`) |
 | `--gpt-quality-no-cache` | False | Disable cached GPT judgments |
+| `--tinker-concurrency` | 64 | Max concurrent Tinker requests for M2 |
+| `--tinker-chunk-size` | 256 | Chunk size for concurrent M2 sampling |
+| `--tinker-max-retries` | 2 | Retry attempts per M2 request |
+| `--tinker-backoff-s` | 0.5 | Base backoff seconds for retries |
+| `--tinker-resume` | False | Enable resumable M2 cache |
+| `--tinker-resume-path` | None | Custom resume cache path |
 
 **Note**: The `--n-values` (budget sweep) and `--no-sanitize` arguments are deprecated. The current pipeline uses a fixed `--n-candidates` value.
 

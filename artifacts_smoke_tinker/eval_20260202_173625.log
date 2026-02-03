@@ -1,0 +1,100 @@
+2026-02-02 17:36:25,238 | INFO | __main__ | ======================================================================
+2026-02-02 17:36:25,238 | INFO | __main__ | StealthRL Evaluation Pipeline
+2026-02-02 17:36:25,238 | INFO | __main__ | ======================================================================
+2026-02-02 17:36:25,238 | INFO | __main__ | Datasets: ['mage']
+2026-02-02 17:36:25,238 | INFO | __main__ | Methods: ['m2']
+2026-02-02 17:36:25,238 | INFO | __main__ | Detectors: ['roberta']
+2026-02-02 17:36:25,238 | INFO | __main__ | Samples: 5 human, 5 AI per dataset
+2026-02-02 17:36:25,238 | INFO | __main__ | Candidates: [2]
+2026-02-02 17:36:25,238 | INFO | __main__ | Output: artifacts_smoke_tinker
+2026-02-02 17:36:25,238 | INFO | __main__ | ======================================================================
+2026-02-02 17:36:25,238 | INFO | eval.runner | ============================================================
+2026-02-02 17:36:25,238 | INFO | eval.runner | Starting StealthRL Evaluation Pipeline
+2026-02-02 17:36:25,238 | INFO | eval.runner | ============================================================
+2026-02-02 17:36:25,238 | INFO | eval.runner | Loading datasets: ['mage']
+2026-02-02 17:36:25,238 | INFO | eval.data | Downloading MAGE dataset (split=test)...
+2026-02-02 17:36:26,880 | INFO | eval.data | Loaded 60743 samples from MAGE test
+2026-02-02 17:36:27,163 | INFO | eval.runner | Loaded mage: 10 samples (5 human, 5 AI)
+2026-02-02 17:36:27,163 | INFO | eval.runner | [TIMING] Step 1 (Load datasets): 1.93s
+2026-02-02 17:36:27,163 | INFO | eval.runner | Loading detectors: ['roberta']
+2026-02-02 17:36:27,173 | INFO | eval.detectors | Initializing detector: roberta
+2026-02-02 17:36:28,062 | INFO | eval.detectors | Loading openai-community/roberta-large-openai-detector...
+2026-02-02 17:36:29,090 | INFO | eval.detectors | ✓ roberta_openai loaded on mps
+2026-02-02 17:36:29,090 | INFO | eval.runner | [TIMING] Step 2 (Load detectors): 1.93s
+2026-02-02 17:36:29,090 | INFO | eval.runner | [LOAD] Loading methods: ['m2']
+2026-02-02 17:36:29,090 | INFO | eval.runner | [LOAD] Loading method m2...
+2026-02-02 17:36:29,090 | INFO | eval.runner | [LOAD] ✓ Loaded method m2 in 0.00s
+2026-02-02 17:36:29,090 | INFO | eval.runner | [LOAD] All methods loaded in 0.00s
+2026-02-02 17:36:29,090 | INFO | eval.runner | [TIMING] Step 3 (Load methods): 0.00s
+2026-02-02 17:36:29,090 | INFO | eval.runner | [CALIBRATE] Starting threshold calibration at FPR=0.01
+2026-02-02 17:36:29,090 | INFO | eval.runner | [CALIBRATE] Processing 5 human texts from mage
+2026-02-02 17:36:29,567 | INFO | eval.runner | [CALIBRATE] roberta scored 5 texts in 0.48s
+2026-02-02 17:36:29,568 | INFO | eval.metrics | Calibrated roberta: threshold=0.4051 (FPR=0.01)
+2026-02-02 17:36:29,569 | INFO | eval.metrics | Saved thresholds to artifacts_smoke_tinker/thresholds.json
+2026-02-02 17:36:29,569 | INFO | eval.runner | [CALIBRATE] Threshold calibration completed in 0.48s
+2026-02-02 17:36:29,569 | INFO | eval.runner | [TIMING] Step 4 (Calibrate thresholds): 0.48s
+2026-02-02 17:36:29,569 | INFO | eval.runner | [ATTACKS] Starting attacks with n_candidates=2
+2026-02-02 17:36:29,569 | INFO | eval.runner | [ATTACKS] Dataset mage: 5 AI texts to process
+2026-02-02 17:36:29,569 | INFO | eval.runner | [ATTACKS] Running m2 on mage (5 texts)...
+2026-02-02 17:36:29,569 | INFO | eval.methods.stealthrl | Loading checkpoint info from checkpoints/atharv_checkpoint_1.json...
+2026-02-02 17:36:29,570 | INFO | eval.methods.stealthrl | Connecting to Tinker for Qwen/Qwen3-4B-Instruct-2507...
+2026-02-02 17:36:29,570 | INFO | eval.methods.stealthrl | Sampler: tinker://a138335f-6bba-51a7-835f-1dc24461e86a:train:0/sampler_weights/final_sampler
+2026-02-02 17:36:29,950 | INFO | tinker.lib.public_interfaces.service_client | ServiceClient initialized for session 17917dc0-e7bc-57d5-892d-420c5cb3aeaa
+2026-02-02 17:36:30,963 | INFO | eval.methods.stealthrl | ✓ StealthRL (Tinker Native API) ready - supports batched num_samples
+2026-02-02 17:36:30,963 | INFO | eval.methods.stealthrl | Reranking detector (roberta) will load lazily if n_candidates > 1
+2026-02-02 17:36:41,566 | INFO | eval.tinker_concurrency | [TINKER] Completed chunk 1 (5 samples)
+2026-02-02 17:36:41,567 | INFO | eval.methods.stealthrl | Loading reranking detector: roberta
+2026-02-02 17:36:41,567 | INFO | eval.detectors | Loading openai-community/roberta-large-openai-detector...
+2026-02-02 17:36:42,069 | INFO | eval.detectors | ✓ roberta_openai loaded on cpu
+2026-02-02 17:36:42,545 | INFO | eval.runner | [ATTACKS] Completed m2: 5 outputs in 12.98s (0.39 texts/s)
+2026-02-02 17:36:42,545 | INFO | eval.runner | Saved raw outputs to artifacts_smoke_tinker/raw_outputs.json
+2026-02-02 17:36:42,545 | INFO | eval.runner | [TIMING] Step 5 (Run attacks): 12.98s
+2026-02-02 17:36:42,545 | INFO | eval.runner | [SCORE] Scoring outputs with detectors...
+2026-02-02 17:36:42,913 | INFO | eval.runner | [SCORE] roberta scored 5 human texts in 0.37s
+2026-02-02 17:36:43,713 | INFO | eval.runner | [SCORE] roberta scored 5 m2 outputs in 0.80s
+2026-02-02 17:36:43,713 | INFO | eval.runner | [SCORE] Scoring complete: 10 records in 1.17s
+2026-02-02 17:36:43,713 | INFO | eval.runner | [TIMING] Step 6 (Score outputs): 1.17s
+2026-02-02 17:36:43,713 | INFO | eval.runner | Computing metrics...
+2026-02-02 17:36:43,864 | INFO | eval.runner | Computed metrics for 1 combinations
+2026-02-02 17:36:43,864 | INFO | eval.runner | [TIMING] Step 7 (Compute metrics): 0.15s
+2026-02-02 17:36:43,864 | INFO | eval.runner | Computing quality metrics...
+2026-02-02 17:36:47,533 | INFO | eval.metrics | Loading PPL model: gpt2
+2026-02-02 17:36:49,203 | INFO | eval.runner | Computed quality metrics for 5 samples
+2026-02-02 17:36:49,207 | INFO | eval.runner | [TIMING] Step 8 (Quality metrics): 5.34s
+2026-02-02 17:36:49,207 | INFO | eval.runner | Saving artifacts...
+2026-02-02 17:36:49,554 | INFO | eval.plots | Saved heatmap to artifacts_smoke_tinker/figures/fig_heatmap_tpr.png
+2026-02-02 17:36:49,625 | INFO | eval.plots | Saved heatmap to artifacts_smoke_tinker/figures/fig_heatmap_auroc.png
+2026-02-02 17:36:49,698 | INFO | eval.plots | Saved AUROC bar chart to artifacts_smoke_tinker/figures/fig_auroc_bars.png
+2026-02-02 17:36:49,787 | INFO | eval.plots | Saved AUROC radar chart to artifacts_smoke_tinker/figures/fig_auroc_radar.png
+2026-02-02 17:36:49,951 | INFO | eval.plots | Saved method comparison summary to artifacts_smoke_tinker/figures/fig_method_comparison.png
+2026-02-02 17:36:50,031 | INFO | eval.plots | Saved tradeoff plot to artifacts_smoke_tinker/figures/fig_tradeoff.png
+2026-02-02 17:36:50,040 | WARNING | eval.plots | No GPT quality ratings available for Likert chart
+2026-02-02 17:36:50,139 | INFO | eval.plots | Saved score distribution plot to artifacts_smoke_tinker/figures/fig_score_distributions.png
+2026-02-02 17:36:50,226 | INFO | eval.plots | Saved human-AI separation plot to artifacts_smoke_tinker/figures/fig_human_ai_separation_roberta.png
+2026-02-02 17:36:50,314 | INFO | eval.plots | Saved quality vs evasion scatter to artifacts_smoke_tinker/figures/fig_quality_vs_evasion.png
+2026-02-02 17:36:50,394 | INFO | eval.plots | Saved ASR comparison chart to artifacts_smoke_tinker/figures/fig_asr_comparison.png
+2026-02-02 17:36:50,528 | INFO | eval.plots | Saved perplexity vs similarity scatter to artifacts_smoke_tinker/figures/fig_perplexity_vs_similarity.png
+2026-02-02 17:36:50,528 | INFO | eval.plots | All figures saved to artifacts_smoke_tinker/figures
+2026-02-02 17:36:50,533 | INFO | eval.plots | Saved main results table to artifacts_smoke_tinker/tables/table_main_mage.md
+2026-02-02 17:36:50,534 | INFO | eval.plots | Saved transfer table to artifacts_smoke_tinker/tables/table_transfer.md
+2026-02-02 17:36:50,536 | INFO | eval.plots | Saved quality table to artifacts_smoke_tinker/tables/table_quality.md
+2026-02-02 17:36:50,536 | INFO | eval.plots | All tables saved to artifacts_smoke_tinker/tables
+2026-02-02 17:36:50,536 | INFO | eval.runner | All artifacts saved to artifacts_smoke_tinker
+2026-02-02 17:36:50,536 | INFO | eval.runner | [TIMING] Step 9 (Save artifacts): 1.33s
+2026-02-02 17:36:50,536 | INFO | eval.runner | ============================================================
+2026-02-02 17:36:50,536 | INFO | eval.runner | Evaluation Complete!
+2026-02-02 17:36:50,536 | INFO | eval.runner | Results saved to: artifacts_smoke_tinker
+2026-02-02 17:36:50,536 | INFO | eval.runner | ============================================================
+2026-02-02 17:36:50,536 | INFO | eval.runner | [TIMING] Pipeline Summary:
+2026-02-02 17:36:50,536 | INFO | eval.runner |   1_load_datasets: 1.93s (7.6%)
+2026-02-02 17:36:50,536 | INFO | eval.runner |   2_load_detectors: 1.93s (7.6%)
+2026-02-02 17:36:50,536 | INFO | eval.runner |   3_load_methods: 0.00s (0.0%)
+2026-02-02 17:36:50,536 | INFO | eval.runner |   4_calibrate_thresholds: 0.48s (1.9%)
+2026-02-02 17:36:50,536 | INFO | eval.runner |   5_run_attacks: 12.98s (51.3%)
+2026-02-02 17:36:50,536 | INFO | eval.runner |   6_score_outputs: 1.17s (4.6%)
+2026-02-02 17:36:50,536 | INFO | eval.runner |   7_compute_metrics: 0.15s (0.6%)
+2026-02-02 17:36:50,536 | INFO | eval.runner |   8_quality_metrics: 5.34s (21.1%)
+2026-02-02 17:36:50,536 | INFO | eval.runner |   9_save_artifacts: 1.33s (5.3%)
+2026-02-02 17:36:50,536 | INFO | eval.runner |   TOTAL: 25.30s
+2026-02-02 17:36:50,536 | INFO | eval.runner | ============================================================
+2026-02-02 17:36:50,537 | INFO | __main__ | Evaluation completed successfully!

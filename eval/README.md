@@ -17,6 +17,14 @@ python scripts/run_eval.py --stealthrl-checkpoint outputs/runs/best_checkpoint -
 # With GPT-based quality evaluation (requires OPENAI_API_KEY)
 python scripts/run_eval.py --methods m2 --gpt-quality --gpt-quality-max-per-method 200
 
+# Fast StealthRL (M2) evals with concurrent Tinker sampling
+python scripts/run_eval.py \
+    --methods m2 \
+    --stealthrl-checkpoint outputs/runs/best_checkpoint \
+    --tinker-concurrency 64 \
+    --tinker-chunk-size 256 \
+    --tinker-resume
+
 # All methods and detectors
 python scripts/run_eval.py \
     --datasets mage raid \
@@ -28,6 +36,11 @@ python scripts/run_eval.py \
     --datasets mage \
     --methods m2 \
     --reuse-samples-from outputs/eval_runs/mage_no_m2
+
+# Prewarm detectors + Ollama (reduces cold-start latency)
+python scripts/prewarm_models.py \
+    --detectors roberta fast_detectgpt binoculars mage \
+    --device mps
 ```
 
 ## CLI Usage
@@ -39,6 +52,17 @@ python -m eval \
     --detectors roberta fast_detectgpt detectgpt binoculars \
     --n-candidates 1 2 4 8 \
     --out-dir artifacts/
+```
+
+### Tinker Concurrency Flags (M2 only)
+
+```bash
+--tinker-concurrency 64     # max concurrent requests (default: 64)
+--tinker-chunk-size 256     # chunk size for batching (default: 256)
+--tinker-max-retries 2      # retries per request (default: 2)
+--tinker-backoff-s 0.5      # base backoff seconds (default: 0.5)
+--tinker-resume             # enable resume cache (output_dir/tinker_m2_cache.jsonl)
+--tinker-resume-path PATH   # custom resume cache path
 ```
 
 ## Output Structure
