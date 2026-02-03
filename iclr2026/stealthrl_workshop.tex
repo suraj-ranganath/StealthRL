@@ -23,7 +23,7 @@ Multi-Detector Evasion of AI-Text Detectors}
 \maketitle
 
 \begin{abstract}
-AI-text detectors face a critical robustness challenge: adversarial paraphrasing attacks that preserve semantics while evading detection. We introduce \emph{StealthRL}, a systematic threat model instantiation and robustness evaluation framework that stress-tests detector families under realistic adversarial conditions. StealthRL addresses the question: \textit{how robust are detectors to black-box adaptive attacks trained explicitly to evade them?} Through reinforcement learning with multi-detector ensemble training, we demonstrate \textbf{catastrophic robustness failure}: detectors achieve near-zero true positive rates (0\% TPR@1\%FPR) while attackers maintain semantic fidelity (0.896 E5 cosine). Critically, attacks transfer across detector architectures, including a held-out detector family, revealing shared vulnerabilities rather than detector-specific brittleness. Our results expose fundamental limitations in current detection approaches and establish StealthRL as a principled adversarial evaluation protocol for robustness benchmarking. We release code for reproducible threat modeling and defense evaluation.
+AI-text detectors face a critical robustness challenge: adversarial paraphrasing attacks that preserve semantics while evading detection. We introduce \emph{StealthRL}, a systematic threat model instantiation and robustness evaluation framework that stress-tests detector families under realistic adversarial conditions. StealthRL addresses the question: \textit{how robust are detectors to black-box adaptive attacks trained explicitly to evade them?} Through reinforcement learning with multi-detector ensemble training, we demonstrate \textbf{catastrophic robustness failure}: detectors achieve near-zero true positive rates (0\% TPR@1\%FPR) while attackers maintain semantic fidelity (0.896 E5 similarity). Critically, attacks transfer across detector architectures, including a held-out detector family, revealing shared vulnerabilities rather than detector-specific brittleness. Our results expose fundamental limitations in current detection approaches and establish StealthRL as a principled adversarial evaluation protocol for robustness benchmarking. We release complete training and evaluation code for fully reproducible adversarial robustness assessment.
 \end{abstract}
 
 \section{Introduction}
@@ -33,15 +33,16 @@ We present \textbf{StealthRL}, a reinforcement-learning framework that trains a 
 
 \paragraph{Contributions.}
 \begin{itemize}
-  \item We implement black-box adaptive paraphrasing attacks via multi-detector RL training with semantic constraints.
+  \item We implement black-box adaptive paraphrasing attacks via multi-detector RL training with semantic constraints, one of the first works to apply RL for adversarial detector evasion.
   \item We demonstrate strong evasion (0\% TPR@1\%FPR across three detector families) with cross-architecture transfer to a held-out detector.
   \item We establish an evaluation protocol measuring evasion, transfer, and fidelity at security-relevant operating points.
+  \item We release complete training and evaluation scripts with full hyperparameters, enabling reproducible robustness benchmarking.
 \end{itemize}
 
 \paragraph{Anonymized code release.}
 Code is available at \url{https://anonymous.4open.science/r/StealthRL-D42D}.
 \section{Related Work}
-Detector families include curvature-based methods (DetectGPT and Fast-DetectGPT) and paired-LM detectors such as Binoculars. \cite{mitchell2023detectgptzeroshotmachinegeneratedtext,bao2024fastdetectgptefficientzeroshotdetection,hans2024spottingllmsbinocularszeroshot} Recent evasion work focuses on paraphrase attacks and RL-based humanization. AuthorMist demonstrates that reinforcement learning can effectively train adaptive evasion policies, motivating our multi-detector ensemble approach. \cite{david2025authormistevadingaitext} Adversarial Paraphrasing shows universal attack strategies, while character-level attacks such as homoglyph substitution demonstrate strong but often less readable perturbations. \cite{cheng2025adversarialparaphrasinguniversalattack,creo2025silverspeakevadingaigeneratedtext} Parameter-efficient fine-tuning methods such as LoRA and QLoRA enable efficient adaptation of large language models. \cite{hu2021loralowrankadaptationlarge,dettmers2023qlora} StealthRL builds on these directions by training a single paraphrase policy against a detector ensemble and evaluating transfer at strict low-FPR operating points.
+Detector families include curvature-based methods (DetectGPT and Fast-DetectGPT) and paired-LM detectors such as Binoculars. \cite{mitchell2023detectgptzeroshotmachinegeneratedtext,bao2024fastdetectgptefficientzeroshotdetection,hans2024spottingllmsbinocularszeroshot} Recent evasion work focuses on paraphrase attacks and RL-based humanization. AuthorMist demonstrates that reinforcement learning can effectively train adaptive evasion policies against single detectors. \cite{david2025authormistevadingaitext} Adversarial Paraphrasing shows universal attack strategies, while character-level attacks such as homoglyph substitution demonstrate strong but often less readable perturbations. \cite{cheng2025adversarialparaphrasinguniversalattack,creo2025silverspeakevadingaigeneratedtext} Parameter-efficient fine-tuning methods such as LoRA and QLoRA enable efficient adaptation of large language models. \cite{hu2021loralowrankadaptationlarge,dettmers2023qlora} Building on AuthorMist's RL approach, StealthRL extends to multi-detector ensemble training with held-out detector evaluation at strict low-FPR operating points, and provides complete open-source training and evaluation code for reproducible adversarial robustness assessment.
 
 \section{Method}
 \paragraph{Threat model.} We assume black-box access to detector scores: the attacker can query detector confidence but does not require gradients. We evaluate transfer to a held-out detector (Binoculars) to test robustness beyond the training ensemble.
@@ -50,7 +51,7 @@ Detector families include curvature-based methods (DetectGPT and Fast-DetectGPT)
 \begin{equation}
 R(x,y) = \alpha R_{\text{det}}(y) + \beta R_{\text{sem}}(x,y),
 \end{equation}
-where $R_{\text{sem}}$ is E5 embedding cosine similarity and $R_{\text{det}} = 1 - p(y)$ is the detector evasion reward, with $p(y)$ the AI probability. During training, $p(y) = 0.6 \cdot p_{\text{RoBERTa}}(y) + 0.4 \cdot p_{\text{Fast-DetectGPT}}(y)$ is the weighted average of two detectors. During evaluation, we test against all three detector families including the held-out Binoculars. We fine-tune the model using the Tinker API framework with GRPO \cite{pang2025grpo} and LoRA adapters \cite{hu2021loralowrankadaptationlarge} on Qwen3-4B-Instruct (rank 32, $\alpha=32$, dropout 0.05) using group size 8, batch size 16, and five epochs over 10,000 MAGE train samples plus 200 dev samples. Reward weights: $\alpha=1.0$, $\beta=0.1$. Full hyperparameters in Appendix~\ref{sec:hyperparams}.
+where $R_{\text{sem}}$ is E5 embedding cosine similarity and $R_{\text{det}} = 1 - p(y)$ is the detector evasion reward, with $p(y)$ the AI probability. During training, $p(y) = 0.6 \cdot p_{\text{RoBERTa}}(y) + 0.4 \cdot p_{\text{Fast-DetectGPT}}(y)$ is the weighted average of two detectors. During evaluation, we test against all three detector families including the held-out Binoculars. We fine-tune the model using the Tinker API framework with GRPO \cite{pang2025grpo} and LoRA adapters \cite{hu2021loralowrankadaptationlarge} on Qwen3-4B-Instruct (rank 32, $\alpha=32$, dropout 0.05) using group size 8, batch size 16, and three epochs over 10,000 MAGE train samples plus 200 dev samples. Reward weights: $\alpha=1.0$, $\beta=0.1$. Full hyperparameters in Appendix~\ref{sec:hyperparams}.
 
 \begin{figure}[t]
   \centering
@@ -143,7 +144,7 @@ Algorithm & Group-Relative Policy Optimization (GRPO) \\
 Learning rate & $2.8 \times 10^{-4}$ \\
 Batch size & 16 \\
 Group size & 8 \\
-Epochs & 2 \\
+Epochs & 3 \\
 Training samples & 10,000 (MAGE train) + 200 (dev) \\
 KL penalty coefficient & 0.05 \\
 Reference policy & Qwen3-4B-Instruct (frozen) \\
