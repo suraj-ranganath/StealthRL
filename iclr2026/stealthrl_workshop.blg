@@ -1,7 +1,9 @@
-This is BibTeX, Version 0.99d (TeX Live 2025)
+This is BibTeX, Version 0.99d
 Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
 The top-level auxiliary file: stealthrl_workshop.aux
+Reallocating 'name_of_file' (item size: 1) to 20 items.
 The style file: iclr2026_conference.bst
+Reallocating 'name_of_file' (item size: 1) to 15 items.
 Database file #1: stealthrl_refs.bib
 You've used 7 entries,
             2773 wiz_defined-function locations,

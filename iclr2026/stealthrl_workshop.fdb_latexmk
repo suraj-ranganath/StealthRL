@@ -1,14 +1,15 @@
 # Fdb version 4
-["bibtex stealthrl_workshop"] 1770119873.22136 "stealthrl_workshop.aux" "stealthrl_workshop.bbl" "stealthrl_workshop" 1770119874.75695 0
+["bibtex stealthrl_workshop"] 1770122618.65743 "stealthrl_workshop.aux" "stealthrl_workshop.bbl" "stealthrl_workshop" 1770122621.17204 0
   "./iclr2026_conference.bst" 1770118425.64118 26973 af983813ca1a1414954dbceae7baa2a1 ""
   "./stealthrl_refs.bib" 1770118425.64177 5096 58b062853dcd1f4d447c2ca617715805 ""
-  "stealthrl_workshop.aux" 1770119874.23171 5664 fd09326bcff6785117b1068cd6cd4345 "pdflatex"
+  "stealthrl_workshop.aux" 1770122620.68481 5819 08b95734ca7e31f3c6f933d83b4412ee "pdflatex"
   (generated)
   "stealthrl_workshop.bbl"
   "stealthrl_workshop.blg"
   (rewritten before read)
-["pdflatex"] 1770119873.43413 "/Users/suraj/Desktop/StealthRL/iclr2026/stealthrl_workshop.tex" "stealthrl_workshop.pdf" "stealthrl_workshop" 1770119874.75711 0
-  "/Users/suraj/Desktop/StealthRL/iclr2026/stealthrl_workshop.tex" 1770119621.1657 14559 47b714f8f34fdeb8531842cafbe027ca ""
+["pdflatex"] 1770122618.87433 "/Users/suraj/Desktop/StealthRL/iclr2026/stealthrl_workshop.tex" "stealthrl_workshop.pdf" "stealthrl_workshop" 1770122621.17221 0
+  "../figures/StealthRL_Pipeline_Final_v3.png" 1770117249.11069 6492755 93ea82cbfdf3b16f1abfc942f0bf9847 ""
+  "/Users/suraj/Desktop/StealthRL/iclr2026/stealthrl_workshop.tex" 1770122375.54529 15298 1288910fd1c5b1a22f8ff30f4d989304 ""
   "/Users/suraj/Library/Application Support/MiKTeX/texmfs/data/fonts/map/pdftex/pdftex.map" 1770071856.15289 112178 3b0fbce6de6341500037089663806d63 ""
   "/Users/suraj/Library/Application Support/MiKTeX/texmfs/data/miktex/data/le/pdftex/pdflatex.fmt" 1754059712.78056 13262729 0298b3ab808458dca4a61e9f9195088c ""
   "/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/enc/dvips/base/8r.enc" 1754057643.82863 4993 1194fb36dfcb11d9ae9802f2b00b60a3 ""
@@ -133,16 +134,15 @@
   "/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/url/url.sty" 1754057683.2794 12796 8edb7d69a20b857904dd0ea757c14ec9 ""
   "/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/xcolor/xcolor.sty" 1754057683.36838 55384 b454dec21c2d9f45ec0b793f0995b992 ""
   "fancyhdr.sty" 1770118425.63393 20521 e5d13d98d57bd53d4fed3aa61bd29c86 ""
-  "figures/StealthRL_Methodology.png" 1770118425.64003 4912907 3f6713551f2ca32cf1a677d4c11bf825 ""
   "figures/fig_method_comparison.png" 1770119407.03885 320352 b5fc1d0c92f9f878da39fe2cfe93be7a ""
   "iclr2026_conference.sty" 1770118425.64129 9062 3fd0414dffb5592e0912aeaa0ab108c9 ""
   "math_commands.tex" 1770118425.64152 12284 a71653715108dc62b66e3a0bde0307d8 ""
   "natbib.sty" 1770118425.64166 45154 40088ce024445d7ee2bca59e704cdd01 ""
-  "stealthrl_workshop.aux" 1770119874.23171 5664 fd09326bcff6785117b1068cd6cd4345 "pdflatex"
-  "stealthrl_workshop.bbl" 1770119873.39836 2436 29c10c128029388d022b8f35c0d1e0ff "bibtex stealthrl_workshop"
-  "stealthrl_workshop.out" 1770119874.23259 1110 60b2029bbb617b786dd0a0f45a9e836d "pdflatex"
-  "stealthrl_workshop.tex" 1770119621.1657 14559 47b714f8f34fdeb8531842cafbe027ca ""
-  "table_main.tex" 1770119120.83491 593 9f520cc324094f8dcc17ee2220a50b5e ""
+  "stealthrl_workshop.aux" 1770122620.68481 5819 08b95734ca7e31f3c6f933d83b4412ee "pdflatex"
+  "stealthrl_workshop.bbl" 1770122618.8371 2694 dfec6afbb7a62535760ea401221a7bb4 "bibtex stealthrl_workshop"
+  "stealthrl_workshop.out" 1770122620.68562 1199 e0a936352d29231fd963c7660b2d9fc2 "pdflatex"
+  "stealthrl_workshop.tex" 1770122375.54529 15298 1288910fd1c5b1a22f8ff30f4d989304 ""
+  "table_main.tex" 1770121484.21529 593 e87d249722196429261ae75bc3e86b2f ""
   (generated)
   "stealthrl_workshop.aux"
   "stealthrl_workshop.log"

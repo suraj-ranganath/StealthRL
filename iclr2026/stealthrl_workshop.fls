@@ -202,13 +202,13 @@ INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/vf/ad
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/tfm/adobe/courier/pcrr8r.tfm
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/tfm/adobe/times/ptmr7t.tfm
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/tfm/adobe/times/ptmr7t.tfm
-INPUT ./figures/StealthRL_Methodology.png
-INPUT ./figures/StealthRL_Methodology.png
-INPUT ./figures/StealthRL_Methodology.png
-INPUT ./figures/StealthRL_Methodology.png
-INPUT ./figures/StealthRL_Methodology.png
-INPUT ./figures/StealthRL_Methodology.png
-INPUT ./figures/StealthRL_Methodology.png
+INPUT ../figures/StealthRL_Pipeline_Final_v3.png
+INPUT ../figures/StealthRL_Pipeline_Final_v3.png
+INPUT ../figures/StealthRL_Pipeline_Final_v3.png
+INPUT ../figures/StealthRL_Pipeline_Final_v3.png
+INPUT ../figures/StealthRL_Pipeline_Final_v3.png
+INPUT ../figures/StealthRL_Pipeline_Final_v3.png
+INPUT ../figures/StealthRL_Pipeline_Final_v3.png
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/vf/adobe/times/ptmr7t.vf
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/tfm/adobe/times/ptmr8r.tfm
 INPUT /Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/tfm/adobe/times/ptmr7t.tfm
