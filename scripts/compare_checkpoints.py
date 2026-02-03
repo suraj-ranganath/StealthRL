@@ -24,6 +24,7 @@ Usage:
 """
 
 import argparse
+import asyncio
 import json
 import logging
 import sys
@@ -34,6 +35,7 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 import numpy as np
+from tqdm import tqdm
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -63,7 +65,7 @@ def setup_logging(log_dir: str, level: str = "INFO"):
 
 
 class CheckpointComparator:
-    """Compare multiple StealthRL checkpoints."""
+    """Compare multiple StealthRL checkpoints with optimized parallel processing."""
     
     def __init__(
         self,
@@ -80,6 +82,8 @@ class CheckpointComparator:
         
         self.detectors = {}
         self.results = {}
+        self.human_scores_cache = {}  # Cache human scores per detector
+        self.sim_scorer = None  # Reusable similarity scorer
     
     def load_detectors(self, detector_names: List[str] = None):
         """Load detector panel."""
@@ -145,45 +149,66 @@ class CheckpointComparator:
         # Load detectors if not already loaded
         if not self.detectors:
             self.load_detectors()
+        if self.sim_scorer is None:
+            logger.info("Initializing similarity scorer...")
+            self.sim_scorer = E5SimilarityScorer()
         
-        # Initialize similarity scorer
-        sim_scorer = E5SimilarityScorer()
+        # Cache human scores for all detectors (compute once, reuse for all checkpoints)
+        logger.info("\nCaching human detector scores...")
+        for det_name, detector in tqdm(self.detectors.items(), desc="Scoring human samples"):
+            if det_name not in self.human_scores_cache:
+                self.human_scores_cache[det_name] = detector.get_scores(human_texts)
         
+        # Run attacks in parallel for all checkpoints
+        logger.info("\n" + "="*70)
+        logger.info("Running parallel attacks for all checkpoints...")
+        logger.info("="*70)
+        
+        attack_results = asyncio.run(self._parallel_attacks(
+            checkpoints, names, ai_texts, n_candidates
+        ))
+        
+        # Batch process all attacked texts with detectors
+        logger.info("\nBatch scoring all attacked texts...")
+        all_attacked_texts = []
+        checkpoint_indices = []
+        
+        for idx, result in enumerate(attack_results):
+            if result is not None:
+                all_attacked_texts.extend(result["attacked_texts"])
+                checkpoint_indices.extend([idx] * len(result["attacked_texts"]))
+        
+        # Batch score all texts at once per detector
+        detector_scores_batch = {}
+        for det_name, detector in tqdm(self.detectors.items(), desc="Batch scoring detectors"):
+            if len(all_attacked_texts) > 0:
+                detector_scores_batch[det_name] = detector.get_scores(all_attacked_texts)
+        
+        # Compute metrics for each checkpoint
+        logger.info("\nComputing metrics for each checkpoint...")
         all_results = []
         
-        # Evaluate each checkpoint
-        for cp_idx, (cp_path, cp_name) in enumerate(zip(checkpoints, names)):
-            logger.info(f"\n{'='*60}")
-            logger.info(f"Checkpoint {cp_idx+1}/{len(checkpoints)}: {cp_name}")
-            logger.info(f"{'='*60}")
-            
-            # Load method for this checkpoint
-            try:
-                method = get_method("m2", checkpoint_json=cp_path)
-            except Exception as e:
-                logger.error(f"Failed to load checkpoint {cp_path}: {e}")
+        for cp_idx, result in enumerate(tqdm(attack_results, desc="Processing results")):
+            if result is None:
                 continue
             
-            # Run attacks
-            logger.info(f"Running attacks (n_candidates={n_candidates})...")
-            start_time = time.time()
-            results = method.attack_batch(ai_texts, n_candidates=n_candidates)
-            attack_time = time.time() - start_time
-            attacked_texts = [r.text for r in results]
-            
-            logger.info(f"Attacks completed in {attack_time:.1f}s ({len(ai_texts)/attack_time:.2f} samples/s)")
+            cp_name = result["name"]
+            cp_path = result["path"]
+            attacked_texts = result["attacked_texts"]
+            attack_time = result["attack_time"]
             
             # Compute quality metrics
-            logger.info("Computing quality metrics...")
-            similarities = sim_scorer.compute_similarity(ai_texts, attacked_texts)
+            similarities = self.sim_scorer.compute_similarity(ai_texts, attacked_texts)
             mean_sim = np.mean(similarities)
             
-            # Evaluate with each detector
-            for det_name, detector in self.detectors.items():
-                logger.info(f"  Evaluating with {det_name}...")
-                
-                human_scores = detector.get_scores(human_texts)
-                ai_scores = detector.get_scores(attacked_texts)
+            # Get scores for this checkpoint from batched results
+            start_idx = sum(len(attack_results[i]["attacked_texts"]) for i in range(cp_idx) if attack_results[i] is not None)
+            end_idx = start_idx + len(attacked_texts)
+            
+            # Evaluate with each detector using cached human scores and batched AI scores
+            for det_name in self.detectors.keys():
+                human_scores = self.human_scores_cache[det_name]
+                ai_scores = detector_scores_batch[det_name][start_idx:end_idx]
                 
                 metrics = compute_detector_metrics(
                     human_scores=human_scores,
@@ -220,6 +245,67 @@ class CheckpointComparator:
         self._save_results(df, checkpoints, names)
         
         return df
+    
+    async def _parallel_attacks(
+        self,
+        checkpoints: List[str],
+        names: List[str],
+        ai_texts: List[str],
+        n_candidates: int,
+    ) -> List[Dict]:
+        """
+        Run attacks in parallel for all checkpoints.
+        
+        Note: This parallelizes checkpoint loading, but within each checkpoint,
+        the Tinker API already efficiently batches:
+        - Multiple candidates per prompt (via num_samples parameter)
+        - attack_batch() processes texts sequentially but each prompt gets N candidates in 1 API call
+        
+        For further optimization, consider modifying the StealthRL method to use
+        sample_async() for concurrent processing of multiple prompts.
+        """
+        async def attack_checkpoint(cp_path: str, cp_name: str, idx: int):
+            """Attack with a single checkpoint."""
+            try:
+                logger.info(f"[{idx+1}/{len(checkpoints)}] Loading {cp_name}...")
+                method = get_method("m2", checkpoint_json=cp_path)
+                
+                logger.info(f"[{idx+1}/{len(checkpoints)}] Attacking with {cp_name}...")
+                logger.info(f"[{idx+1}/{len(checkpoints)}] Tinker API will use num_samples={n_candidates} for efficient candidate generation")
+                start_time = time.time()
+                results = method.attack_batch(ai_texts, n_candidates=n_candidates)
+                attack_time = time.time() - start_time
+                
+                attacked_texts = [r.text for r in results]
+                logger.info(f"[{idx+1}/{len(checkpoints)}] {cp_name} completed in {attack_time:.1f}s ({len(ai_texts)/attack_time:.2f} samples/s)")
+                
+                return {
+                    "name": cp_name,
+                    "path": cp_path,
+                    "attacked_texts": attacked_texts,
+                    "attack_time": attack_time,
+                }
+            except Exception as e:
+                logger.error(f"Failed to process checkpoint {cp_path}: {e}")
+                return None
+        
+        # Run all checkpoint attacks concurrently
+        tasks = [
+            attack_checkpoint(cp_path, cp_name, idx)
+            for idx, (cp_path, cp_name) in enumerate(zip(checkpoints, names))
+        ]
+        
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Filter out exceptions
+        valid_results = []
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(f"Task failed with exception: {result}")
+            elif result is not None:
+                valid_results.append(result)
+        
+        return valid_results
     
     def _save_results(
         self,

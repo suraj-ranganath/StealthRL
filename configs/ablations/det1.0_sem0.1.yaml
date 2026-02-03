@@ -75,7 +75,7 @@ reward:
     quality_min: 0.8
 dataset:
   path: data/mage
-  max_train_examples: 1000
+  max_train_examples: 6000
   max_test_examples: 100
   seed: 42
   few_shot: standard

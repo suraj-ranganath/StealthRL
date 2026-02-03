@@ -136,13 +136,13 @@ def _call_openai(
     }
     payload = {
         "model": model,
-        "input": messages,
+        "messages": messages,  # Fixed: was "input"
         "temperature": temperature,
-        "max_output_tokens": max_output_tokens,
+        "max_tokens": max_output_tokens,  # Fixed: was "max_output_tokens"
     }
 
     with httpx.Client(timeout=timeout) as client:
-        resp = client.post("https://api.openai.com/v1/responses", headers=headers, json=payload)
+        resp = client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)  # Fixed: was /v1/responses
         resp.raise_for_status()
         data = resp.json()
 
