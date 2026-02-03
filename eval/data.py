@@ -492,6 +492,46 @@ def load_eval_dataset(
     return dataset
 
 
+def load_eval_dataset_with_ids(
+    name: str,
+    human_ids: List[str],
+    ai_ids: List[str],
+    split: str = "test",
+    cache_dir: Optional[str] = None,
+    min_tokens: int = 100,
+    max_tokens: int = 500,
+    **kwargs,
+) -> BaseEvalDataset:
+    """
+    Load dataset and select exact samples by id (for reproducibility across runs).
+    """
+    dataset_classes = {
+        "mage": MAGEDataset,
+        "raid": RAIDDataset,
+        "padben": PadBenDataset,
+    }
+    if name not in dataset_classes:
+        raise ValueError(f"Unknown dataset: {name}. Available: {list(dataset_classes.keys())}")
+    dataset_cls = dataset_classes[name]
+
+    if name == "padben":
+        split = "train"
+
+    dataset = dataset_cls.download(split=split, cache_dir=cache_dir, **kwargs)
+    dataset = dataset.filter_by_length(min_tokens=min_tokens, max_tokens=max_tokens)
+
+    id_map = {s.id: s for s in dataset.samples}
+    missing = [sid for sid in (human_ids + ai_ids) if sid not in id_map]
+    if missing:
+        raise ValueError(f"Missing {len(missing)} sample ids in dataset {name}: {missing[:5]} ...")
+
+    selected = []
+    # Preserve order for determinism
+    selected.extend([id_map[sid] for sid in human_ids])
+    selected.extend([id_map[sid] for sid in ai_ids])
+    return dataset.__class__(selected, dataset.name)
+
+
 def prepare_mage_eval(
     output_path: str = "data/mage_eval.jsonl",
     n_human: int = 1000,

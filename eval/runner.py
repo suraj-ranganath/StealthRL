@@ -25,7 +25,7 @@ from typing import Dict, List, Optional, Any
 
 import pandas as pd
 
-from .data import load_eval_dataset, BaseEvalDataset, EvalSample
+from .data import load_eval_dataset, load_eval_dataset_with_ids, BaseEvalDataset, EvalSample
 from .detectors import get_detector, load_detectors, BaseEvalDetector
 from .methods import get_method, NoAttack, METHOD_REGISTRY
 from .metrics import (
@@ -110,19 +110,30 @@ class EvalRunner:
         n_human: int = 1000,
         n_ai: int = 1000,
         cache_dir: str = None,
+        sample_ids: Optional[Dict[str, Dict[str, List[str]]]] = None,
     ):
         """Load evaluation datasets."""
         logger.info(f"Loading datasets: {dataset_names}")
         
         for name in dataset_names:
             try:
-                dataset = load_eval_dataset(
-                    name=name,
-                    n_human=n_human,
-                    n_ai=n_ai,
-                    cache_dir=cache_dir,
-                    seed=self.seed,
-                )
+                if sample_ids and name in sample_ids:
+                    ids = sample_ids[name]
+                    dataset = load_eval_dataset_with_ids(
+                        name=name,
+                        human_ids=ids["human_ids"],
+                        ai_ids=ids["ai_ids"],
+                        cache_dir=cache_dir,
+                    )
+                    logger.info(f"Loaded {name} from fixed sample ids")
+                else:
+                    dataset = load_eval_dataset(
+                        name=name,
+                        n_human=n_human,
+                        n_ai=n_ai,
+                        cache_dir=cache_dir,
+                        seed=self.seed,
+                    )
                 self.datasets[name] = dataset
                 logger.info(f"Loaded {name}: {len(dataset)} samples "
                            f"({len(dataset.human_samples)} human, {len(dataset.ai_samples)} AI)")
@@ -546,6 +557,16 @@ class EvalRunner:
                 output_dir=str(self.output_dir / "tables"),
             )
         
+        # Save selected sample ids for reproducibility
+        sample_ids = {}
+        for name, dataset in self.datasets.items():
+            sample_ids[name] = {
+                "human_ids": [s.id for s in dataset.human_samples],
+                "ai_ids": [s.id for s in dataset.ai_samples],
+            }
+        with open(self.output_dir / "dataset_samples.json", "w") as f:
+            json.dump(sample_ids, f, indent=2)
+
         logger.info(f"All artifacts saved to {self.output_dir}")
     
     def run(
@@ -566,6 +587,7 @@ class EvalRunner:
         gpt_quality_model: str = "gpt-5-mini",
         openai_api_key: Optional[str] = None,
         gpt_quality_cache: bool = True,
+        sample_ids: Optional[Dict[str, Dict[str, List[str]]]] = None,
     ):
         """
         Run complete evaluation pipeline.
@@ -591,7 +613,13 @@ class EvalRunner:
         
         # Step 1: Load datasets
         step_start = time.time()
-        self.load_datasets(datasets, n_human=n_human, n_ai=n_ai, cache_dir=cache_dir)
+        self.load_datasets(
+            datasets,
+            n_human=n_human,
+            n_ai=n_ai,
+            cache_dir=cache_dir,
+            sample_ids=sample_ids,
+        )
         step_times["1_load_datasets"] = time.time() - step_start
         logger.info(f"[TIMING] Step 1 (Load datasets): {step_times['1_load_datasets']:.2f}s")
         
@@ -739,7 +767,7 @@ def main():
         "--detectors",
         nargs="+",
         default=["roberta", "fast_detectgpt"],
-        choices=["roberta", "fast_detectgpt", "detectgpt", "binoculars", "ghostbuster"],
+        choices=["roberta", "fast_detectgpt", "detectgpt", "binoculars", "ghostbuster", "mage"],
         help="Detectors to evaluate against (note: watermark removed - not applicable without watermarked text)",
     )
     parser.add_argument(

@@ -21,10 +21,12 @@ Usage:
 """
 
 import argparse
+import json
 import logging
 import os
 import sys
 from pathlib import Path
+import pandas as pd
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -69,6 +71,12 @@ Examples:
     )
     parser.add_argument("--n-human", type=int, default=500, help="Human samples per dataset")
     parser.add_argument("--n-ai", type=int, default=500, help="AI samples per dataset")
+    parser.add_argument(
+        "--reuse-samples-from",
+        type=str,
+        default=None,
+        help="Reuse exact sample ids from a prior run directory (ensures identical samples)",
+    )
     
     # Method options
     parser.add_argument(
@@ -96,7 +104,7 @@ Examples:
         "--detectors",
         nargs="+",
         default=["roberta", "fast_detectgpt"],
-        help="Detectors to use (roberta, fast_detectgpt, detectgpt, binoculars, ghostbuster)",
+        help="Detectors to use (roberta, fast_detectgpt, detectgpt, binoculars, ghostbuster, mage)",
     )
     
     # Output options
@@ -175,6 +183,8 @@ def main():
     logger.info(f"Samples: {args.n_human} human, {args.n_ai} AI per dataset")
     logger.info(f"Candidates: {args.n_candidates}")
     logger.info(f"Output: {args.out_dir}")
+    if args.reuse_samples_from:
+        logger.info(f"Reusing samples from: {args.reuse_samples_from}")
     logger.info("=" * 70)
     
     # Check for StealthRL checkpoint if needed
@@ -187,6 +197,28 @@ def main():
     
     # Resolve OpenAI key if needed
     openai_key = args.openai_api_key or os.getenv("OPENAI_API_KEY")
+
+    # Load fixed samples if requested
+    sample_ids = None
+    if args.reuse_samples_from:
+        reuse_dir = Path(args.reuse_samples_from)
+        ids_path = reuse_dir / "dataset_samples.json"
+        if ids_path.exists():
+            sample_ids = json.loads(ids_path.read_text())
+        else:
+            # Fallback: infer from scores
+            scores_path = reuse_dir / "scores.parquet"
+            if not scores_path.exists():
+                scores_path = reuse_dir / "scores.csv"
+            if not scores_path.exists():
+                raise FileNotFoundError("reuse-samples-from requires dataset_samples.json or scores.parquet/csv")
+            scores_df = pd.read_parquet(scores_path) if scores_path.suffix == ".parquet" else pd.read_csv(scores_path)
+            sample_ids = {}
+            for ds in scores_df["dataset"].unique():
+                ds_df = scores_df[scores_df["dataset"] == ds]
+                human_ids = ds_df[ds_df["label"] == "human"]["sample_id"].drop_duplicates().tolist()
+                ai_ids = ds_df[ds_df["label"] == "ai"]["sample_id"].drop_duplicates().tolist()
+                sample_ids[ds] = {"human_ids": human_ids, "ai_ids": ai_ids}
 
     # Create runner
     runner = EvalRunner(
@@ -204,23 +236,24 @@ def main():
                 logger.info(f"Running with N={n_cand} candidates")
                 logger.info(f"{'='*70}\n")
             
-            runner.run(
-                datasets=args.datasets,
-                methods=args.methods,
-                detectors=args.detectors,
-                n_candidates=n_cand,
-                n_human=args.n_human,
-                n_ai=args.n_ai,
-                stealthrl_checkpoint=args.stealthrl_checkpoint,
-                cache_dir=args.cache_dir,
-                setting_suffix=f"N={n_cand}" if len(args.n_candidates) > 1 else None,
-                gpt_quality=args.gpt_quality,
-                gpt_quality_methods=args.gpt_quality_methods,
-                gpt_quality_max_per_method=args.gpt_quality_max_per_method,
-                gpt_quality_model=args.gpt_quality_model,
-                openai_api_key=openai_key,
-                gpt_quality_cache=not args.gpt_quality_no_cache,
-            )
+        runner.run(
+            datasets=args.datasets,
+            methods=args.methods,
+            detectors=args.detectors,
+            n_candidates=n_cand,
+            n_human=args.n_human,
+            n_ai=args.n_ai,
+            stealthrl_checkpoint=args.stealthrl_checkpoint,
+            cache_dir=args.cache_dir,
+            setting_suffix=f"N={n_cand}" if len(args.n_candidates) > 1 else None,
+            gpt_quality=args.gpt_quality,
+            gpt_quality_methods=args.gpt_quality_methods,
+            gpt_quality_max_per_method=args.gpt_quality_max_per_method,
+            gpt_quality_model=args.gpt_quality_model,
+            openai_api_key=openai_key,
+            gpt_quality_cache=not args.gpt_quality_no_cache,
+            sample_ids=sample_ids,
+        )
         
         logger.info("Evaluation completed successfully!")
         

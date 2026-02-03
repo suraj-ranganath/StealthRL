@@ -22,6 +22,12 @@ python scripts/run_eval.py \
     --datasets mage raid \
     --methods m0 m1 m2 m3 m4 m5 \
     --detectors roberta fast_detectgpt detectgpt binoculars
+
+# Reuse exact samples from a prior run (ensures identical IDs)
+python scripts/run_eval.py \
+    --datasets mage \
+    --methods m2 \
+    --reuse-samples-from outputs/eval_runs/mage_no_m2
 ```
 
 ## CLI Usage
@@ -76,6 +82,7 @@ artifacts/
 | `detectgpt` | Curvature | Original perturbation-based |
 | `binoculars` | Zero-shot | Paired LM cross-entropy |
 | `ghostbuster` | Feature | RoBERTa with weak features |
+| `mage` | Longformer | `yaful/MAGE` |
 
 ## Metrics
 

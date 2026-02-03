@@ -724,14 +724,14 @@ class MageDetector(BaseDetector):
     """
     MAGE detector (Longformer-based).
     
-    Model: yaful/MAGE
+    Model: nealcly/detection-longformer
     Labels: 0 = machine-generated, 1 = human-written
     
     Note: This detector returns AI probability by default (p_machine).
     The reward uses (1 - p_machine) to align with p_human.
     """
     
-    MODEL_NAME = "yaful/MAGE"
+    MODEL_NAME = "nealcly/detection-longformer"
     
     def __init__(
         self,

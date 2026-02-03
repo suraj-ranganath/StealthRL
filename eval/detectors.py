@@ -6,12 +6,15 @@ Provides a unified interface for multiple detector families:
 - Curvature-based: Fast-DetectGPT, DetectGPT
 - Zero-shot: Binoculars
 - Feature-based: Ghostbuster (optional)
+- Longformer-based: MAGE
 
 All detectors output scores in [0, 1] where higher = more likely AI-generated.
 """
 
 import asyncio
 import logging
+import re
+import unicodedata
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any, Union
@@ -767,6 +770,122 @@ class GhostbusterDetector(BaseEvalDetector):
         return results
 
 
+class MageDetector(BaseEvalDetector):
+    """
+    MAGE detector (Longformer-based).
+    
+    Model: nealcly/detection-longformer
+    Labels: 0 = machine-generated, 1 = human-written
+    
+    The returned score is always AI probability (p_machine) to preserve
+    the higher-is-AI convention used throughout evaluation.
+    """
+    
+    MODEL_NAME = "nealcly/detection-longformer"
+    
+    def __init__(
+        self,
+        device: Optional[str] = None,
+        model_name: Optional[str] = None,
+        max_length: int = 4096,
+        score_mode: str = "ai_prob",  # ai_prob | human_prob | log_odds
+        batch_size: int = 4,
+        **kwargs,
+    ):
+        super().__init__(name="mage", device=device, batch_size=batch_size, **kwargs)
+        self.model_name = model_name or self.MODEL_NAME
+        self.max_length = max_length
+        self.score_mode = score_mode
+        self.model = None
+        self.tokenizer = None
+    
+    @staticmethod
+    def _preprocess(text: str) -> str:
+        text = unicodedata.normalize("NFKC", text)
+        text = text.replace("\u00a0", " ")
+        text = re.sub(r"[ \t]+", " ", text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()
+    
+    def load(self):
+        """Load Longformer classifier."""
+        from transformers import AutoTokenizer, AutoModelForSequenceClassification
+        
+        logger.info(f"Loading {self.model_name} for MAGE detector...")
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self.model = AutoModelForSequenceClassification.from_pretrained(
+            self.model_name,
+            torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+        ).to(self.device)
+        self.model.eval()
+        
+        if getattr(self.tokenizer, "pad_token", None) is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+        
+        if self.score_mode not in {"ai_prob", "human_prob", "log_odds"}:
+            logger.warning(f"Unknown mage score_mode '{self.score_mode}', falling back to ai_prob")
+            self.score_mode = "ai_prob"
+        
+        self._loaded = True
+        logger.info(f"✓ {self.name} loaded on {self.device}")
+    
+    def _detect_batch(self, texts: List[str]) -> List[DetectorResult]:
+        """Batch detection with Longformer global attention mask."""
+        results = []
+        eps = 1e-8
+        
+        for i in range(0, len(texts), self.batch_size):
+            batch_texts = [self._preprocess(t) for t in texts[i:i + self.batch_size]]
+            inputs = self.tokenizer(
+                batch_texts,
+                return_tensors="pt",
+                truncation=True,
+                max_length=self.max_length,
+                padding=True,
+            )
+            input_ids = inputs["input_ids"].to(self.device)
+            attention_mask = inputs["attention_mask"].to(self.device)
+            global_attention_mask = torch.zeros_like(attention_mask)
+            global_attention_mask[:, 0] = 1
+            
+            with torch.no_grad():
+                outputs = self.model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    global_attention_mask=global_attention_mask,
+                )
+                probs = torch.softmax(outputs.logits, dim=-1)
+                p_machine = probs[:, 0]
+                p_human = probs[:, 1]
+            
+            # Raw score for requested mode, but always return AI-prob for eval
+            if self.score_mode == "human_prob":
+                raw_scores = p_human
+            elif self.score_mode == "log_odds":
+                raw_scores = torch.log(p_human + eps) - torch.log(p_machine + eps)
+            else:
+                raw_scores = p_machine
+            
+            for raw, ai_prob, human_prob in zip(raw_scores, p_machine, p_human):
+                results.append(
+                    DetectorResult(
+                        score=float(ai_prob.detach().cpu().item()),
+                        raw_score=float(raw.detach().cpu().item()),
+                        metadata={
+                            "model": self.model_name,
+                            "score_mode": self.score_mode,
+                            "p_human": float(human_prob.detach().cpu().item()),
+                        },
+                    )
+                )
+        
+        return results
+
+    def _detect_single(self, text: str) -> DetectorResult:
+        """Detect a single text (uses batch path for consistency)."""
+        return self._detect_batch([text])[0]
+
+
 class EnsembleDetector(BaseEvalDetector):
     """
     Ensemble detector combining multiple detector scores.
@@ -1013,6 +1132,7 @@ DETECTOR_REGISTRY = {
     "detectgpt": DetectGPTDetector,
     "binoculars": BinocularsDetector,
     "ghostbuster": GhostbusterDetector,
+    "mage": MageDetector,
     "ensemble": EnsembleDetector,
     "watermark": WatermarkDetector,
 }
@@ -1024,6 +1144,7 @@ DETECTOR_CONVENTIONS = {
     "detectgpt": {"higher_is_ai": True, "score_range": (0, 1)},
     "binoculars": {"higher_is_ai": True, "score_range": (0, 1), "note": "Internally lower=AI, normalized"},
     "ghostbuster": {"higher_is_ai": True, "score_range": (0, 1)},
+    "mage": {"higher_is_ai": True, "score_range": (0, 1), "note": "Longformer-based MAGE detector"},
     "ensemble": {"higher_is_ai": True, "score_range": (0, 1)},
     "watermark": {"higher_is_ai": True, "score_range": (0, 1), "note": "Requires matching watermark params"},
 }
