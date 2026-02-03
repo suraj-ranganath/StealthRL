@@ -725,7 +725,7 @@ class EvalRunner:
         gpt_quality: bool = False,
         gpt_quality_methods: Optional[List[str]] = None,
         gpt_quality_max_per_method: int = 200,
-        gpt_quality_model: str = "gpt-5-mini",
+        gpt_quality_model: str = "gpt-4o-mini",
         openai_api_key: Optional[str] = None,
         gpt_quality_cache: bool = True,
         sample_ids: Optional[Dict[str, Dict[str, List[str]]]] = None,
@@ -1033,7 +1033,7 @@ def main():
     parser.add_argument(
         "--gpt-quality-model",
         type=str,
-        default="gpt-5-mini",
+        default="gpt-4o-mini",
         help="Model name for GPT quality judging",
     )
     parser.add_argument(

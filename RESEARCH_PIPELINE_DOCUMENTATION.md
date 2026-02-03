@@ -693,7 +693,7 @@ python scripts/run_eval.py \
   --detectors roberta fast_detectgpt binoculars \
   --n-human 1000 --n-ai 1000 \
   --gpt-quality --gpt-quality-max-per-method 200 \
-  --gpt-quality-model gpt-5-mini
+  --gpt-quality-model gpt-4o-mini
 ```
 
 ### Fast StealthRL (M2) Tinker Evals
@@ -731,7 +731,7 @@ python scripts/run_eval.py \
 | `--quick` | False | Quick test mode (overrides defaults) |
 | `--gpt-quality` | False | Enable GPT-based quality evaluation |
 | `--gpt-quality-max-per-method` | 200 | Max samples per method for GPT judging |
-| `--gpt-quality-model` | `"gpt-5-mini"` | GPT model for judging |
+| `--gpt-quality-model` | `"gpt-4o-mini"` | GPT model for judging |
 | `--gpt-quality-methods` | None | Methods to judge (default: `m2`/`stealthrl`) |
 | `--openai-api-key` | None | API key override (else uses `OPENAI_API_KEY`) |
 | `--gpt-quality-no-cache` | False | Disable cached GPT judgments |

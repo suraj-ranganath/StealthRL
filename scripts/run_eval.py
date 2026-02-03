@@ -250,7 +250,7 @@ Examples:
     parser.add_argument(
         "--gpt-quality-model",
         type=str,
-        default="gpt-5-mini",
+        default="gpt-4o-mini",
         help="Model name for GPT quality judging",
     )
     parser.add_argument(

@@ -70,7 +70,7 @@ where $R_{\text{det}}$ is the ensemble detector score (lower AI probability), $R
 
 \paragraph{Metrics.} We calibrate a 1\% FPR threshold per detector on human texts and report TPR@1\%FPR (lower is better for the attacker), attack success rate (ASR = 1 - TPR@1\%FPR), and AUROC. We also report semantic similarity (E5 cosine) to quantify fidelity. All results use one candidate per sample (n=1) to match the current evaluation run.
 
-\paragraph{LLM-based quality evaluation (optional).} Following Adversarial Paraphrasing, we optionally use a GPT-5-mini autorater to score paraphrase quality and semantic equivalence on a 1--5 Likert scale, capped to a fixed number of samples per method. \cite{cheng2025adversarialparaphrasinguniversalattack,vu2024foundationalautoraters,fu2023gptscore,kim2024prometheus2}
+\paragraph{LLM-based quality evaluation (optional).} Following Adversarial Paraphrasing, we optionally use a gpt-4o-mini autorater to score paraphrase quality and semantic equivalence on a 1--5 Likert scale, capped to a fixed number of samples per method. \cite{cheng2025adversarialparaphrasinguniversalattack,vu2024foundationalautoraters,fu2023gptscore,kim2024prometheus2}
 
 \section{Results}
 Table~\ref{tab:main} summarizes detection evasion at 1\% FPR. StealthRL reduces mean TPR@1\%FPR to 0.04 (vs. 0.27 for no attack) and improves mean AUROC from 0.71 to 0.43. Per-detector TPR@1\%FPR drops from 0.22/0.28/0.32 (M0) to 0.08/0.02/0.02 (M2) on RoBERTa/Fast-DetectGPT/Binoculars, indicating strong transfer to the held-out detector family. StealthRL maintains high semantic similarity (0.953 E5 cosine), comparable to simple paraphrasing (0.959), while substantially outperforming the detector-guided baseline (M3).

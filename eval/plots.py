@@ -1178,7 +1178,7 @@ def create_quality_likert_chart(
     method_col: str = "method",
     rating_col: str = "quality_rating",
     similarity_col: str = "similarity_rating",
-    title: str = "Text Quality Evaluation (GPT-5-mini Ratings)",
+    title: str = "Text Quality Evaluation (gpt-4o-mini Ratings)",
     output_path: str = None,
     figsize: Tuple[int, int] = (12, 5),
 ) -> None:

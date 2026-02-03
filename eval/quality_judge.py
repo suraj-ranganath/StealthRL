@@ -1,7 +1,7 @@
 """
 GPT-based text quality evaluation (Adversarial Paraphrasing-style).
 
-Supports optional GPT-5-mini judging with caching and per-method caps.
+Supports optional gpt-4o-mini judging with caching and per-method caps.
 """
 
 import hashlib
@@ -60,7 +60,7 @@ def get_similarity_rating_messages(original_text: str, paraphrased_text: str) ->
 
 @dataclass
 class GPTQualityConfig:
-    model: str = "gpt-5-mini"
+    model: str = "gpt-4o-mini"
     max_per_method: int = 200
     temperature: float = 0.0
     max_output_tokens: int = 256
