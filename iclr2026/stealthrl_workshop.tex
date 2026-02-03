@@ -43,17 +43,14 @@ An anonymized code package with training and evaluation scripts is included in s
 \section{Related Work}
 Detector families include curvature-based methods (DetectGPT and Fast-DetectGPT) and paired-LM detectors such as Binoculars. \cite{mitchell2023detectgptzeroshotmachinegeneratedtext,bao2024fastdetectgptefficientzeroshotdetection,hans2024spottingllmsbinocularszeroshot} Recent evasion work focuses on paraphrase attacks and RL-based humanization, including Adversarial Paraphrasing, while character-level attacks such as homoglyph substitution demonstrate strong but often less readable perturbations. \cite{cheng2025adversarialparaphrasinguniversalattack,creo2025silverspeakevadingaigeneratedtext} StealthRL builds on these directions by training a single paraphrase policy against a detector ensemble and evaluating transfer at strict low-FPR operating points.
 
-\section{Threat Model}
-We assume \textbf{black-box access to detector scores}, i.e., the attacker can query detector confidence but does not require gradients. In practice, detectors are often open-source or deployed with a confidence API, so both black-box scoring and open-source replication are realistic. We evaluate transfer to a held-out detector family to test robustness beyond the training ensemble.
-
 \section{Method}
-Given AI-generated text $x$, we learn a paraphrase policy $\pi_\theta(y\mid x)$ that produces $y$ with low detector confidence while preserving meaning. We optimize a composite reward:
+\paragraph{Threat model.} We assume black-box access to detector scores: the attacker can query detector confidence but does not require gradients. We evaluate transfer to a held-out detector (Binoculars) to test robustness beyond the training ensemble.
+
+\paragraph{Training.} Given AI-generated text $x$, we learn a paraphrase policy $\pi_\theta(y\mid x)$ that produces $y$ with low detector confidence while preserving meaning. We optimize a composite reward:
 \begin{equation}
 R(x,y) = \alpha R_{\text{det}}(y) + \beta R_{\text{sem}}(x,y),
 \end{equation}
-where $R_{\text{det}}$ is the ensemble detector score (lower AI probability) and $R_{\text{sem}}$ is E5 embedding cosine similarity. We train with group-relative policy optimization (GRPO) and LoRA adapters on Qwen3-4B-Instruct (rank 32, $\alpha=32$, dropout 0.05). Training uses group size 8, batch size 16, and two epochs over 10,000 samples from MAGE train split plus 200 dev samples. The detector ensemble is RoBERTa (0.6) + Fast-DetectGPT (0.4).
-
-\paragraph{Reproducibility.} Reward weights: $\alpha=1.0$, $\beta=0.1$. GRPO uses KL penalty 0.05 with frozen Qwen3-4B as reference. Inference: temperature 1.0, top-p 0.9, max tokens 512. Detectors: RoBERTa (roberta-large-openai-detector), Fast-DetectGPT (GPT-Neo-2.7B), Binoculars (gpt2-medium/large, held-out). Full hyperparameters in Appendix~\ref{sec:hyperparams}.
+where $R_{\text{det}}$ is the detector ensemble score (lower AI probability) and $R_{\text{sem}}$ is E5 embedding cosine similarity. During training, $R_{\text{det}}$ is computed as a weighted combination of two detectors: RoBERTa (0.6) + Fast-DetectGPT (0.4). During evaluation, we test against all three detector families including the held-out Binoculars. We train with GRPO and LoRA adapters on Qwen3-4B-Instruct (rank 32, $\alpha=32$, dropout 0.05) using group size 8, batch size 16, and five epochs over 10,000 MAGE train samples plus 200 dev samples. Reward weights: $\alpha=1.0$, $\beta=0.1$. Full hyperparameters in Appendix~\ref{sec:hyperparams}.
 
 \begin{figure}[t]
   \centering
@@ -63,16 +60,10 @@ where $R_{\text{det}}$ is the ensemble detector score (lower AI probability) and
 \end{figure}
 
 \section{Experimental Setup}
-\paragraph{Dataset.} We evaluate on MAGE (Machine-generated Text Detection in the Wild) test split with 1,000 human and 1,000 AI samples, filtered to 100--500 token window. \cite{li2024magemachinegeneratedtextdetection}
-
-\paragraph{Detectors.} Three families: RoBERTa OpenAI (fine-tuned classifier), Fast-DetectGPT (curvature-based zero-shot), and Binoculars (paired-LM lightweight version, held-out during training). \cite{mitchell2023detectgptzeroshotmachinegeneratedtext,bao2024fastdetectgptefficientzeroshotdetection,hans2024spottingllmsbinocularszeroshot}
-
-\paragraph{Baselines.} M0 (no attack), M1 (simple paraphrase via Qwen3:4B), M2 (StealthRL-v1), M3 (detector-guided selection), M5 (homoglyph substitution via SilverSpeak). \cite{cheng2025adversarialparaphrasinguniversalattack,creo2025silverspeakevadingaigeneratedtext}
-
-\paragraph{Metrics.} We calibrate 1\% FPR thresholds per detector on human texts and report TPR@1\%FPR (lower better for attacker), ASR = 1 - TPR, AUROC, and E5 semantic similarity.
+We evaluate on MAGE test split (1,000 human + 1,000 AI samples, 100--500 tokens) \cite{li2024magemachinegeneratedtextdetection} against three detector families: RoBERTa OpenAI, Fast-DetectGPT, and Binoculars (held-out during training). \cite{mitchell2023detectgptzeroshotmachinegeneratedtext,bao2024fastdetectgptefficientzeroshotdetection,hans2024spottingllmsbinocularszeroshot} Baselines: M0 (no attack), M1 (simple paraphrase), M2 (StealthRL-v1, trained for 5 epochs using Tinker API), M3 (detector-guided selection), M5 (homoglyph substitution). \cite{cheng2025adversarialparaphrasinguniversalattack,creo2025silverspeakevadingaigeneratedtext} Metrics: TPR@1\%FPR, ASR, AUROC, E5 semantic similarity.
 
 \section{Results}
-Table~\ref{tab:main} summarizes detection evasion at 1\% FPR. StealthRL (M2) achieves 0\% TPR@1\%FPR across all three detectors, reducing mean AUROC from 0.74 (no attack) to 0.27 while maintaining semantic similarity (0.896 E5). Figure~\ref{fig:results} visualizes the comprehensive performance: panel (c) shows consistent 0\% TPR across detectors at strict operating points, while panel (d) confirms 99.9\% attack success rate.
+Table~\ref{tab:main} summarizes detection evasion at 1\% FPR. StealthRL (M2) achieves 0\% TPR@1\%FPR across all three detectors, reducing average AUROC across detectors from 0.74 (no attack) to 0.27 while maintaining semantic similarity (0.896 E5). Figure~\ref{fig:results} visualizes the comprehensive performance: panel (c) shows consistent 0\% TPR across detectors at strict operating points, while panel (d) confirms 99.9\% attack success rate.
 
 Critically, strong transfer to the held-out Binoculars detector (0\% TPR) demonstrates that vulnerabilities are not detector-specific but reflect shared architectural weaknesses. Simple paraphrasing (M1) achieves partial success (8\% mean TPR) with 0.960 E5 similarity, while detector-guided selection (M3) performs similarly at 0.976 E5. StealthRL's advantage comes from explicit multi-detector adversarial training, which discovers transferable perturbations that exploit common statistical patterns across architectures.
 

@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.3.8)  3 FEB 2026 03:34
+This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.3.8)  3 FEB 2026 03:44
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -476,61 +476,43 @@ File: ot1pcr.fd 2001/06/04 font definitions for OT1/pcr.
 ocal/texlive/2025/texmf-dist/fonts/enc/dvips/base/8r.enc}
 
 ]
-<figures/StealthRL_Methodology.png, id=65, 2826.56pt x 1541.76pt>
+<figures/StealthRL_Methodology.png, id=61, 2826.56pt x 1541.76pt>
 File: figures/StealthRL_Methodology.png Graphic file (type png)
 <use figures/StealthRL_Methodology.png>
 Package pdftex.def Info: figures/StealthRL_Methodology.png  used on input line 
-60.
+57.
 (pdftex.def)             Requested size: 397.48499pt x 216.80946pt.
 
-Underfull \hbox (badness 1028) in paragraph at lines 68--69
-\OT1/ptm/m/n/10 based zero-shot), and Binoc-u-lars (paired-LM lightweight ver-s
-ion, held-out dur-ing train-ing).
- []
 
-
-
-[2] (./table_main.tex)
-<figures/fig_method_comparison.png, id=102, 1005.2757pt x 593.5776pt>
+[2 <./figures/StealthRL_Methodology.png (PNG copy)>] (./table_main.tex)
+<figures/fig_method_comparison.png, id=94, 1005.2757pt x 593.5776pt>
 File: figures/fig_method_comparison.png Graphic file (type png)
 <use figures/fig_method_comparison.png>
 Package pdftex.def Info: figures/fig_method_comparison.png  used on input line 
-90.
+81.
 (pdftex.def)             Requested size: 397.48499pt x 234.70059pt.
 
-Underfull \vbox (badness 4108) has occurred while \output is active []
 
+[3 <./figures/fig_method_comparison.png>] (./stealthrl_workshop.bbl
 
+[4])
 
-[3 <./figures/StealthRL_Methodology.png (PNG copy)>] (./stealthrl_workshop.bbl
-Underfull \vbox (badness 2142) has occurred while \output is active []
-
-
-
-[4 <./figures/fig_method_comparison.png>])
-
-LaTeX Warning: `h' float specifier changed to `ht'.
-
-
-
-[5]
-
-[6] (./stealthrl_workshop.aux)
+[5] (./stealthrl_workshop.aux)
  ***********
 LaTeX2e <2024-11-01> patch level 2
 L3 programming layer <2025-01-18>
  ***********
 Package rerunfilecheck Info: File `stealthrl_workshop.out' has not changed.
-(rerunfilecheck)             Checksum: 4FA07D893E8AED542EEF18A5508B749F;1069.
+(rerunfilecheck)             Checksum: 844A4442F786C7223ECE235DC0D68C1E;963.
  ) 
 Here is how much of TeX's memory you used:
- 11827 strings out of 473190
- 174131 string characters out of 5715801
- 593907 words of memory out of 5000000
- 34846 multiletter control sequences out of 15000+600000
+ 11821 strings out of 473190
+ 174074 string characters out of 5715801
+ 593906 words of memory out of 5000000
+ 34845 multiletter control sequences out of 15000+600000
  589218 words of font info for 99 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 75i,12n,79p,1184b,557s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 75i,11n,79p,1184b,561s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb
 ></usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb><
 /usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi9.pfb></u
@@ -545,10 +527,10 @@ ive/2025/texmf-dist/fonts/type1/urw/courier/ucrr8a.pfb></usr/local/texlive/2025
 dist/fonts/type1/urw/times/utmb8a.pfb></usr/local/texlive/2025/texmf-dist/fonts
 /type1/urw/times/utmr8a.pfb></usr/local/texlive/2025/texmf-dist/fonts/type1/urw
 /times/utmri8a.pfb>
-Output written on stealthrl_workshop.pdf (6 pages, 5389064 bytes).
+Output written on stealthrl_workshop.pdf (5 pages, 5387048 bytes).
 PDF statistics:
- 216 PDF objects out of 1000 (max. 8388607)
- 175 compressed objects within 2 object streams
- 39 named destinations out of 1000 (max. 500000)
- 83 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 202 PDF objects out of 1000 (max. 8388607)
+ 162 compressed objects within 2 object streams
+ 34 named destinations out of 1000 (max. 500000)
+ 75 words of extra memory for PDF output out of 10000 (max. 10000000)
 
