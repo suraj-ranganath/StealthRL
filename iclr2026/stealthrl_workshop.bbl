@@ -1,4 +1,4 @@
-\begin{thebibliography}{6}
+\begin{thebibliography}{7}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -26,6 +26,13 @@ Aldan Creo and Shushanta Pudasaini.
 \newblock Silverspeak: Evading ai-generated text detectors using homoglyphs,
   2025.
 \newblock URL \url{https://arxiv.org/abs/2406.11239}.
+
+\bibitem[David \& Gervais(2025)David and
+  Gervais]{david2025authormistevadingaitext}
+Isaac David and Arthur Gervais.
+\newblock Authormist: Evading ai text detectors with reinforcement learning,
+  2025.
+\newblock URL \url{https://arxiv.org/abs/2503.08716}.
 
 \bibitem[Hans et~al.(2024)Hans, Schwarzschild, Cherepanova, Kazemi, Saha,
   Goldblum, Geiping, and Goldstein]{hans2024spottingllmsbinocularszeroshot}

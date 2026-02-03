@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.3.8)  3 FEB 2026 04:15
+This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.3.8)  3 FEB 2026 04:18
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -476,16 +476,19 @@ File: ot1pcr.fd 2001/06/04 font definitions for OT1/pcr.
 ocal/texlive/2025/texmf-dist/fonts/enc/dvips/base/8r.enc}
 
 ]
-<figures/StealthRL_Methodology.png, id=61, 2826.56pt x 1541.76pt>
+<figures/StealthRL_Methodology.png, id=63, 2826.56pt x 1541.76pt>
 File: figures/StealthRL_Methodology.png Graphic file (type png)
 <use figures/StealthRL_Methodology.png>
 Package pdftex.def Info: figures/StealthRL_Methodology.png  used on input line 
 57.
 (pdftex.def)             Requested size: 397.48499pt x 216.80946pt.
 
+Underfull \vbox (badness 1895) has occurred while \output is active []
+
+
 
 [2 <./figures/StealthRL_Methodology.png (PNG copy)>] (./table_main.tex)
-<figures/fig_method_comparison.png, id=94, 1005.2757pt x 593.5776pt>
+<figures/fig_method_comparison.png, id=96, 1005.2757pt x 593.5776pt>
 File: figures/fig_method_comparison.png Graphic file (type png)
 <use figures/fig_method_comparison.png>
 Package pdftex.def Info: figures/fig_method_comparison.png  used on input line 
@@ -493,11 +496,17 @@ Package pdftex.def Info: figures/fig_method_comparison.png  used on input line
 (pdftex.def)             Requested size: 397.48499pt x 234.70059pt.
 
 
-[3 <./figures/fig_method_comparison.png>] (./stealthrl_workshop.bbl
+[3] (./stealthrl_workshop.bbl
 
-[4])
+[4 <./figures/fig_method_comparison.png>])
 
-[5] (./stealthrl_workshop.aux)
+LaTeX Warning: `h' float specifier changed to `ht'.
+
+
+
+[5]
+
+[6] (./stealthrl_workshop.aux)
  ***********
 LaTeX2e <2024-11-01> patch level 2
 L3 programming layer <2025-01-18>
@@ -506,10 +515,10 @@ Package rerunfilecheck Info: File `stealthrl_workshop.out' has not changed.
 (rerunfilecheck)             Checksum: 693F4EF1C6D75C24F7AACC0C6B10D1B2;1052.
  ) 
 Here is how much of TeX's memory you used:
- 11813 strings out of 473190
- 173760 string characters out of 5715801
- 593775 words of memory out of 5000000
- 34839 multiletter control sequences out of 15000+600000
+ 11818 strings out of 473190
+ 173923 string characters out of 5715801
+ 593826 words of memory out of 5000000
+ 34842 multiletter control sequences out of 15000+600000
  589218 words of font info for 99 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  75i,11n,79p,1184b,557s stack positions out of 10000i,1000n,20000p,200000b,200000s
@@ -527,10 +536,10 @@ ive/2025/texmf-dist/fonts/type1/urw/courier/ucrr8a.pfb></usr/local/texlive/2025
 dist/fonts/type1/urw/times/utmb8a.pfb></usr/local/texlive/2025/texmf-dist/fonts
 /type1/urw/times/utmr8a.pfb></usr/local/texlive/2025/texmf-dist/fonts/type1/urw
 /times/utmri8a.pfb>
-Output written on stealthrl_workshop.pdf (5 pages, 5385304 bytes).
+Output written on stealthrl_workshop.pdf (6 pages, 5386773 bytes).
 PDF statistics:
- 197 PDF objects out of 1000 (max. 8388607)
- 157 compressed objects within 2 object streams
- 32 named destinations out of 1000 (max. 500000)
+ 205 PDF objects out of 1000 (max. 8388607)
+ 164 compressed objects within 2 object streams
+ 34 named destinations out of 1000 (max. 500000)
  75 words of extra memory for PDF output out of 10000 (max. 10000000)
 

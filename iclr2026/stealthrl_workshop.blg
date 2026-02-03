@@ -3,44 +3,44 @@ Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
 The top-level auxiliary file: stealthrl_workshop.aux
 The style file: iclr2026_conference.bst
 Database file #1: stealthrl_refs.bib
-You've used 6 entries,
+You've used 7 entries,
             2773 wiz_defined-function locations,
-            620 strings with 6369 characters,
-and the built_in function-call counts, 3305 in all, are:
-= -- 253
-> -- 324
-< -- 1
-+ -- 108
-- -- 102
-* -- 298
-:= -- 532
-add.period$ -- 18
-call.type$ -- 6
-change.case$ -- 52
-chr.to.int$ -- 6
-cite$ -- 12
-duplicate$ -- 95
-empty$ -- 198
-format.name$ -- 110
-if$ -- 662
+            624 strings with 6528 characters,
+and the built_in function-call counts, 3667 in all, are:
+= -- 285
+> -- 345
+< -- 2
++ -- 115
+- -- 108
+* -- 322
+:= -- 586
+add.period$ -- 21
+call.type$ -- 7
+change.case$ -- 57
+chr.to.int$ -- 7
+cite$ -- 14
+duplicate$ -- 110
+empty$ -- 230
+format.name$ -- 119
+if$ -- 740
 int.to.chr$ -- 1
 int.to.str$ -- 1
 missing$ -- 0
-newline$ -- 38
-num.names$ -- 24
-pop$ -- 121
+newline$ -- 43
+num.names$ -- 28
+pop$ -- 133
 preamble$ -- 1
-purify$ -- 46
+purify$ -- 50
 quote$ -- 0
-skip$ -- 115
+skip$ -- 132
 stack$ -- 0
-substring$ -- 12
-swap$ -- 6
+substring$ -- 14
+swap$ -- 7
 text.length$ -- 0
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 66
+type$ -- 77
 warning$ -- 0
-while$ -- 18
+while$ -- 21
 width$ -- 0
-write$ -- 79
+write$ -- 91
