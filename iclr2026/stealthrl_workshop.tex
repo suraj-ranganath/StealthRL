@@ -50,7 +50,7 @@ Detector families include curvature-based methods (DetectGPT and Fast-DetectGPT)
 \begin{equation}
 R(x,y) = \alpha R_{\text{det}}(y) + \beta R_{\text{sem}}(x,y),
 \end{equation}
-where $R_{\text{sem}}$ is E5 embedding cosine similarity and $R_{\text{det}} = 1 - p(y)$ is the detector evasion reward, with $p(y)$ the AI probability. During training, $p(y) = 0.6 \cdot p_{\text{RoBERTa}}(y) + 0.4 \cdot p_{\text{Fast-DetectGPT}}(y)$ is the weighted average of two detectors. During evaluation, we test against all three detector families including the held-out Binoculars. We train with GRPO and LoRA adapters on Qwen3-4B-Instruct (rank 32, $\alpha=32$, dropout 0.05) using group size 8, batch size 16, and five epochs over 10,000 MAGE train samples plus 200 dev samples. Reward weights: $\alpha=1.0$, $\beta=0.1$. Full hyperparameters in Appendix~\ref{sec:hyperparams}.
+where $R_{\text{sem}}$ is E5 embedding cosine similarity and $R_{\text{det}} = 1 - p(y)$ is the detector evasion reward, with $p(y)$ the AI probability. During training, $p(y) = 0.6 \cdot p_{\text{RoBERTa}}(y) + 0.4 \cdot p_{\text{Fast-DetectGPT}}(y)$ is the weighted average of two detectors. During evaluation, we test against all three detector families including the held-out Binoculars. We fine-tune the model using the Tinker API framework with GRPO and LoRA adapters on Qwen3-4B-Instruct (rank 32, $\alpha=32$, dropout 0.05) using group size 8, batch size 16, and five epochs over 10,000 MAGE train samples plus 200 dev samples. Reward weights: $\alpha=1.0$, $\beta=0.1$. Full hyperparameters in Appendix~\ref{sec:hyperparams}.
 
 \begin{figure}[t]
   \centering
@@ -88,7 +88,7 @@ Critically, strong transfer to the held-out Binoculars detector (0\% TPR) demons
 This robustness gap has critical security implications: adversaries can train adaptive attacks against deployed detectors, rendering them ineffective. The strong transfer to held-out architectures means ensemble defenses (combining multiple detectors) provide limited robustness improvement. Future work must develop semantic-aware detectors, adversarial training protocols, and provable robustness guarantees. Our evaluation framework provides a rigorous testbed for measuring progress on adversarially robust AI-text detection.
 
 \section{Limitations and Safety}
-Our evaluation focuses on three detector families (curvature-based, paired-LM, fine-tuned classifier) on one benchmark (MAGE). Broader coverage with watermark-based detectors, additional datasets, and multilingual evaluation remains important future work. We also do not explore defenses like adversarial training or certified robustness, which could improve detector resilience.
+Our evaluation focuses on three detector families (curvature-based, paired-LM, fine-tuned classifier) on one benchmark (MAGE). Broader coverage with watermark-based detectors, additional datasets, and multilingual evaluation remains important future work. We also do not explore defenses like adversarial training or certified robustness, which could improve detector resilience. Additionally, StealthRL achieves lower semantic fidelity (E5 similarity 0.896) compared to simpler baselines (M1: 0.960, M3: 0.976), indicating a quality-evasion tradeoff. Improving semantic preservation while maintaining strong evasion is an important direction for future work.
 
 \textbf{Safety and dual-use.} Adversarial paraphrasing is dual-use technology. We position StealthRL as a \emph{stress-testing and robustness evaluation tool} for researchers and detector developers, not a production evasion system. The 0\% TPR@1\%FPR result exposes critical vulnerabilities that must be addressed before detectors are deployed in high-stakes applications. Our released code enables reproducible robustness evaluation and motivates defensive research into adversarially robust detection methods.
 
@@ -96,7 +96,7 @@ Our evaluation focuses on three detector families (curvature-based, paired-LM, f
 StealthRL demonstrates catastrophic detector failure under adaptive attacks, revealing fundamental robustness gaps. Results motivate development of adversarially robust detection methods and establish rigorous evaluation protocols for AI-text detection security. Future work should explore adversarial training strategies, semantic-aware detectors, and provable robustness guarantees to defend against adaptive paraphrasing attacks.
 
 \section*{Acknowledgments}
-We gratefully acknowledge Thinking Machines for providing access to their Tinker API framework, which was essential for the reinforcement learning training in this work. We also thank the open-source community for the detector implementations and model checkpoints that enabled this evaluation.
+We gratefully acknowledge Thinking Machines for providing free research credits and access to their Tinker API framework, which made the RL fine-tuning possible. We also thank the open-source community for the detector implementations and model checkpoints that enabled this evaluation.
 
 \bibliographystyle{iclr2026_conference}
 \bibliography{stealthrl_refs}

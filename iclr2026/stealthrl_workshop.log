@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.3.8)  3 FEB 2026 03:52
+This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.3.8)  3 FEB 2026 04:15
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -497,35 +497,22 @@ Package pdftex.def Info: figures/fig_method_comparison.png  used on input line
 
 [4])
 
-LaTeX Warning: `h' float specifier changed to `ht'.
-
-
-
-[5]
-
-[6] (./stealthrl_workshop.aux)
+[5] (./stealthrl_workshop.aux)
  ***********
 LaTeX2e <2024-11-01> patch level 2
 L3 programming layer <2025-01-18>
  ***********
-
-
-Package rerunfilecheck Warning: File `stealthrl_workshop.out' has changed.
-(rerunfilecheck)                Rerun to get outlines right
-(rerunfilecheck)                or use package `bookmark'.
-
-Package rerunfilecheck Info: Checksums for `stealthrl_workshop.out':
-(rerunfilecheck)             Before: 844A4442F786C7223ECE235DC0D68C1E;963
-(rerunfilecheck)             After:  693F4EF1C6D75C24F7AACC0C6B10D1B2;1052.
+Package rerunfilecheck Info: File `stealthrl_workshop.out' has not changed.
+(rerunfilecheck)             Checksum: 693F4EF1C6D75C24F7AACC0C6B10D1B2;1052.
  ) 
 Here is how much of TeX's memory you used:
- 11822 strings out of 473190
- 174080 string characters out of 5715801
- 593906 words of memory out of 5000000
- 34845 multiletter control sequences out of 15000+600000
+ 11813 strings out of 473190
+ 173760 string characters out of 5715801
+ 593775 words of memory out of 5000000
+ 34839 multiletter control sequences out of 15000+600000
  589218 words of font info for 99 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 75i,11n,79p,1184b,559s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 75i,11n,79p,1184b,557s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb
 ></usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb><
 /usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi9.pfb></u
@@ -540,10 +527,10 @@ ive/2025/texmf-dist/fonts/type1/urw/courier/ucrr8a.pfb></usr/local/texlive/2025
 dist/fonts/type1/urw/times/utmb8a.pfb></usr/local/texlive/2025/texmf-dist/fonts
 /type1/urw/times/utmr8a.pfb></usr/local/texlive/2025/texmf-dist/fonts/type1/urw
 /times/utmri8a.pfb>
-Output written on stealthrl_workshop.pdf (6 pages, 5386829 bytes).
+Output written on stealthrl_workshop.pdf (5 pages, 5385304 bytes).
 PDF statistics:
- 206 PDF objects out of 1000 (max. 8388607)
- 165 compressed objects within 2 object streams
- 35 named destinations out of 1000 (max. 500000)
+ 197 PDF objects out of 1000 (max. 8388607)
+ 157 compressed objects within 2 object streams
+ 32 named destinations out of 1000 (max. 500000)
  75 words of extra memory for PDF output out of 10000 (max. 10000000)
 
