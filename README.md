@@ -5,6 +5,8 @@ Multi-Detector Evasion of AI-Text Detectors
 We introduce \emph{StealthRL}, a reinforcement-learning framework that paraphrases AI-generated text to evade detection while preserving meaning and fluency, enabling systematic red-teaming of AI-text detectors. The challenge is to reduce detector confidence at strict low-false-positive operating points without collapsing semantic fidelity or overfitting to a single detector family. StealthRL fine-tunes a Qwen-family paraphraser with LoRA and a multi-objective reward combining detector evasion, semantic similarity, and fluency. On the MAGE benchmark with multiple detectors, StealthRL reduces detection at stringent operating points while maintaining high semantic similarity, outperforming simple paraphrasing and a detector-guided baseline. We release an anonymized code package in the supplementary material with a placeholder anonymous link for reproducibility.
 \end{abstract}
 
+![StealthRL Pipeline Overview](figures/StealthRL_Pipeline_Final_v3.png)
+
 **Implementation Overview**
 The rest of the implementation is organized as a modular, configuration-driven research codebase:
 - `stealthrl/`: Core library (training, rewards, detectors, evaluation, data utilities)
