@@ -33,6 +33,10 @@ class TinkerCompositeReward:
         semantic_weight: float = 1.0,
         perplexity_weight: float = 0.5,
         
+        # Adaptive weight scheduling (NEW)
+        semantic_weight_start: float | None = None,  # If set, linearly anneal from start to semantic_weight
+        semantic_anneal_steps: int = 200,  # Number of steps to anneal over
+        
         # Component enable/disable flags (NEW)
         enable_semantic: bool = True,
         enable_perplexity: bool = True,
@@ -104,7 +108,13 @@ class TinkerCompositeReward:
         """
         self.detector_weight = detector_weight
         self.semantic_weight = semantic_weight
+        self.semantic_weight_end = semantic_weight  # Target weight for annealing
         self.perplexity_weight = perplexity_weight
+        
+        # Adaptive weight scheduling
+        self.semantic_weight_start = semantic_weight_start if semantic_weight_start is not None else semantic_weight
+        self.semantic_anneal_steps = semantic_anneal_steps
+        self.current_step = 0
         
         # Component enable/disable flags
         self.enable_semantic = enable_semantic
@@ -170,9 +180,40 @@ class TinkerCompositeReward:
         self.detector_std = 0.15
         self.detector_count = 0
         
-        logger.info(f"Initialized TinkerCompositeReward with weights: "
-                   f"det={detector_weight}, sem={semantic_weight}, "
-                   f"ppl={perplexity_weight}")
+        if self.semantic_weight_start != self.semantic_weight_end:
+            logger.info(f"Initialized TinkerCompositeReward with ADAPTIVE weights: "
+                       f"det={detector_weight}, sem={self.semantic_weight_start:.3f}→{self.semantic_weight_end:.3f} over {semantic_anneal_steps} steps, "
+                       f"ppl={perplexity_weight}")
+        else:
+            logger.info(f"Initialized TinkerCompositeReward with weights: "
+                       f"det={detector_weight}, sem={semantic_weight}, "
+                       f"ppl={perplexity_weight}")
+    
+    def update_weights(self, step: int) -> Dict[str, float]:
+        """
+        Update semantic weight based on current training step (adaptive curriculum).
+        
+        Args:
+            step: Current training step
+            
+        Returns:
+            Dictionary with current weights
+        """
+        self.current_step = step
+        
+        # Linear annealing: sem_weight(t) = start + (end - start) * min(t / T, 1.0)
+        if step < self.semantic_anneal_steps:
+            progress = step / self.semantic_anneal_steps
+            self.semantic_weight = self.semantic_weight_start + (self.semantic_weight_end - self.semantic_weight_start) * progress
+        else:
+            self.semantic_weight = self.semantic_weight_end
+        
+        return {
+            "detector_weight": self.detector_weight,
+            "semantic_weight": self.semantic_weight,
+            "perplexity_weight": self.perplexity_weight,
+            "step": step,
+        }
     
     async def compute(
         self,
