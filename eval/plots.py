@@ -130,6 +130,34 @@ METHOD_NAMES = {
     "m5": "Homoglyph (M5)",
 }
 
+# Preferred method ordering for plots/tables
+METHOD_ORDER = ["m0", "m1", "m2", "m3", "m4", "m5"]
+METHOD_ALIASES = {
+    "no_attack": "m0",
+    "simple_paraphrase": "m1",
+    "stealthrl": "m2",
+    "tinker": "m2",
+    "adversarial_paraphrasing": "m3",
+    "authormist": "m4",
+    "homoglyph": "m5",
+    "silverspeak": "m5",
+}
+
+
+def _canonical_method(method: str) -> str:
+    return METHOD_ALIASES.get(method, method)
+
+
+def _method_rank(method: str) -> int:
+    canon = _canonical_method(method)
+    if canon in METHOD_ORDER:
+        return METHOD_ORDER.index(canon)
+    return 999
+
+
+def _order_methods(methods) -> list:
+    return sorted(list(methods), key=lambda m: (_method_rank(m), str(m)))
+
 
 def create_heatmap(
     data: pd.DataFrame,
@@ -165,6 +193,13 @@ def create_heatmap(
     
     # Pivot data for heatmap
     pivot = data.pivot(index=row_col, columns=col_col, values=value_col)
+
+    # Enforce method order on axes where applicable
+    if row_col == "method":
+        pivot = pivot.reindex(_order_methods(pivot.index))
+    if col_col == "method":
+        pivot = pivot[_order_methods(pivot.columns)]
+
     pivot.index = [_pretty_detector_name(d) for d in pivot.index]
     pivot.columns = [METHOD_NAMES.get(m, m) for m in pivot.columns]
     
@@ -225,6 +260,11 @@ def create_tradeoff_plot(
     import matplotlib.pyplot as plt
     
     fig, ax = plt.subplots(figsize=figsize)
+
+    data = data.copy()
+    if label_col in data.columns:
+        data["__order"] = data[label_col].map(_method_rank)
+        data = data.sort_values("__order")
     
     for _, row in data.iterrows():
         method = row[label_col]
@@ -452,7 +492,7 @@ def create_auroc_bar_chart(
     
     fig, ax = plt.subplots(figsize=figsize)
     
-    methods = data[method_col].unique()
+    methods = _order_methods(data[method_col].unique())
     detectors = data[detector_col].unique()
     n_detectors = len(detectors)
     n_methods = len(methods)
@@ -552,7 +592,7 @@ def create_auroc_radar_chart(
     import matplotlib.pyplot as plt
     from math import pi
     
-    methods = data[method_col].unique()
+    methods = _order_methods(data[method_col].unique())
     detectors = list(data[detector_col].unique())
     n_detectors = len(detectors)
     
@@ -654,6 +694,7 @@ def create_method_comparison_summary(
     # Panel 2: Mean AUROC with error bars
     ax2 = axes[0, 1]
     mean_aurocs = data.groupby(method_col)['auroc'].agg(['mean', 'std']).reset_index()
+    mean_aurocs = mean_aurocs.sort_values(by=method_col, key=lambda s: s.map(_method_rank))
     x2 = np.arange(len(mean_aurocs))
     colors = [COLORS.get(m, f"C{i}") for i, m in enumerate(mean_aurocs[method_col])]
     
@@ -702,6 +743,7 @@ def create_method_comparison_summary(
     
     if 'asr' in data.columns:
         mean_asr = data.groupby(method_col)['asr'].mean().reset_index()
+        mean_asr = mean_asr.sort_values(by=method_col, key=lambda s: s.map(_method_rank))
         x4 = np.arange(len(mean_asr))
         colors = [COLORS.get(m, f"C{i}") for i, m in enumerate(mean_asr[method_col])]
         
@@ -777,7 +819,7 @@ def create_score_distribution_plot(
         det_data = scores_data[scores_data[detector_col] == detector]
         
         # Create violin plot with method-specific colors
-        methods = det_data[method_col].unique()
+        methods = _order_methods(det_data[method_col].unique())
         palette = {m: COLORS.get(m, COLORBLIND_COLORS[i % len(COLORBLIND_COLORS)]) 
                    for i, m in enumerate(methods)}
         
@@ -789,6 +831,7 @@ def create_score_distribution_plot(
             ax=ax,
             inner='box',
             cut=0,
+            order=methods,
         )
         
         # Add median markers
@@ -841,7 +884,7 @@ def create_score_shift_plot(
     _apply_paper_style()
     import matplotlib.pyplot as plt
     
-    methods = list(after_scores.keys()) if isinstance(after_scores, dict) else []
+    methods = _order_methods(after_scores.keys()) if isinstance(after_scores, dict) else []
     if not methods:
         logger.warning("No methods found in after_scores")
         return
@@ -926,7 +969,8 @@ def create_human_ai_separation_plot(
             density=True, edgecolor='black', linewidth=0.5)
     
     # AI distributions for each method
-    for i, (method, scores) in enumerate(ai_scores.items()):
+    for i, method in enumerate(_order_methods(ai_scores.keys())):
+        scores = ai_scores[method]
         color = COLORS.get(method, COLORBLIND_COLORS[i % len(COLORBLIND_COLORS)])
         ax.hist(scores, bins=50, alpha=0.4, label=METHOD_NAMES.get(method, method),
                 color=color, density=True, histtype='step', linewidth=2)
@@ -978,7 +1022,8 @@ def create_roc_curves(
     for ax, detector in zip(axes, detectors):
         detector_preds = predictions[detector]
         
-        for method, (y_true, y_scores) in detector_preds.items():
+        for method in _order_methods(detector_preds.keys()):
+            y_true, y_scores = detector_preds[method]
             fpr, tpr, _ = roc_curve(y_true, y_scores)
             roc_auc = auc(fpr, tpr)
             
@@ -1046,7 +1091,8 @@ def create_roc_curves_logscale(
     for ax, detector in zip(axes, detectors):
         detector_preds = predictions[detector]
         
-        for method, (y_true, y_scores) in detector_preds.items():
+        for method in _order_methods(detector_preds.keys()):
+            y_true, y_scores = detector_preds[method]
             fpr, tpr, _ = roc_curve(y_true, y_scores)
             roc_auc = auc(fpr, tpr)
             
@@ -1119,18 +1165,19 @@ def create_transferability_heatmap(
     
     # Pivot to get methods as rows, detectors as columns
     pivot = data.pivot(index=method_col, columns=detector_col, values=value_col)
-    pivot.index = [METHOD_NAMES.get(m, m) for m in pivot.index]
-    pivot.columns = [_pretty_detector_name(d) for d in pivot.columns]
-    
-    # Get baseline row
+    pivot = pivot.reindex(_order_methods(pivot.index))
+
+    # Get baseline row (method ids)
     if baseline_col not in pivot.index:
         logger.warning(f"Baseline '{baseline_col}' not found. Using first method as baseline.")
         baseline_col = pivot.index[0]
-    
+
     baseline = pivot.loc[baseline_col]
-    
+
     # Compute relative reduction: (baseline - value) / baseline * 100
     reduction = pivot.apply(lambda row: (baseline - row) / baseline * 100, axis=1)
+    reduction.index = [METHOD_NAMES.get(m, m) for m in reduction.index]
+    reduction.columns = [_pretty_detector_name(d) for d in reduction.columns]
     
     # Remove baseline row from display (it would be all zeros)
     reduction = reduction.drop(baseline_col, errors='ignore')
@@ -1202,7 +1249,7 @@ def create_quality_likert_chart(
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
     
     rated = quality_data[quality_data[rating_col].notna()]
-    methods = rated[method_col].unique()
+    methods = _order_methods(rated[method_col].unique())
     if len(methods) == 0:
         logger.warning("No GPT quality ratings available for Likert chart")
         return
@@ -1338,6 +1385,7 @@ def create_perplexity_comparison_table(
     """
     # Aggregate by method
     summary = data.groupby(method_col)[ppl_col].agg(['mean', 'std']).round(2)
+    summary = summary.reindex(_order_methods(summary.index))
     summary.columns = ['PPL (mean)', 'PPL (std)']
     summary['PPL (mean±std)'] = summary.apply(
         lambda r: f"{r['PPL (mean)']:.2f} ± {r['PPL (std)']:.2f}", axis=1
@@ -1382,7 +1430,7 @@ def create_combined_results_table(
         Table string
     """
     df = pd.DataFrame(detector_metrics)
-    methods = df['method'].unique()
+    methods = _order_methods(df['method'].unique())
     detectors = df['detector'].unique()
     
     rows = []
@@ -1454,7 +1502,7 @@ def create_main_results_table(
     df = pd.DataFrame(metrics)
     
     # Pivot to get methods as rows, detectors as columns
-    methods = df['method'].unique()
+    methods = _order_methods(df['method'].unique())
     detectors = df['detector'].unique()
     
     # Build table
@@ -1514,6 +1562,7 @@ def create_transfer_table(
         values='tpr_at_1fpr',
         aggfunc='mean',
     )
+    pivot = pivot[_order_methods(pivot.columns)]
     
     if format == "markdown":
         table = pivot.round(3).to_markdown()
@@ -1553,6 +1602,7 @@ def create_quality_table(
         agg_cols['similarity_rating'] = ['mean', 'std']
 
     summary = df.groupby('method').agg(agg_cols).round(3)
+    summary = summary.reindex(_order_methods(summary.index))
     
     # Flatten column names
     summary.columns = ['_'.join(col).strip() for col in summary.columns.values]
@@ -2142,8 +2192,11 @@ def generate_all_plots(
 # ============================================================================
 
 QUALITY_RATING_PROMPT = """
-You are an expert linguist and paraphrase evaluator. Your task is to assess the overall linguistic quality of a paraphrased text compared to the original source text. Focus on fluency, grammaticality, clarity, and naturalness. Use the following scoring criteria:
+You are an expert linguist and paraphrase evaluator. Your task is to assess the overall linguistic quality of a paraphrased text compared to the original source text. Focus on fluency, grammaticality, clarity, and naturalness.
 
+Be generous when the text reads well. Use the full 1-5 scale and avoid defaulting to 3 unless it truly fits. If the paraphrase is fluent and natural with only minor issues, prefer 4 or 5. Use 2 or 1 only when the text is clearly hard to read or incoherent.
+
+Scoring criteria:
 5 - Excellent: Fluent, grammatical, and natural; reads like high-quality human writing.
 4 - Good: Mostly fluent and clear with minor awkwardness or errors.
 3 - Acceptable: Understandable but noticeably awkward or error-prone.

@@ -1,15 +1,18 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.24 (MiKTeX 22.1) (preloaded format=pdflatex 2025.8.1)  3 FEB 2026 04:48
+This is pdfTeX, Version 3.141592653-2.6-1.40.24 (MiKTeX 22.1) (preloaded format=pdflatex 2025.8.1)  7 FEB 2026 23:41
 entering extended mode
  restricted \write18 enabled.
- file:line:error style messages enabled.
  %&-line parsing enabled.
-**/Users/suraj/Desktop/StealthRL/iclr2026/stealthrl_workshop.tex
-(/Users/suraj/Desktop/StealthRL/iclr2026/stealthrl_workshop.tex
+**./stealthrl_workshop.tex
+(stealthrl_workshop.tex
 LaTeX2e <2025-06-01> patch level 1
 L3 programming layer <2025-07-19>
-(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/base/article.cls
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/base/
+article.cls
 Document Class: article 2025/01/22 v1.4n Standard LaTeX document class
-(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/base/size10.clo
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/base/
+size10.clo
 File: size10.clo 2025/01/22 v1.4n Standard LaTeX file (size option)
 )
 \c@part=\count275
@@ -23,22 +26,34 @@ File: size10.clo 2025/01/22 v1.4n Standard LaTeX file (size option)
 \abovecaptionskip=\skip49
 \belowcaptionskip=\skip50
 \bibindent=\dimen148
-) (iclr2026_conference.sty (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/eso-pic/eso-pic.sty
+) (iclr2026_conference.sty
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/eso-p
+ic/eso-pic.sty
 Package: eso-pic 2025/12/10 v3.0d eso-pic (RN)
 \ESO@tempdima=\dimen149
 \ESO@tempdimb=\dimen150
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/graphics/keyval.sty
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/graph
+ics/keyval.sty
 Package: keyval 2022/05/29 v1.15 key=value parser (DPC)
 \KV@toks@=\toks17
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/xcolor/xcolor.sty
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/xcolo
+r/xcolor.sty
 Package: xcolor 2024/09/29 v3.02 LaTeX color extensions (UK)
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/graphics-cfg/color.cfg
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/graph
+ics-cfg/color.cfg
 File: color.cfg 2016/01/02 v1.6 sample color configuration
 )
 Package xcolor Info: Driver file: pdftex.def on input line 274.
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/graphics-def/pdftex.def
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/graph
+ics-def/pdftex.def
 File: pdftex.def 2024/04/13 v1.2c Graphics/color driver for pdftex
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/graphics/mathcolor.ltx)
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/graph
+ics/mathcolor.ltx)
 Package xcolor Info: Model `cmy' substituted by `cmy0' on input line 1349.
 Package xcolor Info: Model `hsb' substituted by `rgb' on input line 1353.
 Package xcolor Info: Model `RGB' extended on input line 1365.
@@ -75,23 +90,35 @@ LaTeX Info: Redefining \cite on input line 694.
 \cv@tot=\count286
 \cv@tmpc@=\count287
 \cv@tmpc=\count288
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/psnfss/times.sty
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/psnfs
+s/times.sty
 Package: times 2020/03/25 PSNFSS-v9.3 (SPQR) 
-) (math_commands.tex (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/amsmath/amsmath.sty
+) (math_commands.tex
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/amsma
+th/amsmath.sty
 Package: amsmath 2025/06/16 v2.17y AMS math features
 \@mathmargin=\skip62
 
 For additional information on amsmath, use the `?' option.
-(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/amsmath/amstext.sty
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/amsma
+th/amstext.sty
 Package: amstext 2024/11/17 v2.01 AMS text
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/amsmath/amsgen.sty
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/amsma
+th/amsgen.sty
 File: amsgen.sty 1999/11/30 v2.0 generic functions
 \@emptytoks=\toks18
 \ex@=\dimen154
-)) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/amsmath/amsbsy.sty
+))
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/amsma
+th/amsbsy.sty
 Package: amsbsy 1999/11/29 v1.2d Bold Symbols
 \pmbraise@=\dimen155
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/amsmath/amsopn.sty
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/amsma
+th/amsopn.sty
 Package: amsopn 2022/04/08 v2.04 operator names
 )
 \inf@bad=\count289
@@ -141,14 +168,18 @@ LaTeX Info: Redefining \Relbar on input line 970.
 \mathdisplay@stack=\toks22
 LaTeX Info: Redefining \[ on input line 2949.
 LaTeX Info: Redefining \] on input line 2950.
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/amsfonts/amsfonts.sty
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/amsfo
+nts/amsfonts.sty
 Package: amsfonts 2013/01/14 v3.01 Basic AMSFonts support
 \symAMSa=\mathgroup4
 \symAMSb=\mathgroup5
 LaTeX Font Info:    Redeclaring math symbol \hbar on input line 98.
 LaTeX Font Info:    Overwriting math alphabet `\mathfrak' in version `bold'
 (Font)                  U/euf/m/n --> U/euf/b/n on input line 106.
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/tools/bm.sty
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/tools
+/bm.sty
 Package: bm 2023/12/19 v1.2f Bold Symbol Support (DPC/FMi)
 \symboldoperators=\mathgroup6
 \symboldletters=\mathgroup7
@@ -160,56 +191,94 @@ LaTeX Font Info:    Redeclaring math alphabet \mathbf on input line 149.
 )
 LaTeX Font Info:    Overwriting math alphabet `\mathsfit' in version `bold'
 (Font)                  OT1/phv/m/sl --> OT1/phv/bx/n on input line 314.
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/hyperref/hyperref.sty
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/hyper
+ref/hyperref.sty
 Package: hyperref 2025-07-12 v7.01o Hypertext links for LaTeX
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/iftex/iftex.sty
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/ift
+ex/iftex.sty
 Package: iftex 2024/12/12 v1.0g TeX engine tests
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/kvsetkeys/kvsetkeys.sty
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/kvset
+keys/kvsetkeys.sty
 Package: kvsetkeys 2022-10-05 v1.19 Key value parser (HO)
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/kvdefinekeys/kvdefinekeys.sty
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/kvd
+efinekeys/kvdefinekeys.sty
 Package: kvdefinekeys 2019-12-19 v1.6 Define keys (HO)
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/pdfescape/pdfescape.sty
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/pdf
+escape/pdfescape.sty
 Package: pdfescape 2019/12/09 v1.15 Implements pdfTeX's escape features (HO)
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/ltxcmds/ltxcmds.sty
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/ltx
+cmds/ltxcmds.sty
 Package: ltxcmds 2023-12-04 v1.26 LaTeX kernel commands for general use (HO)
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/pdftexcmds/pdftexcmds.sty
-Package: pdftexcmds 2020-06-27 v0.33 Utility functions of pdfTeX for LuaTeX (HO)
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/infwarerr/infwarerr.sty
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/pdf
+texcmds/pdftexcmds.sty
+Package: pdftexcmds 2020-06-27 v0.33 Utility functions of pdfTeX for LuaTeX (HO
+)
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/inf
+warerr/infwarerr.sty
 Package: infwarerr 2019/12/03 v1.5 Providing info/warning/error messages (HO)
 )
 Package pdftexcmds Info: \pdf@primitive is available.
 Package pdftexcmds Info: \pdf@ifprimitive is available.
 Package pdftexcmds Info: \pdfdraftmode found.
-)) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/hycolor/hycolor.sty
+))
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/hycol
+or/hycolor.sty
 Package: hycolor 2020-01-27 v1.10 Color options for hyperref/bookmark (HO)
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/hyperref/nameref.sty
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/hyper
+ref/nameref.sty
 Package: nameref 2025-06-21 v2.57 Cross-referencing by name of section
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/refcount/refcount.sty
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/refco
+unt/refcount.sty
 Package: refcount 2019/12/15 v3.6 Data extraction from label references (HO)
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/gettitlestring/gettitlestring.sty
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/get
+titlestring/gettitlestring.sty
 Package: gettitlestring 2019/12/15 v1.6 Cleanup title references (HO)
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/kvoptions/kvoptions.sty
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/kvopt
+ions/kvoptions.sty
 Package: kvoptions 2022-06-15 v3.15 Key value format for package options (HO)
 ))
 \c@section@level=\count301
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/etoolbox/etoolbox.sty
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/etool
+box/etoolbox.sty
 Package: etoolbox 2025/02/11 v2.5l e-TeX tools for LaTeX (JAW)
 \etb@tempcnta=\count302
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/stringenc/stringenc.sty
-Package: stringenc 2019/11/29 v1.12 Convert strings between diff. encodings (HO)
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/str
+ingenc/stringenc.sty
+Package: stringenc 2019/11/29 v1.12 Convert strings between diff. encodings (HO
+)
 )
 \@linkdim=\dimen163
 \Hy@linkcounter=\count303
 \Hy@pagecounter=\count304
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/hyperref/pd1enc.def
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/hyper
+ref/pd1enc.def
 File: pd1enc.def 2025-07-12 v7.01o Hyperref: PDFDocEncoding definition (HO)
 Now handling font encoding PD1 ...
 ... no UTF-8 mapping file for font encoding PD1
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/intcalc/intcalc.sty
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/int
+calc/intcalc.sty
 Package: intcalc 2019/12/15 v1.3 Expandable calculations with integers (HO)
 )
 \Hy@SavedSpaceFactor=\count305
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/hyperref/puenc.def
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/hyper
+ref/puenc.def
 File: puenc.def 2025-07-12 v7.01o Hyperref: PDF Unicode definition (HO)
 Now handling font encoding PU ...
 ... no UTF-8 mapping file for font encoding PU
@@ -222,16 +291,23 @@ Package hyperref Info: Backreferencing OFF on input line 4215.
 Package hyperref Info: Implicit mode ON; LaTeX internals redefined.
 Package hyperref Info: Bookmarks ON on input line 4462.
 \c@Hy@tempcnt=\count306
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/url/url.sty
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/url/u
+rl.sty
 \Urlmuskip=\muskip18
 Package: url 2013/09/16  ver 3.4  Verb mode for urls, etc.
 )
 LaTeX Info: Redefining \url on input line 4801.
 \XeTeXLinkMargin=\dimen164
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/bitset/bitset.sty
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/bit
+set/bitset.sty
 Package: bitset 2019/12/09 v1.3 Handle bit-vector datatype (HO)
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/bigintcalc/bigintcalc.sty
-Package: bigintcalc 2019/12/15 v1.5 Expandable calculations on big integers (HO)
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/big
+intcalc/bigintcalc.sty
+Package: bigintcalc 2019/12/15 v1.5 Expandable calculations on big integers (HO
+)
 ))
 \Fld@menulength=\count307
 \Field@Width=\dimen165
@@ -248,32 +324,49 @@ Package hyperref Info: PDF/A mode OFF on input line 6108.
 \c@Hfootnote=\count310
 )
 Package hyperref Info: Driver (autodetected): hpdftex.
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/hyperref/hpdftex.def
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/hyper
+ref/hpdftex.def
 File: hpdftex.def 2025-07-12 v7.01o Hyperref driver for pdfTeX
 \Fld@listcount=\count311
 \c@bookmark@seq@number=\count312
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/rerunfilecheck/rerunfilecheck.sty
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/rerun
+filecheck/rerunfilecheck.sty
 Package: rerunfilecheck 2025-06-21 v1.11 Rerun checks for auxiliary files (HO)
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/uniquecounter/uniquecounter.sty
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/generic/uni
+quecounter/uniquecounter.sty
 Package: uniquecounter 2019/12/15 v1.4 Provide unlimited unique counter (HO)
 )
-Package uniquecounter Info: New unique counter `rerunfilecheck' on input line 284.
+Package uniquecounter Info: New unique counter `rerunfilecheck' on input line 2
+84.
 )
 \Hy@SectionHShift=\skip65
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/graphics/graphicx.sty
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/graph
+ics/graphicx.sty
 Package: graphicx 2024/12/31 v1.2e Enhanced LaTeX Graphics (DPC,SPQR)
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/graphics/graphics.sty
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/graph
+ics/graphics.sty
 Package: graphics 2024/08/06 v1.4g Standard LaTeX Graphics (DPC,SPQR)
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/graphics/trig.sty
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/graph
+ics/trig.sty
 Package: trig 2023/12/02 v1.11 sin cos tan (DPC)
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/graphics-cfg/graphics.cfg
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/graph
+ics-cfg/graphics.cfg
 File: graphics.cfg 2016/06/04 v1.11 sample graphics configuration
 )
 Package graphics Info: Driver file: pdftex.def on input line 106.
 )
 \Gin@req@height=\dimen167
 \Gin@req@width=\dimen168
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/booktabs/booktabs.sty
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/bookt
+abs/booktabs.sty
 Package: booktabs 2020/01/12 v1.61803398 Publication quality tables
 \heavyrulewidth=\dimen169
 \lightrulewidth=\dimen170
@@ -292,9 +385,13 @@ Package: booktabs 2020/01/12 v1.61803398 Publication quality tables
 \@thisruleclass=\count315
 \@lastruleclass=\count316
 \@thisrulewidth=\dimen181
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/tools/tabularx.sty
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/tools
+/tabularx.sty
 Package: tabularx 2023/12/11 v2.12a `tabularx' package (DPC)
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/tools/array.sty
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/tools
+/array.sty
 Package: array 2025/06/08 v2.6j Tabular extension package (FMi)
 \col@sep=\dimen182
 \ar@mcellbox=\box57
@@ -311,43 +408,54 @@ Package: array 2025/06/08 v2.6j Tabular extension package (FMi)
 \TX@delta=\dimen188
 \TX@cols=\count317
 \TX@ftn=\toks24
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/multirow/multirow.sty
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/multi
+row/multirow.sty
 Package: multirow 2024/11/12 v2.9 Span multiple rows of a table
 \multirow@colwidth=\skip68
 \multirow@cntb=\count318
 \multirow@dima=\skip69
 \bigstrutjot=\dimen189
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/amsfonts/amssymb.sty
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/amsfo
+nts/amssymb.sty
 Package: amssymb 2013/01/14 v3.01 AMS font symbols
 )
-LaTeX Font Info:    Trying to load font information for OT1+ptm on input line 21.
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/psnfss/ot1ptm.fd
+LaTeX Font Info:    Trying to load font information for OT1+ptm on input line 2
+0.
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/psnfs
+s/ot1ptm.fd
 File: ot1ptm.fd 2001/06/04 font definitions for OT1/ptm.
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/l3backend/l3backend-pdftex.def
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/l3bac
+kend/l3backend-pdftex.def
 File: l3backend-pdftex.def 2025-06-09 L3 backend support: PDF output (pdfTeX)
 \l__color_backend_stack_int=\count319
 ) (stealthrl_workshop.aux)
 \openout1 = `stealthrl_workshop.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 21.
-LaTeX Font Info:    ... okay on input line 21.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 21.
-LaTeX Font Info:    ... okay on input line 21.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 21.
-LaTeX Font Info:    ... okay on input line 21.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 21.
-LaTeX Font Info:    ... okay on input line 21.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 21.
-LaTeX Font Info:    ... okay on input line 21.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 21.
-LaTeX Font Info:    ... okay on input line 21.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 21.
-LaTeX Font Info:    ... okay on input line 21.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 21.
-LaTeX Font Info:    ... okay on input line 21.
-LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 21.
-LaTeX Font Info:    ... okay on input line 21.
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/context/base/mkii/supp-pdf.mkii
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 20.
+LaTeX Font Info:    ... okay on input line 20.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 20.
+LaTeX Font Info:    ... okay on input line 20.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 20.
+LaTeX Font Info:    ... okay on input line 20.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 20.
+LaTeX Font Info:    ... okay on input line 20.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 20.
+LaTeX Font Info:    ... okay on input line 20.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 20.
+LaTeX Font Info:    ... okay on input line 20.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 20.
+LaTeX Font Info:    ... okay on input line 20.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 20.
+LaTeX Font Info:    ... okay on input line 20.
+LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 20.
+LaTeX Font Info:    ... okay on input line 20.
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/context/bas
+e/mkii/supp-pdf.mkii
 [Loading MPS to PDF converter (version 2006.09.02).]
 \scratchcounter=\count320
 \scratchdimen=\dimen190
@@ -360,64 +468,89 @@ LaTeX Font Info:    ... okay on input line 21.
 \MPnumerator=\count324
 \makeMPintoPDFobject=\count325
 \everyMPtoPDFconversion=\toks26
-) (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/epstopdf-pkg/epstopdf-base.sty
+)
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/epsto
+pdf-pkg/epstopdf-base.sty
 Package: epstopdf-base 2020-01-24 v2.11 Base part for package epstopdf
-Package epstopdf-base Info: Redefining graphics rule for `.eps' on input line 485.
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/00miktex/epstopdf-sys.cfg
+Package epstopdf-base Info: Redefining graphics rule for `.eps' on input line 4
+85.
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/00mik
+tex/epstopdf-sys.cfg
 File: epstopdf-sys.cfg 2021/03/18 v2.0 Configuration of epstopdf for MiKTeX
 ))
-Package hyperref Info: Link coloring OFF on input line 21.
+Package hyperref Info: Link coloring OFF on input line 20.
  (stealthrl_workshop.out) (stealthrl_workshop.out)
 \@outlinefile=\write3
 \openout3 = `stealthrl_workshop.out'.
 
 
-Underfull \hbox (badness 6078) in paragraph at lines 24--24
+Underfull \hbox (badness 6078) in paragraph at lines 23--23
 []\OT1/ptm/m/sc/17.28 StealthRL: Re-in-force-ment Learn-ing Para-
  []
 
-LaTeX Font Info:    Trying to load font information for U+msa on input line 24.
-(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/amsfonts/umsa.fd
+LaTeX Font Info:    Trying to load font information for U+msa on input line 23.
+
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/amsfo
+nts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 24.
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/amsfonts/umsb.fd
+LaTeX Font Info:    Trying to load font information for U+msb on input line 23.
+
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/amsfo
+nts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 )
-LaTeX Font Info:    Trying to load font information for TS1+ptm on input line 36.
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/psnfss/ts1ptm.fd
+LaTeX Font Info:    Trying to load font information for TS1+ptm on input line 3
+5.
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/psnfs
+s/ts1ptm.fd
 File: ts1ptm.fd 2001/06/04 font definitions for TS1/ptm.
 )
-LaTeX Font Info:    Trying to load font information for OT1+pcr on input line 42.
- (/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/psnfss/ot1pcr.fd
+LaTeX Font Info:    Trying to load font information for OT1+pcr on input line 4
+2.
+
+(/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/psnfs
+s/ot1pcr.fd
 File: ot1pcr.fd 2001/06/04 font definitions for OT1/pcr.
 )
 
-[1{/Users/suraj/Library/Application Support/MiKTeX/texmfs/data/fonts/map/pdftex/pdftex.map}
+[1{/Users/suraj/Library/Application Support/MiKTeX/texmfs/data/fonts/map/pdftex
+/pdftex.map}
 
 ]
-<../figures/StealthRL_Pipeline_Final_v3.png, id=74, 4114.37125pt x 2199.21625pt>
-File: ../figures/StealthRL_Pipeline_Final_v3.png Graphic file (type png)
-<use ../figures/StealthRL_Pipeline_Final_v3.png>
-Package pdftex.def Info: ../figures/StealthRL_Pipeline_Final_v3.png  used on input line 57.
+<figures/StealthRL_Pipeline_Final_v3.png, id=71, 4114.37125pt x 2199.21625pt>
+File: figures/StealthRL_Pipeline_Final_v3.png Graphic file (type png)
+<use figures/StealthRL_Pipeline_Final_v3.png>
+Package pdftex.def Info: figures/StealthRL_Pipeline_Final_v3.png  used on input
+ line 61.
 (pdftex.def)             Requested size: 397.48499pt x 212.45123pt.
 
 
-[2 <../figures/StealthRL_Pipeline_Final_v3.png>] (table_main.tex)
-<figures/fig_method_comparison.png, id=112, 1005.2757pt x 593.5776pt>
+[2] (table_main.tex)
+<figures/fig_method_comparison.png, id=115, 1005.2757pt x 593.5776pt>
 File: figures/fig_method_comparison.png Graphic file (type png)
 <use figures/fig_method_comparison.png>
-Package pdftex.def Info: figures/fig_method_comparison.png  used on input line 81.
+Package pdftex.def Info: figures/fig_method_comparison.png  used on input line 
+89.
 (pdftex.def)             Requested size: 397.48499pt x 234.70059pt.
 
+Underfull \vbox (badness 6893) has occurred while \output is active []
 
-[3] (stealthrl_workshop.bbl
 
-[4 <./figures/fig_method_comparison.png>])
+
+[3 <./figures/StealthRL_Pipeline_Final_v3.png>]
+
+[4 <./figures/fig_method_comparison.png>] (stealthrl_workshop.bbl)
 
 [5]
 
-[6
+[6]
+
+[7
 
 ] (stealthrl_workshop.aux)
  ***********
@@ -428,17 +561,36 @@ Package rerunfilecheck Info: File `stealthrl_workshop.out' has not changed.
 (rerunfilecheck)             Checksum: E0A936352D29231FD963C7660B2D9FC2;1199.
  ) 
 Here is how much of TeX's memory you used:
- 11785 strings out of 468154
- 177509 string characters out of 5422526
- 603402 words of memory out of 5000000
+ 11788 strings out of 468154
+ 177474 string characters out of 5422526
+ 602446 words of memory out of 5000000
  40156 multiletter control sequences out of 15000+600000
  657206 words of font info for 103 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 75i,11n,79p,1266b,563s stack positions out of 10000i,1000n,20000p,200000b,200000s
-{/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/enc/dvips/base/8r.enc}</Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmmi10.pfb></Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmmi7.pfb></Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmmi9.pfb></Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmr10.pfb></Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmr6.pfb></Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmr9.pfb></Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmsy10.pfb></Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmsy6.pfb></Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmsy9.pfb></Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/urw/courier/ucrr8a.pfb></Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/urw/helvetic/uhvb8a.pfb></Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/urw/times/utmb8a.pfb></Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/urw/times/utmr8a.pfb></Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/urw/times/utmri8a.pfb>
-Output written on stealthrl_workshop.pdf (6 pages, 5909443 bytes).
+ 75i,11n,79p,1400b,459s stack positions out of 10000i,1000n,20000p,200000b,200000s
+{/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/enc/dvi
+ps/base/8r.enc}</Users/suraj/Library/Application Support/MiKTeX/texmfs/install/
+fonts/type1/public/amsfonts/cm/cmmi10.pfb></Users/suraj/Library/Application Sup
+port/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmmi7.pfb></Users/sur
+aj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfont
+s/cm/cmmi9.pfb></Users/suraj/Library/Application Support/MiKTeX/texmfs/install/
+fonts/type1/public/amsfonts/cm/cmr10.pfb></Users/suraj/Library/Application Supp
+ort/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmr6.pfb></Users/suraj
+/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/
+cm/cmr9.pfb></Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fon
+ts/type1/public/amsfonts/cm/cmsy10.pfb></Users/suraj/Library/Application Suppor
+t/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/cm/cmsy6.pfb></Users/suraj/
+Library/Application Support/MiKTeX/texmfs/install/fonts/type1/public/amsfonts/c
+m/cmsy9.pfb></Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fon
+ts/type1/urw/courier/ucrr8a.pfb></Users/suraj/Library/Application Support/MiKTe
+X/texmfs/install/fonts/type1/urw/helvetic/uhvb8a.pfb></Users/suraj/Library/Appl
+ication Support/MiKTeX/texmfs/install/fonts/type1/urw/times/utmb8a.pfb></Users/
+suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/type1/urw/times/u
+tmr8a.pfb></Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts
+/type1/urw/times/utmri8a.pfb>
+Output written on stealthrl_workshop.pdf (7 pages, 5933937 bytes).
 PDF statistics:
- 226 PDF objects out of 1000 (max. 8388607)
- 39 named destinations out of 1000 (max. 500000)
+ 237 PDF objects out of 1000 (max. 8388607)
+ 42 named destinations out of 1000 (max. 500000)
  83 words of extra memory for PDF output out of 10000 (max. 10000000)
 

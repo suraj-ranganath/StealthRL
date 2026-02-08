@@ -1,15 +1,13 @@
 # Fdb version 4
-["bibtex stealthrl_workshop"] 1770122916.89681 "stealthrl_workshop.aux" "stealthrl_workshop.bbl" "stealthrl_workshop" 1770122919.44223 0
+["bibtex stealthrl_workshop"] 1770536460.0434 "stealthrl_workshop.aux" "stealthrl_workshop.bbl" "stealthrl_workshop" 1770536480.80819 0
   "./iclr2026_conference.bst" 1770118425.64118 26973 af983813ca1a1414954dbceae7baa2a1 ""
   "./stealthrl_refs.bib" 1770122657.47099 5679 9a30ec3ed1cbb22cb78a3a4afc7f3381 ""
-  "stealthrl_workshop.aux" 1770122918.92131 6245 c9192c4cb4757e01064e2fd33e23c213 "pdflatex"
+  "stealthrl_workshop.aux" 1770536480.28946 6601 b92b93b7b0c1daa00b8d67d42b86c48f "pdflatex"
   (generated)
   "stealthrl_workshop.bbl"
   "stealthrl_workshop.blg"
   (rewritten before read)
-["pdflatex"] 1770122917.11006 "/Users/suraj/Desktop/StealthRL/iclr2026/stealthrl_workshop.tex" "stealthrl_workshop.pdf" "stealthrl_workshop" 1770122919.44239 0
-  "../figures/StealthRL_Pipeline_Final_v3.png" 1770117249.11069 6492755 93ea82cbfdf3b16f1abfc942f0bf9847 ""
-  "/Users/suraj/Desktop/StealthRL/iclr2026/stealthrl_workshop.tex" 1770122909.65843 15605 acf9bc1b5263dc31103d84f4863134bd ""
+["pdflatex"] 1770536478.22601 "stealthrl_workshop.tex" "stealthrl_workshop.pdf" "stealthrl_workshop" 1770536480.80846 0
   "/Users/suraj/Library/Application Support/MiKTeX/texmfs/data/fonts/map/pdftex/pdftex.map" 1770071856.15289 112178 3b0fbce6de6341500037089663806d63 ""
   "/Users/suraj/Library/Application Support/MiKTeX/texmfs/data/miktex/data/le/pdftex/pdflatex.fmt" 1754059712.78056 13262729 0298b3ab808458dca4a61e9f9195088c ""
   "/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/fonts/enc/dvips/base/8r.enc" 1754057643.82863 4993 1194fb36dfcb11d9ae9802f2b00b60a3 ""
@@ -134,15 +132,16 @@
   "/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/url/url.sty" 1754057683.2794 12796 8edb7d69a20b857904dd0ea757c14ec9 ""
   "/Users/suraj/Library/Application Support/MiKTeX/texmfs/install/tex/latex/xcolor/xcolor.sty" 1754057683.36838 55384 b454dec21c2d9f45ec0b793f0995b992 ""
   "fancyhdr.sty" 1770118425.63393 20521 e5d13d98d57bd53d4fed3aa61bd29c86 ""
-  "figures/fig_method_comparison.png" 1770119407.03885 320352 b5fc1d0c92f9f878da39fe2cfe93be7a ""
+  "figures/StealthRL_Pipeline_Final_v3.png" 1770536452.74248 6492755 93ea82cbfdf3b16f1abfc942f0bf9847 ""
+  "figures/fig_method_comparison.png" 1770534492.57376 339483 be6f1de6f53b7fad81adfc4404b74118 ""
   "iclr2026_conference.sty" 1770118425.64129 9062 3fd0414dffb5592e0912aeaa0ab108c9 ""
   "math_commands.tex" 1770118425.64152 12284 a71653715108dc62b66e3a0bde0307d8 ""
   "natbib.sty" 1770118425.64166 45154 40088ce024445d7ee2bca59e704cdd01 ""
-  "stealthrl_workshop.aux" 1770122918.92131 6245 c9192c4cb4757e01064e2fd33e23c213 "pdflatex"
-  "stealthrl_workshop.bbl" 1770122917.0742 3572 f2c79c99297aab99641f023f1a3cf418 "bibtex stealthrl_workshop"
-  "stealthrl_workshop.out" 1770122918.92215 1199 e0a936352d29231fd963c7660b2d9fc2 "pdflatex"
-  "stealthrl_workshop.tex" 1770122909.65843 15605 acf9bc1b5263dc31103d84f4863134bd ""
-  "table_main.tex" 1770121484.21529 593 e87d249722196429261ae75bc3e86b2f ""
+  "stealthrl_workshop.aux" 1770536480.28946 6601 b92b93b7b0c1daa00b8d67d42b86c48f "pdflatex"
+  "stealthrl_workshop.bbl" 1770536460.25228 3572 f2c79c99297aab99641f023f1a3cf418 "bibtex stealthrl_workshop"
+  "stealthrl_workshop.out" 1770536480.29044 1199 e0a936352d29231fd963c7660b2d9fc2 "pdflatex"
+  "stealthrl_workshop.tex" 1770536443.35817 17039 edd9dae505448be2360a8d557babe5a9 ""
+  "table_main.tex" 1770536474.49597 668 5bee55f7ac8c5d3fc44721167688fb3d ""
   (generated)
   "stealthrl_workshop.aux"
   "stealthrl_workshop.log"

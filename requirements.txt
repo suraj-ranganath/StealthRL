@@ -43,6 +43,7 @@ wandb>=0.15.0  # Optional: for experiment tracking
 # Configuration
 pyyaml>=6.0
 python-dotenv>=1.0.0
+openai>=1.0.0
 
 # Async utilities
 aiofiles>=23.0.0
