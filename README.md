@@ -46,3 +46,4 @@ This repository is intended for research and evaluation of AI-text detectors. It
 
 **License**
 MIT License. See `LICENSE`.
+
