@@ -1,15 +1,14 @@
 """
 Simple paraphrase baseline (M1).
 
-Uses base LM (Qwen3-4B via Ollama) without RL training.
+Uses base LM (Qwen3-4B via vLLM) without RL training.
 """
 
 import logging
 from typing import List, Optional
 
-import requests
-
 from .base import BaseAttackMethod, AttackOutput, validate_attack_output
+from .vllm_backend import get_vllm_generator
 
 logger = logging.getLogger(__name__)
 
@@ -26,31 +25,31 @@ class SimpleParaphrase(BaseAttackMethod):
     """
     M1: Simple paraphrase using base LM.
     
-    Uses Qwen3-4B via Ollama without RL training.
+    Uses Qwen3-4B via vLLM without RL training.
     Can generate multiple candidates and optionally rerank by a scoring function.
     """
     
-    DEFAULT_MODEL = "qwen3:4b-instruct"  # Ollama model name
-    DEFAULT_OLLAMA_URL = "http://localhost:11434"
+    DEFAULT_MODEL = "Qwen/Qwen3-4B-Instruct-2507"
     
     def __init__(
         self,
         model_name: str = None,
-        ollama_url: str = None,
         temperature: float = 0.9,
         top_p: float = 0.95,
         max_new_tokens: int = 512,
         scorer_fn: callable = None,
         rerank_detector: str = "roberta",
         device: str = None,
+        tensor_parallel_size: int = 1,
+        gpu_memory_utilization: float = 0.9,
+        max_model_len: int = 4096,
         **kwargs,
     ):
         """
         Initialize simple paraphrase method.
         
         Args:
-            model_name: Ollama model name (default: qwen3:4b)
-            ollama_url: Ollama server URL (default: http://localhost:11434)
+            model_name: Base model name (default: Qwen/Qwen3-4B-Instruct-2507)
             temperature: Sampling temperature
             top_p: Nucleus sampling threshold
             max_new_tokens: Maximum tokens to generate
@@ -61,71 +60,41 @@ class SimpleParaphrase(BaseAttackMethod):
         super().__init__(name="simple_paraphrase")
         
         self.model_name = model_name or self.DEFAULT_MODEL
-        self.ollama_url = ollama_url or self.DEFAULT_OLLAMA_URL
         self.temperature = temperature
         self.top_p = top_p
         self.max_new_tokens = max_new_tokens
         self.scorer_fn = scorer_fn
         self.rerank_detector_name = rerank_detector
         self.device = device
+        self.tensor_parallel_size = tensor_parallel_size
+        self.gpu_memory_utilization = gpu_memory_utilization
+        self.max_model_len = max_model_len
         self.rerank_detector = None
+        self.generator = None
     
     def load(self):
-        """Verify Ollama connection and load reranking detector."""
-        import torch
-        from ..detectors import get_detector
-        
-        logger.info(f"Connecting to Ollama at {self.ollama_url} for {self.model_name}...")
-        
-        # Check if Ollama is running and model is available
-        try:
-            response = requests.get(f"{self.ollama_url}/api/tags", timeout=5)
-            response.raise_for_status()
-            models = [m["name"] for m in response.json().get("models", [])]
-            
-            # Check if our model is available (handle tag variations)
-            model_base = self.model_name.split(":")[0]
-            available = any(model_base in m for m in models)
-            
-            if not available:
-                logger.warning(f"Model {self.model_name} not found in Ollama. Available: {models}")
-                logger.info(f"Attempting to pull {self.model_name}...")
-                # Try to use it anyway - Ollama might pull it automatically
-        except requests.exceptions.ConnectionError:
-            raise RuntimeError(f"Cannot connect to Ollama at {self.ollama_url}. Is Ollama running?")
-        except Exception as e:
-            logger.warning(f"Could not verify Ollama model: {e}")
-        
+        """Load shared vLLM generator."""
+        self.generator = get_vllm_generator(
+            model_name=self.model_name,
+            tensor_parallel_size=self.tensor_parallel_size,
+            gpu_memory_utilization=self.gpu_memory_utilization,
+            max_model_len=self.max_model_len,
+        )
+        self.generator.load()
         self._loaded = True
-        logger.info(f"✓ {self.name} ready (Ollama: {self.model_name})")
+        logger.info(f"✓ {self.name} ready (vLLM: {self.model_name})")
         logger.info(f"Reranking detector ({self.rerank_detector_name}) will load lazily if n_candidates > 1")
     
-    def _generate_single(self, text: str) -> str:
-        """Generate a single paraphrase using Ollama."""
+    def _generate_candidates(self, text: str, n_candidates: int) -> List[str]:
+        """Generate paraphrase candidates with vLLM."""
         prompt = PARAPHRASE_PROMPT.format(text=text)
-        
-        payload = {
-            "model": self.model_name,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": self.temperature,
-                "top_p": self.top_p,
-                "num_predict": self.max_new_tokens,
-            },
-        }
-        
-        response = requests.post(
-            f"{self.ollama_url}/api/generate",
-            json=payload,
-            timeout=120,
-        )
-        response.raise_for_status()
-        
-        result = response.json()
-        generated = result.get("response", "").strip()
-        
-        return generated
+        return self.generator.generate_batch(
+            [prompt],
+            n=n_candidates,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            max_tokens=self.max_new_tokens,
+        )[0]
     
     def _attack_impl(
         self,
@@ -143,15 +112,11 @@ class SimpleParaphrase(BaseAttackMethod):
         Returns:
             AttackOutput with best candidate
         """
-        # Generate candidates
-        candidates = []
-        for _ in range(n_candidates):
-            try:
-                para = self._generate_single(text)
-                if para:  # Non-empty
-                    candidates.append(para)
-            except Exception as e:
-                logger.warning(f"Generation failed: {e}")
+        try:
+            candidates = self._generate_candidates(text, n_candidates)
+        except Exception as e:
+            logger.warning(f"Generation failed: {e}")
+            candidates = []
         
         if not candidates:
             # Fallback to original
@@ -181,6 +146,8 @@ class SimpleParaphrase(BaseAttackMethod):
             text=candidates[best_idx],
             metadata={
                 "method": self.name,
+                "backend": "vllm",
+                "model": self.model_name,
                 "n_candidates": n_candidates,
                 "best_idx": best_idx,
                 "best_detector_score": scores[best_idx],
@@ -189,6 +156,93 @@ class SimpleParaphrase(BaseAttackMethod):
             all_candidates=candidates,
             candidate_scores=scores,
         )
+
+    def attack_batch(
+        self,
+        texts: List[str],
+        n_candidates: int = 1,
+        **kwargs,
+    ) -> List[AttackOutput]:
+        if not self._loaded:
+            self.load()
+
+        prompts = [PARAPHRASE_PROMPT.format(text=text) for text in texts]
+        try:
+            grouped_candidates = self.generator.generate_batch(
+                prompts,
+                n=n_candidates,
+                temperature=self.temperature,
+                top_p=self.top_p,
+                max_tokens=self.max_new_tokens,
+            )
+        except Exception as e:
+            logger.error(f"Batch generation failed: {e}")
+            grouped_candidates = [[] for _ in texts]
+
+        flat_candidates: List[str] = []
+        group_sizes: List[int] = []
+        for candidates in grouped_candidates:
+            filtered = [candidate for candidate in candidates if candidate]
+            flat_candidates.extend(filtered)
+            group_sizes.append(len(filtered))
+
+        flat_scores: List[float] = []
+        if n_candidates > 1 and flat_candidates:
+            if self.rerank_detector is None:
+                import torch
+                from ..detectors import get_detector
+
+                self.device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
+                logger.info(f"Loading reranking detector: {self.rerank_detector_name}")
+                self.rerank_detector = get_detector(self.rerank_detector_name, device=self.device)
+                self.rerank_detector.load()
+            flat_scores = self.rerank_detector.get_scores(flat_candidates)
+
+        results: List[AttackOutput] = []
+        cursor = 0
+        for text, size in zip(texts, group_sizes):
+            candidates = flat_candidates[cursor:cursor + size]
+            scores = flat_scores[cursor:cursor + size] if flat_scores else [0.0] * len(candidates)
+            cursor += size
+
+            if not candidates:
+                results.append(AttackOutput(
+                    text=text,
+                    original_text=text,
+                    valid=False,
+                    fail_reason="no_valid_candidates",
+                    metadata={"method": self.name, "backend": "vllm"},
+                ))
+                continue
+
+            best_idx = scores.index(min(scores)) if scores else 0
+            output = AttackOutput(
+                text=candidates[best_idx],
+                metadata={
+                    "method": self.name,
+                    "backend": "vllm",
+                    "model": self.model_name,
+                    "n_candidates": n_candidates,
+                    "best_idx": best_idx,
+                    "best_detector_score": scores[best_idx] if scores else 0.0,
+                    "rerank_detector": self.rerank_detector_name,
+                },
+                all_candidates=candidates,
+                candidate_scores=scores,
+                original_text=text,
+            )
+            if self.validate_outputs:
+                valid, fail_reason = validate_attack_output(
+                    text,
+                    output.text,
+                    min_words=self.min_words,
+                    max_length_ratio=self.max_length_ratio,
+                )
+                output.valid = valid
+                output.fail_reason = fail_reason
+            results.append(output)
+
+        return results
 
 
 class SimpleParaphraseWithReranking(SimpleParaphrase):

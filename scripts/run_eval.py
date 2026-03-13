@@ -98,6 +98,13 @@ Examples:
         default=[2],
         help="Candidates per sample (supports budget sweep: --n-candidates 1 2 4 8)",
     )
+    parser.add_argument(
+        "--m1-backend",
+        type=str,
+        default="vllm",
+        choices=["vllm", "tinker"],
+        help="Backend for M1 simple paraphrase baseline",
+    )
 
     # Tinker concurrency options (StealthRL / M2 only)
     parser.add_argument(
@@ -151,6 +158,23 @@ Examples:
         "--save-intermediate",
         action="store_true",
         help="Save intermediate outputs after each method/detector (safer for long runs)",
+    )
+    parser.add_argument(
+        "--reuse-human-scores-from",
+        type=str,
+        default=None,
+        help="Reuse human detector scores from a prior run directory",
+    )
+    parser.add_argument(
+        "--reuse-thresholds-from",
+        type=str,
+        default=None,
+        help="Reuse thresholds from a prior run directory",
+    )
+    parser.add_argument(
+        "--allow-failed-attacks",
+        action="store_true",
+        help="Allow invalid attack outputs instead of failing the run",
     )
     
     # Output options
@@ -288,35 +312,38 @@ def main():
                 logger.info(f"\n{'='*70}")
                 logger.info(f"Running with N={n_cand} candidates")
                 logger.info(f"{'='*70}\n")
-            
-        runner.run(
-            datasets=args.datasets,
-            methods=args.methods,
-            detectors=args.detectors,
-            n_candidates=n_cand,
-            n_human=args.n_human,
-            n_ai=args.n_ai,
-            stealthrl_checkpoint=args.stealthrl_checkpoint,
-            cache_dir=args.cache_dir,
-            roberta_batch_size=args.roberta_batch_size,
-            fast_detectgpt_batch_size=args.fast_detectgpt_batch_size,
-            mage_batch_size=args.mage_batch_size,
-            binoculars_batch_size=args.binoculars_batch_size,
-            save_intermediate=args.save_intermediate,
-            tinker_concurrency=args.tinker_concurrency,
-            tinker_chunk_size=args.tinker_chunk_size,
-            tinker_max_retries=args.tinker_max_retries,
-            tinker_backoff_s=args.tinker_backoff_s,
-            tinker_resume_path=tinker_resume_path,
-            setting_suffix=f"N={n_cand}" if len(args.n_candidates) > 1 else None,
-            gpt_quality=args.gpt_quality,
-            gpt_quality_methods=args.gpt_quality_methods,
-            gpt_quality_max_per_method=args.gpt_quality_max_per_method,
-            gpt_quality_model=args.gpt_quality_model,
-            openai_api_key=openai_key,
-            gpt_quality_cache=not args.gpt_quality_no_cache,
-            sample_ids=sample_ids,
-        )
+            runner.run(
+                datasets=args.datasets,
+                methods=args.methods,
+                detectors=args.detectors,
+                n_candidates=n_cand,
+                n_human=args.n_human,
+                n_ai=args.n_ai,
+                stealthrl_checkpoint=args.stealthrl_checkpoint,
+                m1_backend=args.m1_backend,
+                cache_dir=args.cache_dir,
+                roberta_batch_size=args.roberta_batch_size,
+                fast_detectgpt_batch_size=args.fast_detectgpt_batch_size,
+                mage_batch_size=args.mage_batch_size,
+                binoculars_batch_size=args.binoculars_batch_size,
+                save_intermediate=args.save_intermediate,
+                tinker_concurrency=args.tinker_concurrency,
+                tinker_chunk_size=args.tinker_chunk_size,
+                tinker_max_retries=args.tinker_max_retries,
+                tinker_backoff_s=args.tinker_backoff_s,
+                tinker_resume_path=tinker_resume_path,
+                setting_suffix=f"N={n_cand}" if len(args.n_candidates) > 1 else None,
+                gpt_quality=args.gpt_quality,
+                gpt_quality_methods=args.gpt_quality_methods,
+                gpt_quality_max_per_method=args.gpt_quality_max_per_method,
+                gpt_quality_model=args.gpt_quality_model,
+                openai_api_key=openai_key,
+                gpt_quality_cache=not args.gpt_quality_no_cache,
+                sample_ids=sample_ids,
+                reuse_human_scores_from=args.reuse_human_scores_from,
+                reuse_thresholds_from=args.reuse_thresholds_from,
+                allow_failed_attacks=args.allow_failed_attacks,
+            )
         
         logger.info("Evaluation completed successfully!")
         

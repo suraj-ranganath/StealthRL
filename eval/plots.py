@@ -2192,16 +2192,18 @@ def generate_all_plots(
 # ============================================================================
 
 QUALITY_RATING_PROMPT = """
-You are an expert linguist and paraphrase evaluator. Your task is to assess the overall linguistic quality of a paraphrased text compared to the original source text. Focus on fluency, grammaticality, clarity, and naturalness.
+You are an expert linguist and paraphrase evaluator. Your task is to assess the overall writing quality of a paraphrased text compared to the original source text.
 
-Be generous when the text reads well. Use the full 1-5 scale and avoid defaulting to 3 unless it truly fits. If the paraphrase is fluent and natural with only minor issues, prefer 4 or 5. Use 2 or 1 only when the text is clearly hard to read or incoherent.
+Judge the paraphrase as real writing, not as an attack artifact. Reward unusual sentence structure only when it still reads naturally. Penalize awkward clause order, stilted transitions, filler phrases, obvious prompt leakage, parenthetical meta-comments, detector-evasion artifacts, and phrasing that feels unnatural even if the meaning is preserved.
+
+Be strict about naturalness. Use the full 1-5 scale and avoid defaulting to 3 unless it truly fits.
 
 Scoring criteria:
-5 - Excellent: Fluent, grammatical, and natural; reads like high-quality human writing.
-4 - Good: Mostly fluent and clear with minor awkwardness or errors.
-3 - Acceptable: Understandable but noticeably awkward or error-prone.
-2 - Poor: Hard to read; many grammatical issues or unnatural phrasing.
-1 - Unusable: Severely degraded quality; incoherent or ungrammatical.
+5 - Excellent: Fluent, grammatical, and natural throughout; reads like polished human writing.
+4 - Good: Clear and mostly natural with only minor awkwardness.
+3 - Acceptable: Understandable, but noticeably stiff, awkward, or uneven.
+2 - Poor: Readably degraded; unnatural syntax or phrasing frequently distracts.
+1 - Unusable: Severely broken, incoherent, or clearly unnatural.
 
 Provide your final output as a JSON object in this format:
 {
@@ -2247,7 +2249,7 @@ Original Text:
 Paraphrased Text:
 \"\"\"{paraphrased_text}\"\"\"
 
-What score (1 to 5) would you assign to the paraphrase's quality, and why?
+What score (1 to 5) would you assign to the paraphrase's quality, and why? Do not give extra credit for sounding evasive or unusual if the prose becomes less natural.
 """
     
     return [

@@ -21,6 +21,7 @@ import requests
 import torch
 
 from .base import BaseAttackMethod, AttackOutput
+from .vllm_backend import get_vllm_generator
 
 logger = logging.getLogger(__name__)
 
@@ -361,7 +362,7 @@ Paraphrased text:"""
 
 class AuthorMist(BaseAttackMethod):
     """
-    M4: AuthorMist attack using published HF model.
+    M4: AuthorMist attack using published model via vLLM.
     
     AuthorMist is trained for text humanization to evade AI detectors.
     Paper: https://arxiv.org/abs/2503.08716
@@ -377,6 +378,10 @@ class AuthorMist(BaseAttackMethod):
         temperature: float = 0.7,
         top_p: float = 0.9,
         rerank_detector: str = "roberta",
+        tensor_parallel_size: int = 1,
+        gpu_memory_utilization: float = 0.9,
+        max_model_len: int = 4096,
+        **kwargs,
     ):
         """
         Initialize AuthorMist.
@@ -397,92 +402,44 @@ class AuthorMist(BaseAttackMethod):
         self.temperature = temperature
         self.top_p = top_p
         self.rerank_detector_name = rerank_detector
+        self.tensor_parallel_size = tensor_parallel_size
+        self.gpu_memory_utilization = gpu_memory_utilization
+        self.max_model_len = max_model_len
         
-        self.model = None
-        self.tokenizer = None
+        self.generator = None
         self.rerank_detector = None
     
     def load(self):
-        """Load AuthorMist model from HuggingFace and reranking detector."""
-        from transformers import AutoTokenizer, AutoModelForCausalLM
-        from ..detectors import get_detector
-        
-        logger.info(f"Loading AuthorMist from {self.model_name}...")
-        
+        """Load AuthorMist vLLM generator."""
         self.device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
-        
-        try:
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                device_map="auto" if self.device == "cuda" else None,
-                trust_remote_code=True,
-            )
-            
-            if self.device != "cuda":
-                self.model = self.model.to(self.device)
-            
-            self.model.eval()
-            
-            if self.tokenizer.pad_token is None:
-                self.tokenizer.pad_token = self.tokenizer.eos_token
-            
-            self._loaded = True
-            logger.info(f"✓ AuthorMist loaded on {self.device}")
-            logger.info(f"Reranking detector ({self.rerank_detector_name}) will load lazily if n_candidates > 1")
-            
-        except Exception as e:
-            logger.error(f"Failed to load AuthorMist: {e}")
-            raise
+        self.generator = get_vllm_generator(
+            model_name=self.model_name,
+            tensor_parallel_size=self.tensor_parallel_size,
+            gpu_memory_utilization=self.gpu_memory_utilization,
+            max_model_len=self.max_model_len,
+        )
+        self.generator.load()
+        self._loaded = True
+        logger.info(f"✓ AuthorMist loaded via vLLM")
+        logger.info(f"Reranking detector ({self.rerank_detector_name}) will load lazily if n_candidates > 1")
     
-    def _humanize(self, text: str) -> str:
-        """Apply AuthorMist humanization."""
-        # Official AuthorMist prompt format from HF model card:
-        # https://huggingface.co/authormist/authormist-originality
-        prompt = f"""Please paraphrase the following text to make it more human-like while preserving the original meaning:
+    @staticmethod
+    def _build_prompt(text: str) -> str:
+        return f"""Please paraphrase the following text to make it more human-like while preserving the original meaning:
 
 {text}
 
 Paraphrased text:"""
-        
-        # Check for chat template
-        if hasattr(self.tokenizer, 'apply_chat_template'):
-            messages = [{"role": "user", "content": prompt}]
-            try:
-                formatted = self.tokenizer.apply_chat_template(
-                    messages,
-                    tokenize=False,
-                    add_generation_prompt=True,
-                )
-            except Exception:
-                formatted = prompt
-        else:
-            formatted = prompt
-        
-        inputs = self.tokenizer(
-            formatted,
-            return_tensors="pt",
-            truncation=True,
-            max_length=1024,
-        ).to(self.device)
-        
-        with torch.no_grad():
-            outputs = self.model.generate(
-                **inputs,
-                max_new_tokens=self.max_new_tokens,
-                temperature=self.temperature,
-                top_p=self.top_p,
-                do_sample=True,
-                pad_token_id=self.tokenizer.pad_token_id,
-            )
-        
-        generated = self.tokenizer.decode(
-            outputs[0][inputs.input_ids.shape[1]:],
-            skip_special_tokens=True,
-        )
-        
-        return generated.strip()
+
+    def _humanize(self, text: str, n_candidates: int = 1) -> list[str]:
+        prompts = [self._build_prompt(text)]
+        return self.generator.generate_batch(
+            prompts,
+            n=n_candidates,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            max_tokens=self.max_new_tokens,
+        )[0]
     
     def _attack_impl(
         self,
@@ -503,14 +460,11 @@ Paraphrased text:"""
         if not self._loaded:
             self.load()
         
-        candidates = []
-        for _ in range(n_candidates):
-            try:
-                humanized = self._humanize(text)
-                if humanized:
-                    candidates.append(humanized)
-            except Exception as e:
-                logger.warning(f"AuthorMist generation failed: {e}")
+        try:
+            candidates = self._humanize(text, n_candidates=n_candidates)
+        except Exception as e:
+            logger.warning(f"AuthorMist generation failed: {e}")
+            candidates = []
         
         if not candidates:
             return AttackOutput(
@@ -537,6 +491,7 @@ Paraphrased text:"""
             metadata={
                 "method": self.name,
                 "model": self.model_name,
+                "backend": "vllm",
                 "n_candidates": n_candidates,
                 "best_idx": best_idx,
                 "best_detector_score": scores[best_idx],
@@ -546,6 +501,76 @@ Paraphrased text:"""
             candidate_scores=scores,
             original_text=text,
         )
+
+    def attack_batch(
+        self,
+        texts: List[str],
+        n_candidates: int = 1,
+        **kwargs,
+    ) -> List[AttackOutput]:
+        if not self._loaded:
+            self.load()
+
+        prompts = [self._build_prompt(text) for text in texts]
+        grouped_candidates = self.generator.generate_batch(
+            prompts,
+            n=n_candidates,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            max_tokens=self.max_new_tokens,
+        )
+
+        flat_candidates: List[str] = []
+        group_sizes: List[int] = []
+        for candidates in grouped_candidates:
+            filtered = [candidate for candidate in candidates if candidate]
+            flat_candidates.extend(filtered)
+            group_sizes.append(len(filtered))
+
+        flat_scores: List[float] = []
+        if n_candidates > 1 and flat_candidates:
+            if self.rerank_detector is None:
+                from ..detectors import get_detector
+
+                logger.info(f"Loading reranking detector: {self.rerank_detector_name}")
+                self.rerank_detector = get_detector(self.rerank_detector_name, device=self.device)
+                self.rerank_detector.load()
+            flat_scores = self.rerank_detector.get_scores(flat_candidates)
+
+        results: List[AttackOutput] = []
+        cursor = 0
+        for text, size in zip(texts, group_sizes):
+            candidates = flat_candidates[cursor:cursor + size]
+            scores = flat_scores[cursor:cursor + size] if flat_scores else [0.0] * len(candidates)
+            cursor += size
+
+            if not candidates:
+                results.append(AttackOutput(
+                    text=text,
+                    original_text=text,
+                    valid=False,
+                    fail_reason="generation_failed",
+                    metadata={"method": self.name, "backend": "vllm", "error": "generation_failed"},
+                ))
+                continue
+
+            best_idx = scores.index(min(scores)) if scores else 0
+            results.append(AttackOutput(
+                text=candidates[best_idx],
+                metadata={
+                    "method": self.name,
+                    "model": self.model_name,
+                    "backend": "vllm",
+                    "n_candidates": n_candidates,
+                    "best_idx": best_idx,
+                    "best_detector_score": scores[best_idx] if scores else 0.0,
+                    "rerank_detector": self.rerank_detector_name,
+                },
+                all_candidates=candidates,
+                candidate_scores=scores,
+                original_text=text,
+            ))
+        return results
 
 
 class AuthorMistFallback(BaseAttackMethod):
