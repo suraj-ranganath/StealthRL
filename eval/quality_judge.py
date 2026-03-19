@@ -4,16 +4,16 @@ GPT-based text quality evaluation (Adversarial Paraphrasing-style).
 Supports optional gpt-4o-mini judging with caching and per-method caps.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
 import random
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import httpx
+from openai import AsyncOpenAI
 
 from .plots import (
     QUALITY_RATING_PROMPT,
@@ -25,13 +25,16 @@ logger = logging.getLogger(__name__)
 
 
 SIMILARITY_RATING_PROMPT = """
-You are an expert linguist and paraphrase evaluator. Your task is to assess how well the paraphrased text preserves the meaning of the original source text. Use the following scoring criteria:
+You are an expert linguist and paraphrase evaluator. Your task is to assess how well the paraphrased text preserves the meaning of the original source text.
 
-5 - Approximately equivalent: Meaning is preserved; differences are only in wording or structure.
-4 - Nearly equivalent: Meaning is mostly preserved; minor factual details differ.
-3 - Somewhat equivalent: Some meaning is preserved; important details or meanings differ.
-2 - Topically related: The texts are on the same topic but most meaning is lost.
-1 - Not topically related: The texts are not related in topic or meaning.
+Be generous when meaning is substantially preserved. Use the full 1-5 scale and avoid defaulting to 3 unless it truly fits. If the paraphrase keeps the core meaning with only minor changes, prefer 4 or 5. Use 2 or 1 only for clear meaning loss or topic drift.
+
+Scoring criteria:
+5 - Approximately equivalent: Meaning preserved; only wording/structure changes.
+4 - Nearly equivalent: Meaning mostly preserved; small factual or emphasis shifts.
+3 - Somewhat equivalent: Partial meaning preserved; important details differ.
+2 - Topically related: Same topic but most meaning lost.
+1 - Not related: Different topic or meaning.
 
 Provide your final output as a JSON object in this format:
 {
@@ -60,12 +63,17 @@ def get_similarity_rating_messages(original_text: str, paraphrased_text: str) ->
 
 @dataclass
 class GPTQualityConfig:
-    model: str = "gpt-4o-mini"
+    model: str = "gpt-5-nano"
     max_per_method: int = 200
-    temperature: float = 0.0
+    temperature: Optional[float] = 0.0
     max_output_tokens: int = 256
     seed: int = 42
     cache_path: Optional[Path] = None
+    concurrency: int = 32
+    request_timeout_s: int = 60
+    max_retries: int = 6
+    reasoning_effort: Optional[str] = None
+    text_verbosity: Optional[str] = None
 
 
 def _hash_key(model: str, prompt_type: str, original: str, paraphrased: str) -> str:
@@ -122,35 +130,47 @@ def _extract_response_text(data: Dict) -> str:
     return ""
 
 
-def _call_openai(
-    api_key: str,
+def _response_to_dict(response) -> Dict:
+    if isinstance(response, dict):
+        return response
+    for attr in ("model_dump", "dict"):
+        if hasattr(response, attr):
+            try:
+                return getattr(response, attr)()
+            except Exception:
+                continue
+    return {}
+
+
+async def _call_openai_async(
+    client: AsyncOpenAI,
     model: str,
     messages: List[Dict],
-    temperature: float,
+    temperature: Optional[float],
     max_output_tokens: int,
-    timeout: int = 60,
+    reasoning_effort: Optional[str],
+    text_verbosity: Optional[str],
 ) -> str:
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
     payload = {
         "model": model,
-        "messages": messages,  # Fixed: was "input"
-        "temperature": temperature,
-        "max_tokens": max_output_tokens,  # Fixed: was "max_output_tokens"
+        "input": messages,
+        "max_output_tokens": max_output_tokens,
     }
+    if temperature is not None:
+        payload["temperature"] = temperature
+    if reasoning_effort:
+        payload["reasoning"] = {"effort": reasoning_effort}
+    if text_verbosity:
+        payload["text"] = {"verbosity": text_verbosity}
 
-    with httpx.Client(timeout=timeout) as client:
-        resp = client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)  # Fixed: was /v1/responses
-        resp.raise_for_status()
-        data = resp.json()
-
-    return _extract_response_text(data)
+    response = await client.responses.create(**payload)
+    if hasattr(response, "output_text") and isinstance(response.output_text, str):
+        return response.output_text
+    return _extract_response_text(_response_to_dict(response))
 
 
-def _judge_single(
-    api_key: str,
+async def _judge_single_async(
+    client: AsyncOpenAI,
     config: GPTQualityConfig,
     original_text: str,
     paraphrased_text: str,
@@ -161,19 +181,57 @@ def _judge_single(
     else:
         messages = get_similarity_rating_messages(original_text, paraphrased_text)
 
-    response_text = _call_openai(
-        api_key=api_key,
-        model=config.model,
-        messages=messages,
-        temperature=config.temperature,
-        max_output_tokens=config.max_output_tokens,
-    )
+    last_err: Optional[Exception] = None
+    temperature = config.temperature
+    reasoning_effort = config.reasoning_effort
+    text_verbosity = config.text_verbosity
+    if "gpt-5" in config.model:
+        if temperature is not None:
+            temperature = None
+        if not reasoning_effort:
+            reasoning_effort = "minimal"
+        if not text_verbosity:
+            text_verbosity = "low"
+    for attempt in range(config.max_retries + 1):
+        try:
+            response_text = await _call_openai_async(
+                client=client,
+                model=config.model,
+                messages=messages,
+                temperature=temperature,
+                max_output_tokens=config.max_output_tokens,
+                reasoning_effort=reasoning_effort,
+                text_verbosity=text_verbosity,
+            )
+            score, justification = parse_quality_rating_response(response_text)
+            return score, justification
+        except Exception as e:
+            msg = str(e).lower()
+            if "temperature" in msg and "unsupported" in msg and temperature is not None:
+                temperature = None
+                continue
+            if "rate limit" in msg or "rate_limit" in msg or "429" in msg:
+                wait_s = 1.0 * (2 ** attempt) + random.uniform(0.0, 0.5)
+                if "try again in" in msg:
+                    try:
+                        tail = msg.split("try again in", 1)[1]
+                        num = "".join(ch for ch in tail if ch.isdigit() or ch == ".")
+                        if num:
+                            wait_s = max(wait_s, float(num) / 1000.0)
+                    except Exception:
+                        pass
+                await asyncio.sleep(wait_s)
+                last_err = e
+                continue
+            last_err = e
+            if attempt < config.max_retries:
+                await asyncio.sleep(0.5 * (2 ** attempt))
+            else:
+                raise last_err
+    raise last_err
 
-    score, justification = parse_quality_rating_response(response_text)
-    return score, justification
 
-
-def run_gpt_quality_judge(
+async def run_gpt_quality_judge_async(
     api_key: str,
     items: List[Dict],
     config: GPTQualityConfig,
@@ -204,37 +262,32 @@ def run_gpt_quality_judge(
     results: List[Dict] = []
     logger.info(f"[GPT-QUALITY] Evaluating {len(selected)} samples (cap={config.max_per_method} per method)")
 
-    for idx, item in enumerate(selected, 1):
-        original = item["original"]
-        paraphrased = item["paraphrased"]
+    sem = asyncio.Semaphore(max(1, config.concurrency))
+    cache_lock = asyncio.Lock()
+    progress_lock = asyncio.Lock()
+    progress = {"done": 0, "total": 0}
 
-        record = {
-            "sample_id": item["sample_id"],
-            "dataset": item["dataset"],
-            "method": item["method"],
-            "setting": item["setting"],
-            "quality_model": config.model,
-        }
+    async with AsyncOpenAI(api_key=api_key, timeout=config.request_timeout_s) as client:
+        tasks = []
 
-        for prompt_type in ("quality", "similarity"):
-            cache_key = _hash_key(config.model, prompt_type, original, paraphrased)
-            cached = cache.get(cache_key)
-            if cached:
-                score = cached.get(f"{prompt_type}_rating")
-                justification = cached.get(f"{prompt_type}_justification")
-            else:
+        async def run_task(record: Dict, cache_key: str, prompt_type: str, original: str, paraphrased: str):
+            async with sem:
                 try:
-                    score, justification = _judge_single(
-                        api_key=api_key,
+                    score, justification = await _judge_single_async(
+                        client=client,
                         config=config,
                         original_text=original,
                         paraphrased_text=paraphrased,
                         prompt_type=prompt_type,
                     )
                 except Exception as e:
-                    logger.warning(f"[GPT-QUALITY] Failed {prompt_type} for sample {item['sample_id']}: {e}")
+                    logger.warning(f"[GPT-QUALITY] Failed {prompt_type} for sample {record.get('sample_id')}: {e}")
                     score, justification = None, None
 
+            record[f"{prompt_type}_rating"] = score
+            record[f"{prompt_type}_justification"] = justification
+
+            if config.cache_path:
                 cache_record = {
                     "cache_key": cache_key,
                     "model": config.model,
@@ -244,16 +297,58 @@ def run_gpt_quality_judge(
                     f"{prompt_type}_rating": score,
                     f"{prompt_type}_justification": justification,
                 }
-                _append_cache(config.cache_path, cache_record)
-                cache[cache_key] = cache_record
+                async with cache_lock:
+                    _append_cache(config.cache_path, cache_record)
+                    cache[cache_key] = cache_record
 
-            record[f"{prompt_type}_rating"] = score
-            record[f"{prompt_type}_justification"] = justification
+            async with progress_lock:
+                progress["done"] += 1
+                if progress["done"] % 25 == 0:
+                    logger.info(f"[GPT-QUALITY] {progress['done']}/{progress['total']} completed")
 
-        results.append(record)
+        for item in selected:
+            original = item["original"]
+            paraphrased = item["paraphrased"]
 
-        if idx % 25 == 0:
-            logger.info(f"[GPT-QUALITY] {idx}/{len(selected)} completed")
-        time.sleep(0.05)
+            record = {
+                "sample_id": item["sample_id"],
+                "dataset": item["dataset"],
+                "method": item["method"],
+                "setting": item["setting"],
+                "quality_model": config.model,
+            }
+
+            for prompt_type in ("quality", "similarity"):
+                cache_key = _hash_key(config.model, prompt_type, original, paraphrased)
+                cached = cache.get(cache_key)
+                cached_score = cached.get(f"{prompt_type}_rating") if cached else None
+                if cached and cached_score is not None:
+                    record[f"{prompt_type}_rating"] = cached.get(f"{prompt_type}_rating")
+                    record[f"{prompt_type}_justification"] = cached.get(f"{prompt_type}_justification")
+                else:
+                    progress["total"] += 1
+                    tasks.append(asyncio.create_task(
+                        run_task(record, cache_key, prompt_type, original, paraphrased)
+                    ))
+
+            results.append(record)
+
+        if tasks:
+            await asyncio.gather(*tasks)
 
     return results
+
+
+def run_gpt_quality_judge(
+    api_key: str,
+    items: List[Dict],
+    config: GPTQualityConfig,
+) -> List[Dict]:
+    """
+    Synchronous wrapper for async GPT quality evaluation.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(run_gpt_quality_judge_async(api_key=api_key, items=items, config=config))
+    raise RuntimeError("run_gpt_quality_judge cannot be called from a running event loop. Use run_gpt_quality_judge_async.")

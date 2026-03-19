@@ -1,9 +1,13 @@
 # StealthRL: Reinforcement Learning Paraphrase Attacks for Multi-Detector Evasion of AI-Text Detectors
 
 **Abstract**  
-We introduce *StealthRL*, a reinforcement-learning framework that paraphrases AI-generated text to evade detection while preserving meaning and fluency, enabling systematic red-teaming of AI-text detectors. The challenge is to reduce detector confidence at strict low-false-positive operating points without collapsing semantic fidelity or overfitting to a single detector family. StealthRL fine-tunes a Qwen-family paraphraser with LoRA and a multi-objective reward combining detector evasion, semantic similarity, and fluency. On the MAGE benchmark with multiple detectors, StealthRL reduces detection at stringent operating points while maintaining high semantic similarity, outperforming simple paraphrasing and a detector-guided baseline. We release an anonymized code package in the supplementary material with a placeholder anonymous link for reproducibility.
+AI-text detectors face a critical robustness challenge: adversarial paraphrasing attacks that preserve semantics while evading detection. *StealthRL* is a reinforcement learning framework for stress-testing detector robustness under realistic adversarial conditions. It trains a paraphrase policy against a multi-detector ensemble using Group Relative Policy Optimization (GRPO) with LoRA adapters on Qwen3-4B, optimizing a composite reward that balances detector evasion with semantic preservation. On the full filtered MAGE test pool (15,310 human / 14,656 AI) and a four-detector panel of RoBERTa, Fast-DetectGPT, Binoculars, and MAGE, StealthRL achieves near-zero detection on three of the four detectors and a 0.024 mean TPR@1%FPR, reducing mean AUROC from 0.79 to 0.43 while attaining a 97.6% attack success rate. The attack also transfers to held-out detectors not seen during training, revealing shared architectural vulnerabilities rather than detector-specific brittleness. This repository contains the training code, evaluation pipeline, and paper sources used for those experiments.
 
 ![StealthRL Pipeline Overview](figures/StealthRL_Pipeline_Final_v3.png)
+
+**Paper Sources**
+- `acl2026/`: anonymized ACL 2026 SRW review package
+- `arxiv/`: arXiv submission package and clean upload bundle
 
 **Implementation Overview**
 The rest of the implementation is organized as a modular, configuration-driven research codebase:
@@ -38,7 +42,6 @@ The rest of the implementation is organized as a modular, configuration-driven r
   ```
 
 **Reproducibility**
-- The anonymized release package uses a placeholder link included in the supplementary material.
 - All experiments are driven by YAML configs under `configs/` and logged to `outputs/`.
 
 **Responsible Use**

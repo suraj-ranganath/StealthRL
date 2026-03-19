@@ -173,7 +173,7 @@ class EvalRunner:
         self,
         method_names: List[str],
         stealthrl_checkpoint: str = None,
-        m1_backend: str = "ollama",
+        m1_backend: str = "vllm",
         m1_base_model: Optional[str] = None,
         tinker_concurrency: int = 64,
         tinker_chunk_size: int = 256,
@@ -292,6 +292,7 @@ class EvalRunner:
         n_candidates: int = 4,
         save_outputs: bool = True,
         save_intermediate: bool = False,
+        fail_on_invalid: bool = True,
     ) -> Dict[str, Dict[str, List[str]]]:
         """
         Run all attack methods on AI samples.
@@ -317,6 +318,25 @@ class EvalRunner:
                 try:
                     # Run attack on all AI samples
                     results = method.attack_batch(ai_texts, n_candidates=n_candidates)
+                    if len(results) != len(ai_texts):
+                        raise RuntimeError(
+                            f"{method_name} returned {len(results)} results for {len(ai_texts)} inputs"
+                        )
+
+                    invalid_results = []
+                    for sample_id, result in zip(ai_ids, results):
+                        if not result.valid:
+                            invalid_results.append((sample_id, result.fail_reason or "invalid_output"))
+
+                    if invalid_results and fail_on_invalid:
+                        preview = ", ".join(
+                            f"{sample_id}:{reason}" for sample_id, reason in invalid_results[:10]
+                        )
+                        raise RuntimeError(
+                            f"{method_name} produced {len(invalid_results)} invalid outputs on {dataset_name}. "
+                            f"Examples: {preview}"
+                        )
+
                     attacked_texts = [r.text for r in results]
                     
                     outputs[dataset_name][method_name] = attacked_texts
@@ -350,7 +370,7 @@ class EvalRunner:
                 
                 except Exception as e:
                     logger.error(f"[ATTACKS] Failed {method_name} on {dataset_name}: {e}")
-                    outputs[dataset_name][method_name] = ai_texts  # Fallback to original
+                    raise
         
         # Save raw outputs
         if save_outputs:
@@ -538,6 +558,12 @@ class EvalRunner:
             sample_ids = [s.id for s in dataset.ai_samples]
             
             for method_name, attacked_texts in outputs.get(dataset_name, {}).items():
+                logger.info(
+                    "Quality metrics: dataset=%s method=%s n=%d",
+                    dataset_name,
+                    method_name,
+                    len(attacked_texts),
+                )
                 quality = compute_quality_metrics(
                     original_texts=original_texts,
                     paraphrased_texts=attacked_texts,
@@ -549,7 +575,14 @@ class EvalRunner:
                 )
                 
                 for q in quality:
-                    self.all_quality.append(q.to_dict())
+                    record = q.to_dict()
+                    record["dataset"] = dataset_name
+                    self.all_quality.append(record)
+                logger.info(
+                    "Completed quality metrics: dataset=%s method=%s",
+                    dataset_name,
+                    method_name,
+                )
         
         logger.info(f"Computed quality metrics for {len(self.all_quality)} samples")
 
@@ -699,7 +732,7 @@ class EvalRunner:
         n_human: int = 1000,
         n_ai: int = 1000,
         stealthrl_checkpoint: str = None,
-        m1_backend: str = "ollama",
+        m1_backend: str = "vllm",
         m1_base_model: Optional[str] = None,
         cache_dir: str = None,
         binoculars_full: bool = False,
@@ -731,6 +764,7 @@ class EvalRunner:
         sample_ids: Optional[Dict[str, Dict[str, List[str]]]] = None,
         reuse_human_scores_from: Optional[str] = None,
         reuse_thresholds_from: Optional[str] = None,
+        allow_failed_attacks: bool = False,
     ):
         """
         Run complete evaluation pipeline.
@@ -845,7 +879,11 @@ class EvalRunner:
         
         # Step 5: Run attacks
         step_start = time.time()
-        outputs = self.run_attacks(n_candidates=n_candidates, save_intermediate=save_intermediate)
+        outputs = self.run_attacks(
+            n_candidates=n_candidates,
+            save_intermediate=save_intermediate,
+            fail_on_invalid=not allow_failed_attacks,
+        )
         step_times["5_run_attacks"] = time.time() - step_start
         logger.info(f"[TIMING] Step 5 (Run attacks): {step_times['5_run_attacks']:.2f}s")
         

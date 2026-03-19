@@ -1,0 +1,610 @@
+\documentclass[11pt]{article}
+\usepackage[review]{acl}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{times}
+\usepackage{latexsym}
+
+% Math commands
+\input{math_commands.tex}
+
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{amsmath,amssymb}
+\usepackage{subcaption}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{capt-of}
+\usepackage[section]{placeins}
+\usepackage{microtype}
+\usepackage{inconsolata}
+
+\title{\textbf{StealthRL: Reinforcement Learning Paraphrase Attacks\\for Multi-Detector Evasion of AI-Text Detectors}}
+
+\author{Anonymous ACL Submission}
+
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+AI-text detectors face a critical robustness challenge: adversarial paraphrasing attacks that preserve semantics while evading detection. We introduce \emph{StealthRL}, a reinforcement learning framework that stress-tests detector robustness under realistic adversarial conditions. StealthRL trains a paraphrase policy against a multi-detector ensemble using Group Relative Policy Optimization (GRPO) with LoRA adapters on Qwen3-4B, optimizing a composite reward that balances detector evasion with semantic preservation. We evaluate six attack settings (M0--M5) on the full filtered MAGE test pool (15,310 human / 14,656 AI) against four detectors: RoBERTa, Fast-DetectGPT, Binoculars, and MAGE. StealthRL achieves \textbf{near-zero detection} on three of the four detectors and a \textbf{0.024 mean TPR@1\%FPR}, reducing mean AUROC from 0.79 to 0.43 and attaining a 97.6\% attack success rate. Critically, attacks \emph{transfer} to two held-out detectors not seen during training, revealing shared architectural vulnerabilities rather than detector-specific brittleness. We additionally conduct LLM-based quality evaluation via Likert scoring on 500 matched samples per method, analyze detector score distributions to explain \emph{why} evasion succeeds, and provide per-detector AUROC with bootstrap confidence intervals. Our results expose significant robustness gaps in current AI-text detection and establish StealthRL as a principled adversarial evaluation protocol.
+\end{abstract}
+
+% ============================================================================
+\section{Introduction}
+\label{sec:intro}
+% ============================================================================
+
+Large language models (LLMs) produce text that is increasingly indistinguishable from human writing, raising urgent concerns about academic integrity, misinformation, and content provenance~\cite{solaiman2019release}. In response, a growing ecosystem of AI-text detectors has been deployed in educational institutions, publishing platforms, and content moderation systems. These detectors span diverse architectures, from fine-tuned classifiers~\cite{solaiman2019release} to zero-shot statistical methods~\cite{mitchell2023detectgptzeroshotmachinegeneratedtext, bao2024fastdetectgptefficientzeroshotdetection} and paired-LM approaches~\cite{hans2024spottingllmsbinocularszeroshot}, yet their robustness to adversarial manipulation remains poorly understood.
+
+Standard detector evaluations measure performance on \emph{clean} distributions, where AI-generated text is presented without any evasion attempt. However, real-world adversaries are adaptive: they can iteratively refine paraphrases, query detector APIs, and exploit known weaknesses. This gap between clean-distribution evaluation and adversarial robustness is critical. A detector that achieves 95\% accuracy on clean text may fail catastrophically when an attacker deliberately targets its decision boundary.
+
+The choice of operating point further complicates evaluation. Most prior work reports AUROC or accuracy at default thresholds, but deployed detectors must operate at \emph{low false positive rates} (e.g., 1\% FPR) to avoid falsely accusing human writers. At these strict operating points, the gap between clean and adversarial performance is even more pronounced, as detectors sacrifice recall to maintain precision.
+
+We introduce \textbf{StealthRL}, a reinforcement learning framework that systematically evaluates detector robustness under adaptive adversarial conditions. StealthRL trains a paraphrase policy against a multi-detector ensemble, using GRPO~\cite{pang2025grpo} with LoRA adapters~\cite{hu2021loralowrankadaptationlarge} on Qwen3-4B-Instruct, to produce semantically faithful paraphrases that minimize detection confidence. By evaluating at the 1\% FPR operating point and testing transfer to multiple held-out detectors, we provide a rigorous robustness assessment that complements standard benchmarks.
+
+Our contributions are as follows:
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+  \item We implement black-box adaptive paraphrasing attacks via multi-detector RL training with semantic constraints, one of the first works to apply RL for adversarial detector evasion across multiple detector families simultaneously.
+  \item We demonstrate catastrophic robustness failure: 0.024 mean TPR@1\%FPR across four detectors, with strong transfer to two held-out detectors.
+  \item We provide comprehensive analysis including detector score distributions (explaining \emph{why} evasion succeeds), LLM-based quality evaluation, and per-detector AUROC with bootstrap confidence intervals.
+  \item We establish an evaluation protocol measuring evasion, transfer, and fidelity at security-relevant operating points, and provide an anonymized code package for reproducible robustness benchmarking.
+\end{itemize}
+
+% ============================================================================
+\section{Related Work}
+\label{sec:related}
+% ============================================================================
+
+\subsection{AI-Text Detection Methods}
+
+AI-text detection methods can be broadly categorized into three families. \textbf{Fine-tuned classifiers} train discriminative models on labeled human and AI text; the RoBERTa-based OpenAI detector~\cite{solaiman2019release} is a widely used example. \textbf{Zero-shot statistical methods} exploit properties of language model probability distributions without requiring labeled data. DetectGPT~\cite{mitchell2023detectgptzeroshotmachinegeneratedtext} uses probability curvature, while Fast-DetectGPT~\cite{bao2024fastdetectgptefficientzeroshotdetection} achieves similar accuracy with substantially reduced computational cost via conditional probability curvature. \textbf{Paired-LM detectors} such as Binoculars~\cite{hans2024spottingllmsbinocularszeroshot} compare log-likelihoods across two language models to detect statistical anomalies. The MAGE benchmark~\cite{li2024magemachinegeneratedtextdetection} provides standardized evaluation data, while RAID~\cite{dugan2024raidsharedbenchmarkrobust} offers a shared benchmark for robust detector evaluation across domains and attacks.
+
+Despite diverse architectures, Sadasivan et al.~\cite{sadasivan2023aigenerated} provide theoretical arguments that reliable detection may be fundamentally impossible as language models improve, motivating empirical robustness evaluation like ours.
+
+\subsection{Adversarial Attacks on Detectors}
+
+Evasion attacks on AI-text detectors range from simple paraphrasing to sophisticated adaptive methods. Krishna et al.~\cite{krishna2023paraphrasing} demonstrate that paraphrasing with their DIPPER model~\cite{krishna2023dipper} effectively evades detectors, though retrieval-based defenses can mitigate the attack. Cheng et al.~\cite{cheng2025adversarialparaphrasinguniversalattack} study adversarial paraphrasing as a universal attack, using detector-guided candidate selection to humanize AI-generated text. Character-level attacks such as homoglyph substitution (SilverSpeak~\cite{creo2025silverspeakevadingaigeneratedtext}) achieve strong evasion by replacing characters with visually similar Unicode glyphs, but often degrade readability and are detectable by normalization.
+
+Most relevant to our work, AuthorMist~\cite{david2025authormistevadingaitext} applies reinforcement learning to train an evasion policy against a single detector. StealthRL extends this approach to multi-detector ensemble training with held-out evaluation, strict low-FPR operating points, and comprehensive quality analysis.
+
+Watermark-based detection~\cite{kirchenbauer2023watermark} represents an orthogonal approach where the text generator embeds a statistical signal during generation. While watermarks can provide stronger guarantees, they require control over the generation process and are outside the scope of post-hoc detection methods we evaluate.
+
+A natural defensive response to paraphrasing attacks is adversarial training, where detectors are fine-tuned on adversarially generated examples to improve robustness. However, adversarial training faces a fundamental scalability challenge: the space of possible paraphrasing strategies is vast, and a detector hardened against one attack family may remain vulnerable to novel attack methods. The RAID benchmark~\cite{dugan2024raidsharedbenchmarkrobust} evaluates detectors across diverse attack types and finds that no single detector achieves robust performance against all attacks, underscoring the difficulty of building universally robust defenses. Our work focuses on the attack side of this arms race to quantify the current robustness gap and motivate the development of stronger defensive strategies.
+
+\subsection{Reinforcement Learning for Text Generation}
+
+Reinforcement learning from human feedback (RLHF)~\cite{ouyang2022training} has become the standard approach for aligning language models with human preferences. Proximal Policy Optimization (PPO)~\cite{schulman2017ppo} was the original RL algorithm used for RLHF, but recent work has introduced more efficient alternatives. Group Relative Policy Optimization (GRPO)~\cite{pang2025grpo,shao2024deepseekmath} eliminates the need for a separate value network by using group-level relative rewards, reducing memory requirements and enabling efficient training.
+
+Parameter-efficient fine-tuning methods, particularly LoRA~\cite{hu2021loralowrankadaptationlarge} and QLoRA~\cite{dettmers2023qlora}, enable RL training of large language models with limited compute by adapting only low-rank weight matrices. StealthRL combines GRPO with LoRA on Qwen3-4B-Instruct, demonstrating that efficient RL fine-tuning suffices for learning effective evasion policies.
+
+% ============================================================================
+\section{Method}
+\label{sec:method}
+% ============================================================================
+
+\subsection{Threat Model}
+\label{sec:threat}
+
+We consider an adversary who has produced AI-generated text and seeks to modify it to evade detection while preserving semantic content. Formally:
+
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+  \item \textbf{Attacker capability}: Black-box access to detector scores. The attacker can query detector confidence $p(y)$ (probability that input $y$ is AI-generated) but does not have access to model gradients or internal parameters. Although our experiments use open-source detectors for which gradients are in principle available, we deliberately treat them as black-box oracles, querying only scalar confidence scores.
+  \item \textbf{Attacker goal}: Produce a paraphrase $y$ of AI-generated text $x$ such that $p(y) < \tau$ for detector threshold $\tau$, while maintaining semantic equivalence $\text{sim}(x, y) > \delta$ for a similarity threshold $\delta$.
+  \item \textbf{Attacker constraint}: The paraphrase must be a fluent, grammatical reformulation of the original text, not a trivially corrupted version.
+\end{itemize}
+
+We evaluate transfer by testing against two \emph{held-out} detectors (Binoculars and MAGE) not seen during training, assessing whether learned evasion strategies generalize across detector architectures.
+
+\subsection{Reward Design}
+\label{sec:reward}
+
+Given AI-generated text $x$ and paraphrase $y \sim \pi_\theta(\cdot \mid x)$, we define a composite reward:
+\begin{equation}
+  R(x, y) = \alpha \cdot R_{\text{det}}(y) + \beta \cdot R_{\text{sem}}(x, y),
+  \label{eq:reward}
+\end{equation}
+where $\alpha = 1.0$ and $\beta = 0.1$ control the evasion-quality tradeoff.
+
+\paragraph{Detector evasion reward.} The detector reward measures how effectively the paraphrase evades the training ensemble:
+\begin{equation}
+  R_{\text{det}}(y) = 1 - p_{\text{ens}}(y)
+\end{equation}
+\begin{equation}
+  p_{\text{ens}}(y) = w_1 \cdot p_{\text{RoBERTa}}(y) + w_2 \cdot p_{\text{Fast-DetectGPT}}(y)
+\end{equation}
+where $w_1 = 0.6$ and $w_2 = 0.4$ are the ensemble weights. The weighted average prioritizes the fine-tuned classifier (RoBERTa) over the zero-shot method (Fast-DetectGPT), reflecting the intuition that evading a learned detector is harder and thus more informative for training.
+
+\paragraph{Semantic similarity reward.} To prevent degenerate solutions (e.g., outputting empty or unrelated text), we constrain semantic preservation using E5 embedding cosine similarity~\cite{wang2022e5}:
+\begin{equation}
+  R_{\text{sem}}(x, y) = \cos\bigl(\text{E5}(x),\; \text{E5}(y)\bigr).
+\end{equation}
+
+\paragraph{KL penalty.} GRPO includes an implicit KL divergence penalty (coefficient $\lambda_{\text{KL}} = 0.05$) against the frozen reference policy $\pi_{\text{ref}}$ to prevent catastrophic forgetting and maintain generation fluency.
+
+\subsection{Training Pipeline}
+\label{sec:training}
+
+Algorithm~\ref{alg:stealthrl} describes the StealthRL training procedure.
+
+\begin{algorithm}[t]
+\caption{StealthRL Training}
+\label{alg:stealthrl}
+\begin{algorithmic}[1]
+\REQUIRE Training data $\mathcal{D} = \{x_i\}_{i=1}^N$ (AI-generated texts), detector ensemble $\{d_k\}_{k=1}^K$ with weights $\{w_k\}$, E5 similarity model, base LLM $\pi_{\text{ref}}$
+\ENSURE Fine-tuned paraphrase policy $\pi_\theta$
+\STATE Initialize $\pi_\theta \leftarrow \pi_{\text{ref}}$ with LoRA adapters (rank $r{=}32$, $\alpha{=}32$)
+\FOR{epoch $= 1, \ldots, E$}
+  \FOR{batch $\mathcal{B} \subset \mathcal{D}$}
+    \FOR{each $x \in \mathcal{B}$}
+      \STATE Sample group $\{y_1, \ldots, y_G\} \sim \pi_\theta(\cdot \mid x)$ \hfill $\triangleright$ $G{=}8$ candidates
+      \FOR{each $y_g$ in group}
+        \STATE $R_{\text{det}}(y_g) \leftarrow 1 - \sum_{k} w_k \cdot d_k(y_g)$ \hfill $\triangleright$ Ensemble evasion
+        \STATE $R_{\text{sem}}(x, y_g) \leftarrow \cos(\text{E5}(x), \text{E5}(y_g))$ \hfill $\triangleright$ Semantic preservation
+        \STATE $R(x, y_g) \leftarrow \alpha \cdot R_{\text{det}}(y_g) + \beta \cdot R_{\text{sem}}(x, y_g)$
+      \ENDFOR
+      \STATE Compute advantages via group-relative normalization: \\ \quad $A_g \leftarrow (R_g - \bar{R}) / \sigma_R$ \hfill $\triangleright$ GRPO
+    \ENDFOR
+    \STATE Update $\theta$ via clipped policy gradient with KL penalty
+  \ENDFOR
+\ENDFOR
+\RETURN $\pi_\theta$
+\end{algorithmic}
+\end{algorithm}
+
+We fine-tune Qwen3-4B-Instruct~using LoRA adapters (rank 32, $\alpha = 32$, dropout 0.05) with GRPO~\cite{pang2025grpo}. Training uses 10,000 AI-generated MAGE train samples for 3 epochs with batch size 16, group size 8, and learning rate $2.8 \times 10^{-4}$. The training ensemble comprises RoBERTa (60\% weight) and Fast-DetectGPT (40\% weight); Binoculars and the MAGE detector are \emph{held out} for transfer evaluation.
+
+\subsection{Inference}
+\label{sec:inference}
+
+At inference time, the fine-tuned policy generates a single paraphrase per input using temperature 1.0, top-p 0.9, and maximum 512 tokens. The prompt template is: \texttt{``Paraphrase the following text while preserving its meaning: [TEXT]''}. No candidate selection or reranking is applied; the single-pass output is evaluated directly against all four detectors.
+
+Accordingly, the reported StealthRL attack is \emph{single-shot} at test time: each input receives one policy generation call, with no iterative refinement and no target-detector queries during evaluation. Detector access is required only during offline RL training. This differs from detector-guided search baselines such as M3, which use multi-candidate generation and detector-based reranking at evaluation time.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/StealthRL_Pipeline_Final_v3.png}
+\caption{StealthRL training and evaluation pipeline. A paraphrase policy (Qwen3-4B with LoRA) is trained via GRPO against a two-detector ensemble (RoBERTa + Fast-DetectGPT) with semantic similarity reward. The trained policy is then evaluated against four detectors, including the held-out Binoculars and MAGE detectors, at the 1\% FPR operating point.}
+\label{fig:pipeline}
+\end{figure}
+
+% ============================================================================
+\section{Experimental Setup}
+\label{sec:setup}
+% ============================================================================
+
+\subsection{Dataset}
+
+We construct a custom subset of the MAGE (Machine-Generated Text Detection in the Wild) benchmark~\cite{li2024magemachinegeneratedtextdetection}, which provides human-written and AI-generated text across multiple domains. Our training set consists of 10,000 AI-generated samples drawn from the MAGE training split; no human-written samples are used during RL fine-tuning, as the policy learns entirely from detector feedback on paraphrased AI text. The evaluation set uses the full filtered MAGE test pool with 15,310 human-written and 14,656 AI-generated samples after applying the 100--500 token filter. Human samples in the evaluation set are used solely for threshold calibration at the 1\% FPR operating point; AI and attacked samples are never used when setting thresholds.
+
+\subsection{Detectors}
+
+We evaluate against four detectors spanning distinct architectural paradigms:
+
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+  \item \textbf{RoBERTa OpenAI} (\texttt{openai-community/roberta-large-}\\\texttt{openai-detector}): A fine-tuned RoBERTa-large classifier trained on GPT-2 outputs. Represents the class of supervised neural classifiers.
+  \item \textbf{Fast-DetectGPT}~\cite{bao2024fastdetectgptefficientzeroshotdetection}: A zero-shot statistical method that uses conditional probability curvature with scoring model \texttt{EleutherAI/gpt-neo-2.7B}. Represents curvature-based detection.
+  \item \textbf{Binoculars}~\cite{hans2024spottingllmsbinocularszeroshot}: A paired-LM detector using \texttt{gpt2-medium} and \texttt{gpt2-large} that compares cross-entropy and perplexity. \emph{Held out during training} to assess transfer.
+  \item \textbf{MAGE detector}~\cite{li2024magemachinegeneratedtextdetection}: The benchmark-provided Longformer-based classifier released with MAGE (model checkpoint \texttt{yaful/MAGE}). In the original MAGE paper, this PLM-based detector is the strongest method among their compared detectors across the benchmark's in-distribution and out-of-distribution testbeds, so we include it as a strong held-out evaluation target rather than a detector used during training.
+\end{itemize}
+
+\subsection{Baselines}
+
+We compare six attack settings:
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+  \item \textbf{M0 (No Attack)}: Original AI-generated text, unmodified.
+  \item \textbf{M1 (Simple Paraphrase)}: Standard LLM paraphrasing without detector feedback.
+  \item \textbf{M2 (StealthRL)}: Our method, RL-trained paraphrasing against a detector ensemble (3 epochs, GRPO + LoRA).
+  \item \textbf{M3 (Adversarial Paraphrasing)}~\cite{cheng2025adversarialparaphrasinguniversalattack}: Detector-guided candidate selection from multiple paraphrases.
+  \item \textbf{M4 (AuthorMist)}~\cite{david2025authormistevadingaitext}: RL-trained paraphrasing against a single detector (RoBERTa).
+  \item \textbf{M5 (Homoglyph)}~\cite{creo2025silverspeakevadingaigeneratedtext}: Character-level Unicode substitution (SilverSpeak).
+\end{itemize}
+
+\subsection{Evaluation Metrics}
+
+We report five primary metrics:
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+  \item \textbf{TPR@1\%FPR}: True positive rate at 1\% false positive rate. For each detector, we compute the decision threshold as the empirical 99th percentile of its scores on the 15,310 human evaluation samples, then keep that threshold fixed when scoring all clean and attacked AI samples. This is our primary metric as it reflects realistic deployment conditions.
+  \item \textbf{TPR@5\%FPR}: The same operating-point metric evaluated at a looser 5\% false positive rate. For each detector, we compute the decision threshold as the empirical 95th percentile of its scores on the same 15,310 human evaluation samples, then keep that threshold fixed when scoring all clean and attacked AI samples. We report this as a supplementary operating point to show how conclusions change when detectors are allowed more false positives.
+  \item \textbf{ASR} (Attack Success Rate): Fraction of AI samples classified as human at the 1\% FPR threshold. $\text{ASR} = 1 - \text{TPR@1\%FPR}$.
+  \item \textbf{AUROC}: Area under the receiver operating characteristic curve. Threshold-independent measure of overall discriminability.
+  \item \textbf{E5 Similarity}: Cosine similarity between E5 embeddings~\cite{wang2022e5} of original and paraphrased text, measuring semantic preservation.
+\end{itemize}
+
+All confidence intervals are computed via bootstrap resampling with 500 iterations and seed 42.
+
+\subsection{LLM-Based Quality Judge}
+
+We additionally evaluate paraphrase quality using an LLM judge, following the growing body of work on LLM-based automatic evaluation. Recent studies have shown that LLMs can serve as effective evaluators of text quality~\cite{fu2023gptscore}, with specialized evaluation models~\cite{kim2024prometheus2} and systematic frameworks for building reliable autoraters~\cite{vu2024foundationalautoraters} demonstrating strong agreement with human judgments. We employ OpenAI \texttt{gpt-5-nano} to score each paraphrase on two 1--5 Likert axes:
+\begin{enumerate}[leftmargin=*,itemsep=2pt]
+  \item \textbf{Linguistic quality}: Fluency, grammaticality, and naturalness of the paraphrase.
+  \item \textbf{Semantic similarity}: Faithfulness of meaning preservation relative to the source.
+\end{enumerate}
+
+For fair cross-method comparison, we evaluate a shared subset of 500 AI samples per method (M1--M5) using identical sample IDs across methods. Each sample is scored independently; the judge sees only the source and paraphrase without method labels.
+
+% ============================================================================
+\section{Results}
+\label{sec:results}
+% ============================================================================
+
+\subsection{Main Detection Evasion Results}
+
+StealthRL (M2) achieves a \textbf{0.024 mean TPR@1\%FPR}, reducing mean AUROC from 0.79 (no attack) to 0.43 with a 97.6\% attack success rate. This remains catastrophic robustness failure: at the strict operating point required for real-world deployment, detectors are rendered largely ineffective against an adaptive adversary. The full detector-by-detector AUC/TPR/ASR tables for the 1\% FPR operating point are moved to Appendix Tables~\ref{tab:app_main_binoc}, \ref{tab:app_main_fastd}, \ref{tab:app_main_mage}, and~\ref{tab:app_main_part2}.
+
+Figure~\ref{fig:method_comparison} provides a comprehensive visual comparison across all metrics. Panel~(a) shows that StealthRL dramatically reduces AUROC across the detector panel, driving Binoculars and Fast-DetectGPT close to random chance and substantially degrading the remaining detectors. Panel~(b) confirms that the mean AUROC of 0.432 for M2 is far below the no-attack baseline of 0.789. Panel~(c) demonstrates near-zero TPR at strict operating points on three detectors, while Panel~(d) shows the 97.6\% attack success rate.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/fig_method_comparison.pdf}
+  \caption{Detection evasion results for methods M0--M5. (a) AUROC by detector. (b)~Mean AUROC with standard-deviation bars across detectors. (c) TPR at 1\% FPR. (d) Mean attack success rate. StealthRL (M2, teal) achieves extremely low TPR on Binoculars, Fast-DetectGPT, and RoBERTa, with MAGE remaining the most robust detector in the panel.}
+  \label{fig:method_comparison}
+\end{figure}
+
+\subsection{Cross-Architecture Transfer}
+
+A key finding is the strong \emph{transfer} of StealthRL's evasion to detectors that were never used during training. Despite never seeing Binoculars or MAGE during training, M2 achieves 0.002 TPR@1\%FPR on Binoculars and 0.089 on the MAGE detector, alongside 0.002 on both in-ensemble detectors. Figure~\ref{fig:heatmap} visualizes the per-detector, per-method TPR matrix, clearly showing that M2 and M5 achieve near-zero TPR on most of the detector panel.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/fig_heatmap_tpr.pdf}
+  \caption{TPR@1\%FPR heatmap across detectors and methods. Darker colors indicate higher detection rates. StealthRL (M2) and Homoglyph (M5) achieve near-zero TPR on three detectors, while MAGE remains the most robust held-out detector.}
+  \label{fig:heatmap}
+\end{figure}
+
+This cross-architecture transfer reveals that detectors share common vulnerabilities: they rely on surface-level statistical cues (token distributions, perplexity patterns, embedding geometry) that are disrupted by paraphrasing. The attack does not exploit detector-specific weaknesses but rather targets the fundamental fragility of current detection approaches.
+
+\subsection{Supplementary 5\% FPR Operating Point}
+
+Appendix Table~\ref{tab:app_tpr5} adds TPR@5\%FPR as a supplementary operating point without replacing any of the primary TPR@1\%FPR reporting above. The qualitative ranking remains similar: StealthRL stays near-zero on Binoculars (0.005), Fast-DetectGPT (0.003), and RoBERTa (0.022), while MAGE remains substantially more robust at 0.272. Averaged across the four-detector panel, M2 reaches a mean TPR@5\%FPR of 0.076.
+
+\subsection{Detector Score Analysis}
+
+To understand \emph{why} M2 and M5 achieve near-zero TPR, we examine the raw detector score distributions in Appendix Figure~\ref{fig:app_score_dist}. For both methods, AI-sample scores are pushed \emph{below} the 1\% FPR threshold, making them statistically indistinguishable from human-written text from the detector's perspective. In contrast, methods M0--M3 retain a substantial fraction of scores above the threshold, explaining their higher detection rates.
+
+Figure~\ref{fig:method_comparison} already summarizes the core AUROC behavior. In particular, Panel~(a) shows that StealthRL achieves the lowest AUROC on Binoculars (0.055) and Fast-DetectGPT (0.089), while RoBERTa remains substantially degraded at 0.691 and the MAGE detector is the most robust at 0.891.
+
+The RoBERTa AUROC anomaly deserves further discussion. Despite achieving near-zero TPR@1\%FPR (0.002), StealthRL's AUROC on RoBERTa (0.691) is far higher than on Fast-DetectGPT (0.089) or Binoculars (0.055). This apparent contradiction arises because AUROC and TPR@1\%FPR measure fundamentally different properties. AUROC captures global rank separability across all possible thresholds, while TPR@1\%FPR measures detection power at a single strict operating point. RoBERTa retains moderate ability to rank AI-paraphrased text above human text on average, but at the strict 1\% FPR threshold, the overlap between human and AI score distributions is sufficient to render detection ineffective. Concretely, the score distributions for M2 paraphrases are shifted leftward (toward human-like scores) enough that nearly all AI samples fall below the 1\% FPR threshold, even though the distribution means remain partially separated. This pattern suggests that the RL policy learns to target the specific score region near the decision boundary rather than fully collapsing the detector's discriminative capacity. For practical deployment, the TPR@1\%FPR metric is more security-relevant, as detectors must operate at low false positive rates to avoid falsely accusing human writers.
+
+\subsection{Evasion--Quality Tradeoff}
+
+Achieving strong evasion without degrading text quality is the central challenge. Appendix Figure~\ref{fig:app_tradeoff} plots mean ASR@1\%FPR against E5 semantic similarity for each method, so the preferred operating region is the top-right corner. M1 and M3 preserve high similarity (0.974 and 0.973) but achieve only moderate evasion (0.716 and 0.783 mean ASR). M2 and M5 both achieve near-maximal mean ASR (0.976 and 0.972), with comparable E5 similarity (0.901 for M2 vs.\ 0.923 for M5), but M2 achieves substantially better \emph{judged} quality.
+
+Table~\ref{tab:quality} and Appendix Figure~\ref{fig:app_quality} present the LLM-based quality evaluation. E5 similarity is computed on the full filtered evaluation pool, whereas the Likert ratings are computed on the matched 500-sample subset used for paid judging. The Likert scores reveal a more nuanced picture than E5 similarity alone. While M2's E5 similarity (0.901) remains below M5's (0.923), the LLM judge rates M2 substantially higher on quality (2.51 vs.\ 1.97 for M5). M5 scores higher on judged similarity (2.92 vs.\ 2.64), likely because character-level substitutions preserve surface form while degrading readability. Overall, learned paraphrasing produces more natural text than character-level obfuscation. Methods M1 and M3, which achieve weaker evasion, score highest on quality (3.78 and 3.77), illustrating the fundamental tradeoff between evasion effectiveness and output quality. This is a concrete limitation of the current StealthRL system: although M2 achieves the strongest overall evasion, it still pays a noticeable fidelity cost relative to higher-quality paraphrasers, with lower E5 similarity than M1/M3 (0.901 vs.\ 0.974/0.973) and substantially lower judged quality on the Likert scale (2.51 vs.\ 3.78/3.77).
+
+\begin{table}[H]
+  \centering
+  \small
+  \setlength{\tabcolsep}{6pt}
+  \resizebox{\columnwidth}{!}{\input{table_quality.tex}}
+  \caption{Quality and similarity metrics. E5 Sim.\ is embedding cosine similarity computed on the full filtered evaluation pool. Quality and Similarity are mean Likert scores (1--5) from a gpt-5-nano judge on 500 matched samples for methods M1--M5; M0 reports automatic metrics only. Higher is better for all quality metrics; higher ASR is better for evasion.}
+  \label{tab:quality}
+\end{table}
+
+\subsection{Discussion}
+
+The severe failure across the four detectors tested reveals significant vulnerabilities in current AI-text detection. Detectors rely on brittle statistical cues, including token frequency distributions, perplexity patterns, and embedding geometry, rather than robust semantic understanding. Surface-level paraphrasing that preserves meaning suffices to evade detection, suggesting that detectors learn superficial correlates of AI text rather than deeper linguistic features.
+
+This robustness gap has critical security implications. Adversaries can train adaptive attacks against deployed detectors, rendering them ineffective with modest computational resources (a single LoRA fine-tuning run). The strong transfer to held-out architectures means that ensemble defenses (combining multiple detectors) provide limited robustness improvement, as the attack generalizes across detector families.
+
+% ============================================================================
+\section{Conclusion and Future Work}
+\label{sec:conclusion}
+% ============================================================================
+
+StealthRL demonstrates severe detector failure under adaptive RL-based paraphrasing attacks, revealing significant robustness gaps in the AI-text detectors evaluated. By training against a multi-detector ensemble with GRPO and LoRA, we achieve near-zero detection on three of four detectors and a 0.024 mean TPR@1\%FPR with strong cross-architecture transfer, including to two held-out detectors. Our comprehensive evaluation, spanning detection metrics, quality assessment, and score distribution analysis, provides a complete picture of the evasion--quality tradeoff.
+
+Several directions for future work emerge from our findings:
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+  \item \textbf{Adversarial training}: Incorporating adversarial examples into detector training to improve robustness against adaptive attacks.
+  \item \textbf{Semantic-aware detectors}: Developing detection methods that rely on deeper linguistic features rather than surface-level statistical cues.
+  \item \textbf{Provable robustness}: Establishing theoretical guarantees on detector robustness under bounded perturbations.
+  \item \textbf{Multi-objective optimization}: Improving StealthRL's quality preservation through constrained RL or Pareto-optimal training.
+  \item \textbf{Broader evaluation}: Extending to additional datasets, languages, and detector families (including watermark-based methods).
+\end{itemize}
+
+Our evaluation framework and released code provide a rigorous testbed for measuring progress on adversarially robust AI-text detection.
+
+% ============================================================================
+\section{Limitations}
+\label{sec:limitations}
+% ============================================================================
+
+\paragraph{Detector coverage.} Our evaluation covers four detectors spanning supervised, zero-shot statistical, paired-LM, and benchmark-provided paradigms. We do not evaluate against watermark-based detectors~\cite{kirchenbauer2023watermark}, which embed signals during generation and may be more robust to paraphrasing attacks. Evaluating StealthRL against watermarked text is an important direction for future work.
+
+\paragraph{Dataset diversity.} We evaluate on a single benchmark (MAGE) in English. Broader coverage across datasets (RAID~\cite{dugan2024raidsharedbenchmarkrobust}), domains, and languages is needed to establish generalizability. The MAGE benchmark, while diverse, may not capture all deployment scenarios.
+
+\paragraph{Quality gap.} StealthRL achieves lower semantic fidelity (E5 similarity 0.901, Likert quality 2.51) compared to simpler baselines (M1: 0.974/3.78, M3: 0.973/3.77). Improving semantic preservation while maintaining strong evasion is an important direction. Techniques such as constrained decoding, rejection sampling, or multi-objective RL could help close this gap.
+
+\paragraph{Defense evaluation.} We do not explore defensive strategies such as adversarial training, certified robustness, or ensemble diversification that could improve detector resilience. Our focus is on exposing vulnerabilities to motivate defensive research.
+
+% ============================================================================
+\section{Ethical Considerations}
+% ============================================================================
+
+Adversarial paraphrasing is dual-use technology. We position StealthRL as a \emph{stress-testing and robustness evaluation tool} for researchers and detector developers, not a production evasion system. The near-zero TPR@1\%FPR result exposes critical vulnerabilities that must be addressed before detectors are deployed in high-stakes applications such as academic integrity enforcement.
+
+We provide an anonymized code package to enable reproducible robustness assessment and to accelerate defensive research. By making attack capabilities transparent, we aim to shift the detector development paradigm toward adversarial robustness rather than clean-distribution accuracy. We believe responsible disclosure of detector vulnerabilities, accompanied by tools for measuring progress, serves the broader goal of trustworthy AI-text detection.
+
+\bibliography{stealthrl_refs}
+
+% ============================================================================
+\appendix
+% ============================================================================
+
+\section{Full Main Results on the MAGE Test Pool}
+\label{app:mainresults}
+
+\begin{center}
+\small
+\setlength{\tabcolsep}{4pt}
+\resizebox{\columnwidth}{!}{%
+  \input{table_main_binoc.tex}
+}
+\captionof{table}{Main results on the full filtered MAGE test pool at the 1\% FPR operating point for Binoculars. Lower TPR@1\%FPR/AUROC is better for the attacker; higher ASR is better. Bold indicates the best value per metric.}
+\label{tab:app_main_binoc}
+\end{center}
+
+\begin{center}
+\small
+\setlength{\tabcolsep}{4pt}
+\resizebox{\columnwidth}{!}{%
+  \input{table_main_fastd.tex}
+}
+\captionof{table}{Main results on the full filtered MAGE test pool at the 1\% FPR operating point for Fast-DetectGPT. Lower TPR@1\%FPR/AUROC is better for the attacker; higher ASR is better. Bold indicates the best value per metric.}
+\label{tab:app_main_fastd}
+\end{center}
+
+\begin{center}
+\small
+\setlength{\tabcolsep}{4pt}
+\resizebox{\columnwidth}{!}{%
+  \input{table_main_mage.tex}
+}
+\captionof{table}{Main results on the full filtered MAGE test pool at the 1\% FPR operating point for MAGE. Lower TPR@1\%FPR/AUROC is better for the attacker; higher ASR is better. Bold indicates the best value per metric.}
+\label{tab:app_main_mage}
+\end{center}
+
+\begin{center}
+\small
+\setlength{\tabcolsep}{4pt}
+\resizebox{\columnwidth}{!}{%
+  \input{table_main_part2.tex}
+}
+\captionof{table}{Main results on the full filtered MAGE test pool at the 1\% FPR operating point, part II. Lower TPR@1\%FPR/AUROC is better for the attacker; higher ASR is better. This panel reports RoBERTa and the mean TPR@1\%FPR / mean ASR aggregates across the four-detector panel. Bold indicates the best value per metric.}
+\label{tab:app_main_part2}
+\end{center}
+
+\begin{center}
+\small
+\setlength{\tabcolsep}{5pt}
+\resizebox{\columnwidth}{!}{%
+  \input{table_tpr5.tex}
+}
+\captionof{table}{Supplementary TPR@5\%FPR results on the full filtered MAGE test pool. Lower is better for the attacker. Thresholds are recalibrated on the 15,310 human evaluation samples at the 5\% false-positive operating point. Bold indicates the lowest TPR@5\%FPR per column.}
+\label{tab:app_tpr5}
+\end{center}
+
+\FloatBarrier
+\section{Qualitative Examples}
+\label{app:examples}
+
+Tables~\ref{tab:qual1}--\ref{tab:qual3} show representative paraphrases across different domains from the filtered MAGE test split.
+
+\begin{center}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Original (M0)} & \textbf{StealthRL (M2)} \\
+\midrule
+During cardio the heart increases its workload and all the body's other systems adjust to help support that endeavor. The blood vessels dilate, the muscles do their best to help pump blood back to the heart, and the lungs work harder to take in oxygen and remove waste gases like carbon dioxide. &
+In cardio, the heart ramps up its workload, prompting the body's other systems to adapt and assist. Blood vessels widen, muscles strive to push blood back to the heart, and lungs intensify their efforts to absorb oxygen and expel waste gases such as carbon dioxide. \\
+\midrule
+The engine has to endure the torque of powering two axels and a drive shaft generally the transfer casing connects to the drive shaft with a ujoint and same for power distribution. The electricity goes into the battery first then is sent to the alternator where it generates voltage that powers all other electrical components like the lights, radio. &
+The engine must handle the torque from two axles and a drive shaft, typically linked via a universal joint in the transfer casing for power distribution. Electricity first charges the battery, then flows to the alternator, which converts it into voltage to power essential electrical systems such as lights and the radio. \\
+\bottomrule
+\end{tabularx}
+\captionof{table}{Representative paraphrases from the filtered MAGE test split (health and automotive domains).}
+\label{tab:qual1}
+\end{center}
+
+\begin{center}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Original (M0)} & \textbf{StealthRL (M2)} \\
+\midrule
+Machine learning algorithms have become increasingly sophisticated in recent years, with deep neural networks achieving state-of-the-art performance across a wide range of tasks including image classification, natural language processing, and reinforcement learning. &
+Recent advances in machine learning have led to highly sophisticated algorithms. Deep neural networks now achieve top performance in diverse areas, from classifying images and processing natural language to learning through reinforcement-based approaches. \\
+\midrule
+The process of photosynthesis converts light energy into chemical energy that can be stored in glucose molecules. This process occurs in the chloroplasts of plant cells and involves two main stages: the light-dependent reactions and the Calvin cycle. &
+Photosynthesis transforms light energy into chemical energy, storing it within glucose molecules. Taking place in plant cell chloroplasts, this process unfolds in two key stages: light-dependent reactions followed by the Calvin cycle. \\
+\bottomrule
+\end{tabularx}
+\captionof{table}{Representative paraphrases (science and technology domains).}
+\label{tab:qual2}
+\end{center}
+
+\begin{center}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Original (M0)} & \textbf{StealthRL (M2)} \\
+\midrule
+The global economy faces several interconnected challenges, including rising inflation, supply chain disruptions, and geopolitical tensions. Central banks worldwide have responded by tightening monetary policy, raising interest rates to combat price pressures. &
+Several intertwined challenges confront the global economy: climbing inflation, supply chain breakdowns, and geopolitical friction. In response, central banks around the world have tightened monetary policy and hiked interest rates to curb rising prices. \\
+\midrule
+Renewable energy sources such as solar and wind power have seen dramatic cost reductions over the past decade, making them competitive with traditional fossil fuels in many markets. Government incentives and technological improvements continue to drive adoption rates higher. &
+Solar and wind power costs have fallen dramatically over the last decade, allowing renewables to compete with fossil fuels across numerous markets. Ongoing government incentives and technological progress continue pushing adoption rates upward. \\
+\bottomrule
+\end{tabularx}
+\captionof{table}{Representative paraphrases (economics and energy domains).}
+\label{tab:qual3}
+\end{center}
+
+\FloatBarrier
+\newpage
+\section{Hyperparameters and Configuration}
+\label{sec:hyperparams}
+
+\begin{center}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+\multicolumn{2}{l}{\textit{Model \& LoRA}} \\
+Base model & Qwen/Qwen3-4B-Instruct-2507 \\
+LoRA rank & 32 \\
+LoRA alpha & 32 \\
+LoRA dropout & 0.05 \\
+\midrule
+\multicolumn{2}{l}{\textit{Training}} \\
+Algorithm & Group-Relative Policy Optimization (GRPO) \\
+Learning rate & $2.8 \times 10^{-4}$ \\
+Batch size & 16 \\
+Group size & 8 \\
+Epochs & 3 \\
+Training samples & 10,000 AI-generated (custom MAGE subset) \\
+KL penalty coefficient & 0.05 \\
+Reference policy & Qwen3-4B-Instruct (frozen) \\
+\midrule
+\multicolumn{2}{l}{\textit{Reward}} \\
+Detector weight ($\alpha$) & 1.0 \\
+Semantic weight ($\beta$) & 0.1 \\
+Detector ensemble & RoBERTa (0.6) + Fast-DetectGPT (0.4) \\
+Semantic metric & E5 embedding cosine similarity \\
+\midrule
+\multicolumn{2}{l}{\textit{Inference}} \\
+Temperature & 1.0 \\
+Top-p & 0.9 \\
+Max tokens & 512 \\
+Prompt template & ``Paraphrase the following text while \\
+& preserving its meaning: [TEXT]'' \\
+\midrule
+\multicolumn{2}{l}{\textit{Detectors}} \\
+RoBERTa OpenAI & openai-community/roberta-large-openai-detector \\
+Fast-DetectGPT & Scoring model: EleutherAI/gpt-neo-2.7B \\
+Binoculars & Lightweight: gpt2-medium + gpt2-large (held-out) \\
+MAGE detector & Longformer classifier (\texttt{yaful/MAGE}, held-out) \\
+\midrule
+\multicolumn{2}{l}{\textit{Evaluation}} \\
+Test samples & 15,310 human + 14,656 AI (filtered MAGE test) \\
+Token window & 100--500 tokens \\
+FPR calibration & 1\% on 15,310 human samples (quantile) \\
+Candidates per sample & 1 \\
+\midrule
+\multicolumn{2}{l}{\textit{Compute}} \\
+Training framework & Managed RL training service \\
+Reward computation & MacBook + NVIDIA RTX A5000 GPUs \\
+Offline evaluation & MacBook + NVIDIA RTX A5000 GPUs \\
+Seed & 42 \\
+\bottomrule
+\end{tabular}
+}
+\captionof{table}{Complete hyperparameters and configuration for reproducibility.}
+\label{tab:hyperparams}
+\end{center}
+
+\FloatBarrier
+\section{Per-Detector Results with Confidence Intervals}
+\label{app:perdetector}
+
+Table~\ref{tab:perdetector} provides the complete per-detector, per-method results with 95\% bootstrap confidence intervals (500 iterations) for all four detectors: RoBERTa, Fast-DetectGPT, Binoculars, and MAGE.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\resizebox{\columnwidth}{!}{%
+  \input{table_per_detector.tex}
+}
+\caption{Complete per-detector results with 95\% bootstrap confidence intervals for all four detectors: RoBERTa, Fast-DetectGPT, Binoculars, and MAGE. Bold indicates the best value per metric. StealthRL (M2) achieves near-zero TPR@1\%FPR on three of the four detectors.}
+\label{tab:perdetector}
+\end{table}
+
+\FloatBarrier
+\section{LLM Judge Prompt Templates}
+\label{app:prompts}
+
+We use the following prompt template for the gpt-5-nano Likert judge evaluation:
+
+\begin{quote}
+\small
+\texttt{You are an expert evaluator of text quality. You will be given an original text and a paraphrased version. Rate the paraphrase on two dimensions using a 1-5 Likert scale.}
+
+\texttt{Original text: \{source\_text\}}
+
+\texttt{Paraphrased text: \{paraphrase\_text\}}
+
+\texttt{Rate on:}
+\texttt{1. QUALITY (1-5): How fluent, grammatical, and natural is the paraphrase? (1=incoherent, 5=perfectly natural)}
+\texttt{2. SIMILARITY (1-5): How well does the paraphrase preserve the meaning of the original? (1=completely different, 5=identical meaning)}
+
+\texttt{Respond in JSON format: \{"quality": <int>, "similarity": <int>, "quality\_justification": "<str>", "similarity\_justification": "<str>"\}}
+\end{quote}
+
+\section{Dataset Statistics}
+\label{app:dataset}
+
+\begin{table}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{llcc}
+\toprule
+\textbf{Stage} & \textbf{Purpose} & \textbf{Human Samples} & \textbf{AI Samples} \\
+\midrule
+Train           & RL fine-tuning (GRPO)       & 0 & 10,000 \\
+Test            & Detection evaluation        & 15,310  & 14,656  \\
+Likert eval     & Quality scoring (per method) & 0     & 500    \\
+\midrule
+Token range     & \multicolumn{3}{c}{100--500 tokens} \\
+Source          & \multicolumn{3}{c}{MAGE benchmark~\cite{li2024magemachinegeneratedtextdetection}} \\
+Domains         & \multicolumn{3}{c}{Multiple (essays, Q\&A, creative writing)} \\
+\bottomrule
+\end{tabular}
+}
+\caption{Dataset statistics for training and evaluation. The Likert evaluation uses 500 AI samples per attack method (M1--M5) with matched sample IDs.}
+\label{tab:dataset}
+\end{table}
+
+\FloatBarrier
+\section{Supplementary Figures}
+\label{app:figures}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/fig_score_distributions.pdf}
+  \caption{Detector score distributions for AI samples across methods (one panel per detector). StealthRL (M2) and Homoglyph (M5) push scores below the detection threshold, explaining their near-zero TPR@1\%FPR.}
+  \label{fig:app_score_dist}
+\end{figure*}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.75\textwidth]{figures/fig_tradeoff.pdf}
+  \caption{Evasion--quality tradeoff at the 1\% FPR operating point. Each point represents a method, plotted by E5 semantic similarity (x-axis) against mean ASR@1\%FPR (y-axis). Top-right is ideal (high similarity, high attack success). The dashed lines mark the 0.90 similarity floor and the random-detector ASR baseline at 1\% FPR, and the solid line shows the Pareto frontier.}
+  \label{fig:app_tradeoff}
+\end{figure*}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.62\textwidth]{figures/fig_quality_likert.pdf}
+  \caption{LLM-based quality evaluation on 500 matched samples. Panel (a) shows linguistic quality and panel (b) semantic similarity; higher is better. The dashed line marks the neutral midpoint (3.0).}
+  \label{fig:app_quality}
+\end{figure*}
+
+\end{document}
