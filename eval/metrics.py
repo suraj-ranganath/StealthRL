@@ -387,10 +387,17 @@ class E5SimilarityScorer:
     FALLBACK_MODEL = "intfloat/e5-base-v2"  # HuggingFace fallback
     OLLAMA_URL = "http://localhost:11434/api/embed"
     
-    def __init__(self, model_name: str = None, device: str = None, use_ollama: bool = True):
+    def __init__(
+        self,
+        model_name: str = None,
+        device: str = None,
+        use_ollama: bool = True,
+        batch_size: int = 96,
+    ):
         self.model_name = model_name or self.DEFAULT_MODEL
         self.device = device
         self.use_ollama = use_ollama
+        self.batch_size = batch_size
         self.model = None
         self.tokenizer = None
         self._ollama_available = None
@@ -455,26 +462,34 @@ class E5SimilarityScorer:
     def _encode_hf(self, texts: List[str]) -> np.ndarray:
         """Encode texts using HuggingFace E5."""
         import torch
-        
+        embeddings = []
+
         # E5 prefix for similarity tasks
-        texts = [f"query: {t}" for t in texts]
-        
-        inputs = self.tokenizer(
-            texts,
-            padding=True,
-            truncation=True,
-            max_length=512,
-            return_tensors="pt",
-        ).to(self.device)
-        
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-            embeddings = outputs.last_hidden_state.mean(dim=1)
-            embeddings = embeddings.cpu().numpy()
-        
+        prefixed = [f"query: {t}" for t in texts]
+
+        for start in range(0, len(prefixed), self.batch_size):
+            batch = prefixed[start:start + self.batch_size]
+            inputs = self.tokenizer(
+                batch,
+                padding=True,
+                truncation=True,
+                max_length=512,
+                return_tensors="pt",
+            ).to(self.device)
+
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+                batch_embeddings = outputs.last_hidden_state.mean(dim=1).cpu().numpy()
+            embeddings.append(batch_embeddings)
+
+            if self.device and self.device.startswith("cuda"):
+                torch.cuda.empty_cache()
+
+        merged = np.concatenate(embeddings, axis=0) if embeddings else np.empty((0, 0))
+
         # Normalize
-        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-        return embeddings / (norms + 1e-10)
+        norms = np.linalg.norm(merged, axis=1, keepdims=True)
+        return merged / (norms + 1e-10)
     
     def encode(self, texts: List[str]) -> np.ndarray:
         """Encode texts to embeddings."""
@@ -492,13 +507,19 @@ class E5SimilarityScorer:
         paraphrased_texts: List[str],
     ) -> List[float]:
         """Compute cosine similarity between original and paraphrased texts."""
-        orig_emb = self.encode(original_texts)
-        para_emb = self.encode(paraphrased_texts)
-        
-        # Cosine similarity (embeddings are normalized)
-        similarities = np.sum(orig_emb * para_emb, axis=1)
-        
-        return similarities.tolist()
+        similarities: List[float] = []
+
+        for start in range(0, len(original_texts), self.batch_size):
+            orig_batch = original_texts[start:start + self.batch_size]
+            para_batch = paraphrased_texts[start:start + self.batch_size]
+            orig_emb = self.encode(orig_batch)
+            para_emb = self.encode(para_batch)
+
+            # Cosine similarity (embeddings are normalized)
+            batch_similarities = np.sum(orig_emb * para_emb, axis=1)
+            similarities.extend(batch_similarities.tolist())
+
+        return similarities
 
 
 class PerplexityScorer:
@@ -506,9 +527,10 @@ class PerplexityScorer:
     
     DEFAULT_MODEL = "gpt2"
     
-    def __init__(self, model_name: str = None, device: str = None):
+    def __init__(self, model_name: str = None, device: str = None, batch_size: int = 32):
         self.model_name = model_name or self.DEFAULT_MODEL
         self.device = device
+        self.batch_size = batch_size
         self.model = None
         self.tokenizer = None
     
@@ -535,20 +557,39 @@ class PerplexityScorer:
             self.load()
         
         perplexities = []
-        
-        for text in texts:
+
+        for start in range(0, len(texts), self.batch_size):
+            batch = texts[start:start + self.batch_size]
             inputs = self.tokenizer(
-                text,
+                batch,
                 return_tensors="pt",
                 truncation=True,
                 max_length=512,
+                padding=True,
             ).to(self.device)
-            
+
+            labels = inputs.input_ids.clone()
+            labels[inputs.attention_mask == 0] = -100
+
             with torch.no_grad():
-                outputs = self.model(**inputs, labels=inputs.input_ids)
-                ppl = torch.exp(outputs.loss).item()
-            
-            perplexities.append(ppl)
+                outputs = self.model(**inputs)
+                logits = outputs.logits[:, :-1, :].contiguous()
+                shift_labels = labels[:, 1:].contiguous()
+
+                loss_fct = torch.nn.CrossEntropyLoss(reduction="none", ignore_index=-100)
+                token_losses = loss_fct(
+                    logits.view(-1, logits.size(-1)),
+                    shift_labels.view(-1),
+                ).view(shift_labels.size())
+
+                valid_mask = (shift_labels != -100)
+                seq_losses = token_losses.sum(dim=1) / valid_mask.sum(dim=1).clamp_min(1)
+                batch_ppl = torch.exp(seq_losses).cpu().tolist()
+
+            perplexities.extend(batch_ppl)
+
+            if self.device and self.device.startswith("cuda"):
+                torch.cuda.empty_cache()
         
         return perplexities
 

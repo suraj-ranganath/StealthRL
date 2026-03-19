@@ -4,7 +4,6 @@ detectors:
   - "fast-detectgpt"
   - "ghostbuster"
   - "binoculars"
-  - "roberta-base-openai-detector"
 
 datasets:
   human_texts: "data/processed/human_test.jsonl"

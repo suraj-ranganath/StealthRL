@@ -15,12 +15,17 @@ from typing import Optional, List
 
 import torch
 
-from .base import BaseAttackMethod, AttackOutput
+from .base import (
+    BaseAttackMethod,
+    AttackOutput,
+    estimate_generation_max_tokens,
+    iter_length_bucket_indices,
+)
 
 logger = logging.getLogger(__name__)
 
 
-PARAPHRASE_PROMPT = """Please paraphrase the following text while maintaining its meaning and style. Output only the paraphrased text without any additional explanation.
+PARAPHRASE_PROMPT = """Please paraphrase the following text while maintaining its meaning and style. Keep the paraphrase close to the original length, do not add new details, and output only the paraphrased text without any additional explanation.
 
 Original text:
 {text}
@@ -82,6 +87,9 @@ class StealthRLTinker(BaseAttackMethod):
         self.sampler_path = None
         self.tokenizer = None
         self.rerank_detector = None
+
+    def _estimate_max_tokens(self, text: str) -> int:
+        return estimate_generation_max_tokens(text, self.max_new_tokens)
     
     def load(self):
         """Load Tinker native sampling client and reranking detector."""
@@ -145,7 +153,7 @@ class StealthRLTinker(BaseAttackMethod):
         model_input = types.ModelInput.from_ints(input_ids)
         
         params = types.SamplingParams(
-            max_tokens=self.max_new_tokens,
+            max_tokens=self._estimate_max_tokens(text),
             temperature=self.temperature,
             top_p=self.top_p,
         )
@@ -273,32 +281,41 @@ class StealthRLTinker(BaseAttackMethod):
             input_ids = self.tokenizer.encode(formatted)
             return types.ModelInput.from_ints(input_ids)
 
-        params = types.SamplingParams(
-            max_tokens=self.max_new_tokens,
-            temperature=self.temperature,
-            top_p=self.top_p,
-        )
-        params_dict = {
-            "max_tokens": self.max_new_tokens,
-            "temperature": self.temperature,
-            "top_p": self.top_p,
-            "num_samples": n_candidates,
-        }
+        results: List[Optional[AttackOutput]] = [None] * len(texts)
+        sampling_results = [None] * len(texts)
 
-        results = run_sampling_concurrent(
-            texts=texts,
-            build_model_input=build_model_input,
-            sampling_client=self.sampling_client,
-            sampling_params=params,
-            num_samples=n_candidates,
-            tokenizer=self.tokenizer,
-            concurrency=self.tinker_concurrency,
-            chunk_size=self.tinker_chunk_size,
-            max_retries=self.tinker_max_retries,
-            backoff_base_s=self.tinker_backoff_s,
-            resume_cache_path=self.tinker_resume_path,
-            sampling_params_dict=params_dict,
-        )
+        for batch in iter_length_bucket_indices(texts, self.tinker_chunk_size):
+            batch_indices = [index for index, _ in batch]
+            batch_texts = [text for _, text in batch]
+            batch_max_tokens = max(self._estimate_max_tokens(text) for text in batch_texts)
+            params = types.SamplingParams(
+                max_tokens=batch_max_tokens,
+                temperature=self.temperature,
+                top_p=self.top_p,
+            )
+            params_dict = {
+                "max_tokens": batch_max_tokens,
+                "temperature": self.temperature,
+                "top_p": self.top_p,
+                "num_samples": n_candidates,
+            }
+
+            batch_results = run_sampling_concurrent(
+                texts=batch_texts,
+                build_model_input=build_model_input,
+                sampling_client=self.sampling_client,
+                sampling_params=params,
+                num_samples=n_candidates,
+                tokenizer=self.tokenizer,
+                concurrency=self.tinker_concurrency,
+                chunk_size=self.tinker_chunk_size,
+                max_retries=self.tinker_max_retries,
+                backoff_base_s=self.tinker_backoff_s,
+                resume_cache_path=None,
+                sampling_params_dict=params_dict,
+            )
+            for original_index, batch_result in zip(batch_indices, batch_results):
+                sampling_results[original_index] = batch_result
 
         if n_candidates > 1 and self.rerank_detector is None:
             self.device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -307,7 +324,16 @@ class StealthRLTinker(BaseAttackMethod):
             self.rerank_detector.load()
 
         outputs: List[AttackOutput] = []
-        for text, result in zip(texts, results):
+        for text, result in zip(texts, sampling_results):
+            if result is None:
+                outputs.append(AttackOutput(
+                    text=text,
+                    original_text=text,
+                    valid=False,
+                    fail_reason="missing_result",
+                    metadata={"method": self.name, "backend": "tinker"},
+                ))
+                continue
             if result.error or not result.candidates:
                 outputs.append(AttackOutput(
                     text=text,

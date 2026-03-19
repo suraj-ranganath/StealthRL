@@ -130,6 +130,34 @@ METHOD_NAMES = {
     "m5": "Homoglyph (M5)",
 }
 
+# Preferred method ordering for plots/tables
+METHOD_ORDER = ["m0", "m1", "m2", "m3", "m4", "m5"]
+METHOD_ALIASES = {
+    "no_attack": "m0",
+    "simple_paraphrase": "m1",
+    "stealthrl": "m2",
+    "tinker": "m2",
+    "adversarial_paraphrasing": "m3",
+    "authormist": "m4",
+    "homoglyph": "m5",
+    "silverspeak": "m5",
+}
+
+
+def _canonical_method(method: str) -> str:
+    return METHOD_ALIASES.get(method, method)
+
+
+def _method_rank(method: str) -> int:
+    canon = _canonical_method(method)
+    if canon in METHOD_ORDER:
+        return METHOD_ORDER.index(canon)
+    return 999
+
+
+def _order_methods(methods) -> list:
+    return sorted(list(methods), key=lambda m: (_method_rank(m), str(m)))
+
 
 def create_heatmap(
     data: pd.DataFrame,
@@ -165,6 +193,13 @@ def create_heatmap(
     
     # Pivot data for heatmap
     pivot = data.pivot(index=row_col, columns=col_col, values=value_col)
+
+    # Enforce method order on axes where applicable
+    if row_col == "method":
+        pivot = pivot.reindex(_order_methods(pivot.index))
+    if col_col == "method":
+        pivot = pivot[_order_methods(pivot.columns)]
+
     pivot.index = [_pretty_detector_name(d) for d in pivot.index]
     pivot.columns = [METHOD_NAMES.get(m, m) for m in pivot.columns]
     
@@ -204,12 +239,16 @@ def create_tradeoff_plot(
     figsize: Tuple[int, int] = (8, 6),
     annotate: bool = True,
     show_pareto: bool = True,
+    y_label: Optional[str] = None,
+    y_higher_is_better: bool = False,
+    reference_y: Optional[float] = None,
+    reference_label: Optional[str] = None,
 ) -> None:
     """
     Create tradeoff/Pareto curve (Figure 2 in SPEC.md).
     
     X-axis: Quality metric (similarity)
-    Y-axis: Evasion metric (TPR@1%FPR, lower = better attack)
+    Y-axis: Evasion metric
     
     Args:
         data: DataFrame with method-level aggregated metrics
@@ -225,60 +264,150 @@ def create_tradeoff_plot(
     import matplotlib.pyplot as plt
     
     fig, ax = plt.subplots(figsize=figsize)
-    
+
+    data = data.copy()
+    if label_col in data.columns:
+        data["__order"] = data[label_col].map(_method_rank)
+        data = data.sort_values("__order")
+
+    label_offsets = {
+        "m0": (6, 4),
+        "m1": (6, 8),
+        "m2": (4, 8),
+        "m3": (16, -2),
+        "m4": (10, -20),
+        "m5": (4, 8),
+    }
+
     for _, row in data.iterrows():
         method = row[label_col]
         label = METHOD_NAMES.get(method, method)
         color = COLORS.get(method, "#333333")
-        
+
         ax.scatter(
             row[x_col],
             row[y_col],
-            s=150,
+            s=190,
             c=color,
-            label=label,
             edgecolors='white',
-            linewidth=2,
+            linewidth=1.8,
+            zorder=3,
         )
-        
+
         if annotate:
+            dx, dy = label_offsets.get(method, (6, 6))
+            ha = "left" if dx >= 0 else "right"
             ax.annotate(
                 label,
                 (row[x_col], row[y_col]),
-                xytext=(5, 5),
+                xytext=(dx, dy),
                 textcoords='offset points',
-                fontsize=9,
+                fontsize=9.5,
+                ha=ha,
+                va="bottom" if dy >= 0 else "top",
+                bbox={
+                    "boxstyle": "round,pad=0.18",
+                    "facecolor": "white",
+                    "edgecolor": "none",
+                    "alpha": 0.85,
+                },
+                zorder=4,
             )
-    
-    ax.set_xlabel("Semantic Similarity (E5)", fontsize=12)
-    ax.set_ylabel("Mean TPR@1%FPR (↓ better attack)", fontsize=12)
-    ax.set_title(title, fontsize=14, fontweight='bold')
 
-    # Pareto frontier (maximize similarity, minimize TPR)
+    ax.set_xlabel("Semantic Similarity (E5)", fontsize=13)
+    ax.set_ylabel(
+        y_label or (
+            "Mean evasion metric (higher is better)"
+            if y_higher_is_better
+            else "Mean evasion metric (lower is better)"
+        ),
+        fontsize=13,
+    )
+    ax.set_title(title, fontsize=16, fontweight='bold')
+
+    # Pareto frontier
+    pareto_handle = None
     if show_pareto:
         pareto_points = []
         filtered = data[[x_col, y_col]].dropna().sort_values(by=x_col, ascending=False)
-        best_tpr = float("inf")
+        best_y = -float("inf") if y_higher_is_better else float("inf")
         for _, row in filtered.iterrows():
-            tpr = row[y_col]
-            if tpr < best_tpr:
-                pareto_points.append((row[x_col], tpr))
-                best_tpr = tpr
+            y_val = row[y_col]
+            improved = y_val > best_y if y_higher_is_better else y_val < best_y
+            if improved:
+                pareto_points.append((row[x_col], y_val))
+                best_y = y_val
         if len(pareto_points) >= 2:
             pareto_points = sorted(pareto_points, key=lambda p: p[0])
             xs, ys = zip(*pareto_points)
-            ax.plot(xs, ys, color="#111111", linewidth=2.5, linestyle="-", label="Pareto frontier")
-    
+            pareto_handle, = ax.plot(
+                xs,
+                ys,
+                color="#111111",
+                linewidth=2.4,
+                linestyle="-",
+                label="Pareto frontier",
+                zorder=2,
+            )
+
     # Add reference lines
-    ax.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5, label='Random')
-    ax.axvline(x=0.9, color='gray', linestyle=':', alpha=0.5, label='Min similarity')
-    
-    ax.legend(loc='best', fontsize=9)
-    ax.grid(True, alpha=0.3)
-    
-    # Set axis limits
-    ax.set_xlim(0.7, 1.0)
-    ax.set_ylim(0.0, 1.0)
+    random_handle = None
+    if reference_y is not None:
+        random_handle = ax.axhline(
+            y=reference_y,
+            color="#9a9a9a",
+            linestyle="--",
+            linewidth=1.5,
+            alpha=0.7,
+            label=reference_label or "Reference",
+            zorder=1,
+        )
+    similarity_handle = ax.axvline(
+        x=0.9,
+        color="#b0b0b0",
+        linestyle=":",
+        linewidth=1.7,
+        alpha=0.9,
+        label="0.90 similarity",
+        zorder=1,
+    )
+
+    valid = data[[x_col, y_col]].dropna()
+    if not valid.empty:
+        x_vals = valid[x_col].to_numpy()
+        y_vals = valid[y_col].to_numpy()
+
+        x_min = min(x_vals.min(), 0.9)
+        x_max = x_vals.max()
+        x_pad = max(0.008, (x_max - x_min) * 0.18)
+        left = max(0.7, x_min - x_pad)
+        right = min(1.002, x_max + x_pad)
+        if right - left < 0.08:
+            mid = (left + right) / 2
+            left = max(0.7, mid - 0.04)
+            right = min(1.002, mid + 0.04)
+        ax.set_xlim(left, right)
+
+        y_min = y_vals.min()
+        y_max = y_vals.max()
+        if reference_y is not None:
+            y_min = min(y_min, reference_y)
+            y_max = max(y_max, reference_y)
+        y_span = max(y_max - y_min, 0.04)
+        y_pad = max(0.02, y_span * 0.16)
+        lower = max(0.0, y_min - y_pad)
+        upper = min(1.0, y_max + y_pad)
+        ax.set_ylim(lower, upper)
+
+    legend_handles = [h for h in [pareto_handle, random_handle, similarity_handle] if h is not None]
+    ax.legend(
+        handles=legend_handles,
+        loc="lower left",
+        bbox_to_anchor=(0.02, 0.03),
+        fontsize=9,
+        frameon=True,
+    )
+    ax.grid(True, alpha=0.22)
     
     plt.tight_layout()
     
@@ -452,7 +581,7 @@ def create_auroc_bar_chart(
     
     fig, ax = plt.subplots(figsize=figsize)
     
-    methods = data[method_col].unique()
+    methods = _order_methods(data[method_col].unique())
     detectors = data[detector_col].unique()
     n_detectors = len(detectors)
     n_methods = len(methods)
@@ -552,7 +681,7 @@ def create_auroc_radar_chart(
     import matplotlib.pyplot as plt
     from math import pi
     
-    methods = data[method_col].unique()
+    methods = _order_methods(data[method_col].unique())
     detectors = list(data[detector_col].unique())
     n_detectors = len(detectors)
     
@@ -654,6 +783,7 @@ def create_method_comparison_summary(
     # Panel 2: Mean AUROC with error bars
     ax2 = axes[0, 1]
     mean_aurocs = data.groupby(method_col)['auroc'].agg(['mean', 'std']).reset_index()
+    mean_aurocs = mean_aurocs.sort_values(by=method_col, key=lambda s: s.map(_method_rank))
     x2 = np.arange(len(mean_aurocs))
     colors = [COLORS.get(m, f"C{i}") for i, m in enumerate(mean_aurocs[method_col])]
     
@@ -702,6 +832,7 @@ def create_method_comparison_summary(
     
     if 'asr' in data.columns:
         mean_asr = data.groupby(method_col)['asr'].mean().reset_index()
+        mean_asr = mean_asr.sort_values(by=method_col, key=lambda s: s.map(_method_rank))
         x4 = np.arange(len(mean_asr))
         colors = [COLORS.get(m, f"C{i}") for i, m in enumerate(mean_asr[method_col])]
         
@@ -777,7 +908,7 @@ def create_score_distribution_plot(
         det_data = scores_data[scores_data[detector_col] == detector]
         
         # Create violin plot with method-specific colors
-        methods = det_data[method_col].unique()
+        methods = _order_methods(det_data[method_col].unique())
         palette = {m: COLORS.get(m, COLORBLIND_COLORS[i % len(COLORBLIND_COLORS)]) 
                    for i, m in enumerate(methods)}
         
@@ -789,6 +920,7 @@ def create_score_distribution_plot(
             ax=ax,
             inner='box',
             cut=0,
+            order=methods,
         )
         
         # Add median markers
@@ -841,7 +973,7 @@ def create_score_shift_plot(
     _apply_paper_style()
     import matplotlib.pyplot as plt
     
-    methods = list(after_scores.keys()) if isinstance(after_scores, dict) else []
+    methods = _order_methods(after_scores.keys()) if isinstance(after_scores, dict) else []
     if not methods:
         logger.warning("No methods found in after_scores")
         return
@@ -926,7 +1058,8 @@ def create_human_ai_separation_plot(
             density=True, edgecolor='black', linewidth=0.5)
     
     # AI distributions for each method
-    for i, (method, scores) in enumerate(ai_scores.items()):
+    for i, method in enumerate(_order_methods(ai_scores.keys())):
+        scores = ai_scores[method]
         color = COLORS.get(method, COLORBLIND_COLORS[i % len(COLORBLIND_COLORS)])
         ax.hist(scores, bins=50, alpha=0.4, label=METHOD_NAMES.get(method, method),
                 color=color, density=True, histtype='step', linewidth=2)
@@ -978,7 +1111,8 @@ def create_roc_curves(
     for ax, detector in zip(axes, detectors):
         detector_preds = predictions[detector]
         
-        for method, (y_true, y_scores) in detector_preds.items():
+        for method in _order_methods(detector_preds.keys()):
+            y_true, y_scores = detector_preds[method]
             fpr, tpr, _ = roc_curve(y_true, y_scores)
             roc_auc = auc(fpr, tpr)
             
@@ -1046,7 +1180,8 @@ def create_roc_curves_logscale(
     for ax, detector in zip(axes, detectors):
         detector_preds = predictions[detector]
         
-        for method, (y_true, y_scores) in detector_preds.items():
+        for method in _order_methods(detector_preds.keys()):
+            y_true, y_scores = detector_preds[method]
             fpr, tpr, _ = roc_curve(y_true, y_scores)
             roc_auc = auc(fpr, tpr)
             
@@ -1119,18 +1254,19 @@ def create_transferability_heatmap(
     
     # Pivot to get methods as rows, detectors as columns
     pivot = data.pivot(index=method_col, columns=detector_col, values=value_col)
-    pivot.index = [METHOD_NAMES.get(m, m) for m in pivot.index]
-    pivot.columns = [_pretty_detector_name(d) for d in pivot.columns]
-    
-    # Get baseline row
+    pivot = pivot.reindex(_order_methods(pivot.index))
+
+    # Get baseline row (method ids)
     if baseline_col not in pivot.index:
         logger.warning(f"Baseline '{baseline_col}' not found. Using first method as baseline.")
         baseline_col = pivot.index[0]
-    
+
     baseline = pivot.loc[baseline_col]
-    
+
     # Compute relative reduction: (baseline - value) / baseline * 100
     reduction = pivot.apply(lambda row: (baseline - row) / baseline * 100, axis=1)
+    reduction.index = [METHOD_NAMES.get(m, m) for m in reduction.index]
+    reduction.columns = [_pretty_detector_name(d) for d in reduction.columns]
     
     # Remove baseline row from display (it would be all zeros)
     reduction = reduction.drop(baseline_col, errors='ignore')
@@ -1202,7 +1338,7 @@ def create_quality_likert_chart(
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
     
     rated = quality_data[quality_data[rating_col].notna()]
-    methods = rated[method_col].unique()
+    methods = _order_methods(rated[method_col].unique())
     if len(methods) == 0:
         logger.warning("No GPT quality ratings available for Likert chart")
         return
@@ -1338,6 +1474,7 @@ def create_perplexity_comparison_table(
     """
     # Aggregate by method
     summary = data.groupby(method_col)[ppl_col].agg(['mean', 'std']).round(2)
+    summary = summary.reindex(_order_methods(summary.index))
     summary.columns = ['PPL (mean)', 'PPL (std)']
     summary['PPL (mean±std)'] = summary.apply(
         lambda r: f"{r['PPL (mean)']:.2f} ± {r['PPL (std)']:.2f}", axis=1
@@ -1382,7 +1519,7 @@ def create_combined_results_table(
         Table string
     """
     df = pd.DataFrame(detector_metrics)
-    methods = df['method'].unique()
+    methods = _order_methods(df['method'].unique())
     detectors = df['detector'].unique()
     
     rows = []
@@ -1454,7 +1591,7 @@ def create_main_results_table(
     df = pd.DataFrame(metrics)
     
     # Pivot to get methods as rows, detectors as columns
-    methods = df['method'].unique()
+    methods = _order_methods(df['method'].unique())
     detectors = df['detector'].unique()
     
     # Build table
@@ -1514,6 +1651,7 @@ def create_transfer_table(
         values='tpr_at_1fpr',
         aggfunc='mean',
     )
+    pivot = pivot[_order_methods(pivot.columns)]
     
     if format == "markdown":
         table = pivot.round(3).to_markdown()
@@ -1540,28 +1678,52 @@ def create_quality_table(
     """
     df = pd.DataFrame(quality_metrics)
     
-    # Aggregate by method
+    # Paper-facing table: report method means only, without per-column stds.
     agg_cols = {
-        'sim_e5': ['mean', 'std'],
-        'ppl_score': ['mean', 'std'],
-        'edit_rate': ['mean', 'std'],
+        'sim_e5': 'mean',
+        'ppl_score': 'mean',
+        'edit_rate': 'mean',
         'valid': 'mean',
     }
     if 'quality_rating' in df.columns:
-        agg_cols['quality_rating'] = ['mean', 'std']
+        agg_cols['quality_rating'] = 'mean'
     if 'similarity_rating' in df.columns:
-        agg_cols['similarity_rating'] = ['mean', 'std']
+        agg_cols['similarity_rating'] = 'mean'
 
     summary = df.groupby('method').agg(agg_cols).round(3)
-    
-    # Flatten column names
-    summary.columns = ['_'.join(col).strip() for col in summary.columns.values]
+    summary = summary.reindex(_order_methods(summary.index))
     summary = summary.reset_index()
+
+    method_labels = {
+        "m0": "M0",
+        "m1": "M1",
+        "m2": "M2 (Ours)",
+        "m3": "M3",
+        "m4": "M4",
+        "m5": "M5",
+    }
+    summary["method"] = summary["method"].map(method_labels).fillna(summary["method"])
+    summary = summary.rename(
+        columns={
+            "method": "Method",
+            "sim_e5": "E5 Sim.",
+            "ppl_score": "PPL",
+            "edit_rate": "Edit Rate",
+            "valid": "Valid",
+            "quality_rating": "Quality",
+            "similarity_rating": "Similarity",
+        }
+    )
+
+    for col in summary.columns:
+        if col == "Method":
+            continue
+        summary[col] = summary[col].map(lambda v: "---" if pd.isna(v) else f"{float(v):.3f}")
     
     if format == "markdown":
         table = summary.to_markdown(index=False)
     elif format == "latex":
-        table = summary.to_latex(index=False)
+        table = summary.to_latex(index=False, escape=False, column_format="lrrrrrr")
     else:
         table = summary.to_string(index=False)
     
@@ -2040,10 +2202,10 @@ def generate_all_plots(
     # ========================================================================
     
     # Prepare tradeoff data
-    tradeoff_data = detector_metrics.groupby('method').agg({
-        'tpr_at_1fpr': 'mean',
-    }).reset_index()
-    tradeoff_data.columns = ['method', 'mean_tpr']
+    tradeoff_data = detector_metrics.groupby('method').agg(
+        mean_tpr=('tpr_at_1fpr', 'mean'),
+        mean_asr=('asr', 'mean'),
+    ).reset_index()
     
     # Add quality metrics
     if 'sim_e5' in quality_metrics.columns:
@@ -2053,8 +2215,13 @@ def generate_all_plots(
         # Figure 5: Tradeoff plot
         create_tradeoff_plot(
             tradeoff_data,
+            y_col="mean_asr",
             title="Evasion-Quality Tradeoff",
             output_path=str(output_dir / "fig_tradeoff.png"),
+            y_label="Mean ASR@1%FPR (higher is better)",
+            y_higher_is_better=True,
+            reference_y=0.99,
+            reference_label="Random detector @1% FPR",
         )
     
     # ========================================================================
@@ -2142,13 +2309,18 @@ def generate_all_plots(
 # ============================================================================
 
 QUALITY_RATING_PROMPT = """
-You are an expert linguist and paraphrase evaluator. Your task is to assess the overall linguistic quality of a paraphrased text compared to the original source text. Focus on fluency, grammaticality, clarity, and naturalness. Use the following scoring criteria:
+You are an expert linguist and paraphrase evaluator. Your task is to assess the overall writing quality of a paraphrased text compared to the original source text.
 
-5 - Excellent: Fluent, grammatical, and natural; reads like high-quality human writing.
-4 - Good: Mostly fluent and clear with minor awkwardness or errors.
-3 - Acceptable: Understandable but noticeably awkward or error-prone.
-2 - Poor: Hard to read; many grammatical issues or unnatural phrasing.
-1 - Unusable: Severely degraded quality; incoherent or ungrammatical.
+Judge the paraphrase as real writing, not as an attack artifact. Reward unusual sentence structure only when it still reads naturally. Penalize awkward clause order, stilted transitions, filler phrases, obvious prompt leakage, parenthetical meta-comments, detector-evasion artifacts, and phrasing that feels unnatural even if the meaning is preserved.
+
+Be strict about naturalness. Use the full 1-5 scale and avoid defaulting to 3 unless it truly fits.
+
+Scoring criteria:
+5 - Excellent: Fluent, grammatical, and natural throughout; reads like polished human writing.
+4 - Good: Clear and mostly natural with only minor awkwardness.
+3 - Acceptable: Understandable, but noticeably stiff, awkward, or uneven.
+2 - Poor: Readably degraded; unnatural syntax or phrasing frequently distracts.
+1 - Unusable: Severely broken, incoherent, or clearly unnatural.
 
 Provide your final output as a JSON object in this format:
 {
@@ -2194,7 +2366,7 @@ Original Text:
 Paraphrased Text:
 \"\"\"{paraphrased_text}\"\"\"
 
-What score (1 to 5) would you assign to the paraphrase's quality, and why?
+What score (1 to 5) would you assign to the paraphrase's quality, and why? Do not give extra credit for sounding evasive or unusual if the prose becomes less natural.
 """
     
     return [

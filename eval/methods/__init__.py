@@ -3,10 +3,10 @@ Attack methods for StealthRL evaluation.
 
 Implements baseline methods as specified in SPEC.md:
 - M0: No attack (original AI text)
-- M1: Simple paraphrase (base LM without RL)
+- M1: Simple paraphrase (base LM without RL, vLLM backend)
 - M2: StealthRL (RL-trained policy) - supports Tinker and local PEFT
-- M3: Adversarial Paraphrasing (guided selection fallback)
-- M4: AuthorMist (HF model)
+- M3: Adversarial Paraphrasing (guided selection with vLLM backend)
+- M4: AuthorMist (vLLM backend)
 - M5: Homoglyph (text transform)
 """
 
@@ -63,10 +63,12 @@ METHOD_REGISTRY = {
     "adversarial_paraphrasing": AdversarialParaphrasing,
     "m3_ensemble": AdversarialParaphrasingEnsemble,
     "adversarial_paraphrasing_ensemble": AdversarialParaphrasingEnsemble,
-    "m4": AuthorMistOllama,  # Default to Ollama for M4 Mac
-    "authormist": AuthorMistOllama,
-    "m4_hf": AuthorMist,  # HuggingFace version (requires GPU)
-    "authormist_hf": AuthorMist,
+    "m4": AuthorMist,  # Default to vLLM-backed AuthorMist
+    "authormist": AuthorMist,
+    "m4_vllm": AuthorMist,
+    "authormist_vllm": AuthorMist,
+    "m4_ollama": AuthorMistOllama,
+    "authormist_ollama": AuthorMistOllama,
     "m5": HomoglyphAttack,
     "homoglyph": HomoglyphAttack,
 }
