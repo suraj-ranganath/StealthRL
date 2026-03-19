@@ -3,7 +3,7 @@
 **Abstract**  
 AI-text detectors face a critical robustness challenge: adversarial paraphrasing attacks that preserve semantics while evading detection. *StealthRL* is a reinforcement learning framework for stress-testing detector robustness under realistic adversarial conditions. It trains a paraphrase policy against a multi-detector ensemble using Group Relative Policy Optimization (GRPO) with LoRA adapters on Qwen3-4B, optimizing a composite reward that balances detector evasion with semantic preservation. On the full filtered MAGE test pool (15,310 human / 14,656 AI) and a four-detector panel of RoBERTa, Fast-DetectGPT, Binoculars, and MAGE, StealthRL achieves near-zero detection on three of the four detectors and a 0.024 mean TPR@1%FPR, reducing mean AUROC from 0.79 to 0.43 while attaining a 97.6% attack success rate. The attack also transfers to held-out detectors not seen during training, revealing shared architectural vulnerabilities rather than detector-specific brittleness. This repository contains the training code and evaluation pipeline used for those experiments.
 
-![StealthRL Pipeline Overview](figures/StealthRL_Pipeline_Final_v3.png)
+![StealthRL Pipeline Overview](figures/StealthRL_Pipeline_Final_Final.png)
 
 **Implementation Overview**
 The rest of the implementation is organized as a modular, configuration-driven research codebase:
