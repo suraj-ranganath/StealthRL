@@ -452,6 +452,51 @@ summary {
   font-size: 0.78rem;
 }
 
+.footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.footer a:hover {
+  color: var(--accent-2);
+  text-decoration: underline;
+}
+
+.privacy-hero h1 {
+  font-size: clamp(2.9rem, 8vw, 5.8rem);
+}
+
+.privacy-panel {
+  line-height: 1.58;
+}
+
+.privacy-panel h2 {
+  margin: 1.4rem 0 0.45rem;
+  color: var(--ink);
+  font-size: 1.12rem;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+}
+
+.privacy-panel h2:first-child {
+  margin-top: 0;
+}
+
+.privacy-panel p {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+}
+
+.privacy-panel ul {
+  margin: 0.35rem 0 0.85rem;
+  padding-left: 1.25rem;
+  color: var(--muted);
+}
+
+.privacy-panel li {
+  margin-bottom: 0.45rem;
+}
+
 [hidden] {
   display: none !important;
 }

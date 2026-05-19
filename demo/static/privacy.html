@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy information · StealthRL Demo</title>
+    <meta
+      name="description"
+      content="Privacy information for the StealthRL research demo."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="bg-grid" aria-hidden="true"></div>
+
+    <main class="wrap privacy-doc">
+      <header class="hero privacy-hero">
+        <p class="kicker"><a href="/">Back to demo</a></p>
+        <div class="title-row">
+          <span class="brand-mark">SRL</span>
+          <h1>Privacy information</h1>
+        </div>
+        <p class="subtitle">
+          This page explains what the StealthRL Demo processes when you submit text to the
+          research preview.
+        </p>
+      </header>
+
+      <section class="panel privacy-panel" aria-label="Privacy information">
+        <h2>Who runs this demo</h2>
+        <p>
+          The StealthRL Demo is operated by Suraj Ranganath and Atharv Ramesh for research
+          demonstration and evaluation purposes.
+        </p>
+
+        <h2>What data is processed</h2>
+        <ul>
+          <li>
+            <strong>Submitted text.</strong> The text you paste is sent to the demo backend so a
+            paraphrase can be generated and returned to your browser.
+          </li>
+          <li>
+            <strong>Generated output.</strong> The paraphrased output and lightweight text-shape
+            metrics are produced for the current request.
+          </li>
+          <li>
+            <strong>Quota metadata.</strong> The service stores daily usage counters in SQLite.
+            Public quota subjects and API-key subjects are hashed before storage.
+          </li>
+          <li>
+            <strong>Connection metadata.</strong> Hosting, reverse proxy, tunnel, or server logs
+            may process technical metadata such as IP address, user agent, timestamp, and request
+            path.
+          </li>
+          <li>
+            <strong>Optional API key.</strong> If you enter an API key in the browser, the browser
+            stores it in local storage so you do not need to retype it. The server receives it only
+            with requests you submit.
+          </li>
+        </ul>
+
+        <h2>What is not intentionally stored</h2>
+        <p>
+          The demo application does not intentionally persist submitted source text, generated
+          paraphrases, or per-request model outputs in its quota database. Do not submit private,
+          sensitive, confidential, or regulated text, because request content may still pass through
+          infrastructure logs or external inference services depending on deployment.
+        </p>
+
+        <h2>External inference services</h2>
+        <p>
+          The public preview may run in a no-cost mock backend or in a real StealthRL inference
+          backend. If a deployment is configured to call Tinker or another model service, the text
+          you submit is transmitted to that service for generation under that provider's terms and
+          privacy practices.
+        </p>
+
+        <h2>How the data is used</h2>
+        <ul>
+          <li>To return a paraphrased output for the text you submit.</li>
+          <li>To enforce the public daily quota and any API-key quota.</li>
+          <li>To monitor, debug, secure, and improve the research demo.</li>
+        </ul>
+
+        <h2>Retention</h2>
+        <p>
+          Quota counters are tracked by day and may remain in the configured SQLite usage database
+          until the operator deletes or rotates that database. Browser local storage remains on your
+          device until you clear it. Infrastructure logs, if present, follow the retention policies
+          of the deployment environment.
+        </p>
+
+        <h2>Your choices</h2>
+        <ul>
+          <li>Do not use the demo for sensitive or private text.</li>
+          <li>Clear your browser storage if you want to remove a saved API key.</li>
+          <li>Use an API key only if one has been issued to you by the operators.</li>
+        </ul>
+
+        <h2>Contact</h2>
+        <p>
+          For privacy or demo-operation questions, contact the project maintainers through the
+          public project links on the demo page.
+        </p>
+
+        <h2>Changes</h2>
+        <p>
+          This page may be updated as the demo deployment changes. The version shown here applies
+          to your current visit.
+        </p>
+      </section>
+
+      <footer class="footer">
+        <span>
+          <a href="https://www.linkedin.com/in/suraj-ranganath/" target="_blank" rel="noreferrer">Suraj Ranganath</a>
+          &amp;
+          <a href="https://www.linkedin.com/in/atharv-ramesh/" target="_blank" rel="noreferrer">Atharv Ramesh</a>
+        </span>
+        <span><a href="/privacy">Privacy</a></span>
+        <span>Copyright &copy; 2026. All rights reserved.</span>
+      </footer>
+    </main>
+  </body>
+</html>

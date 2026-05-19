@@ -45,6 +45,14 @@ def test_index_serves_static_demo(tmp_path):
     assert "StealthRL Demo" in response.text
 
 
+def test_privacy_page_serves_static_document(tmp_path):
+    client = _client(tmp_path)
+    response = client.get("/privacy")
+    assert response.status_code == 200
+    assert "Privacy information" in response.text
+    assert "StealthRL Demo" in response.text
+
+
 def test_api_key_bypasses_public_quota(tmp_path):
     client = _client(tmp_path, public_limit=0)
     payload = {
