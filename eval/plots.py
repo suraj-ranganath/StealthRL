@@ -40,14 +40,14 @@ def _apply_paper_style():
         rc={
             "figure.dpi": 150,
             "savefig.dpi": 300,
-            "axes.titlesize": 12,
+            "axes.titlesize": 14,
             "axes.titlepad": 8,
-            "axes.labelsize": 11,
+            "axes.labelsize": 12,
             "axes.labelpad": 6,
-            "xtick.labelsize": 9,
-            "ytick.labelsize": 9,
-            "legend.fontsize": 9,
-            "legend.title_fontsize": 9,
+            "xtick.labelsize": 10,
+            "ytick.labelsize": 10,
+            "legend.fontsize": 10,
+            "legend.title_fontsize": 10,
             "axes.linewidth": 0.8,
             "grid.linewidth": 0.6,
             "grid.alpha": 0.25,
@@ -214,11 +214,14 @@ def create_heatmap(
         vmax=vmax,
         ax=ax,
         cbar_kws={"label": value_col},
+        annot_kws={"fontsize": 11},
     )
     
-    ax.set_title(title, fontsize=14, fontweight='bold')
+    ax.set_title(title, fontsize=15, fontweight='bold')
     ax.set_xlabel("Method", fontsize=12)
     ax.set_ylabel("Detector", fontsize=12)
+    ax.tick_params(axis="x", labelsize=10)
+    ax.tick_params(axis="y", labelsize=10)
     
     plt.tight_layout()
     
@@ -775,9 +778,9 @@ def create_method_comparison_summary(
         [_pretty_detector_name(d).replace(' ', '\n') for d in detectors],
         rotation=45,
         ha='right',
-        fontsize=8,
+        fontsize=10,
     )
-    ax1.legend(fontsize=8, ncol=2)
+    ax1.legend(fontsize=10, ncol=2)
     ax1.set_ylim(0, 1.05)
     
     # Panel 2: Mean AUROC with error bars
@@ -795,14 +798,14 @@ def create_method_comparison_summary(
     ax2.set_xticks(x2)
     ax2.set_xticklabels(
         [METHOD_NAMES.get(m, m).replace(' ', '\n') for m in mean_aurocs[method_col]],
-        fontsize=9,
+        fontsize=10,
     )
     ax2.set_ylim(0, 1.05)
     
     # Add value labels
     for bar, val in zip(bars, mean_aurocs['mean']):
         ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02,
-                 f'{val:.2f}', ha='center', fontsize=9, fontweight='bold')
+                 f'{val:.2f}', ha='center', fontsize=10, fontweight='bold')
     
     # Panel 3: TPR@1%FPR grouped bars
     ax3 = axes[1, 0]
@@ -823,7 +826,7 @@ def create_method_comparison_summary(
         [_pretty_detector_name(d).replace(' ', '\n') for d in detectors],
         rotation=45,
         ha='right',
-        fontsize=8,
+        fontsize=10,
     )
     ax3.set_ylim(0, 1.05)
     
@@ -842,20 +845,20 @@ def create_method_comparison_summary(
         ax4.set_xticks(x4)
         ax4.set_xticklabels(
             [METHOD_NAMES.get(m, m).replace(' ', '\n') for m in mean_asr[method_col]],
-            fontsize=9,
+            fontsize=10,
         )
         ax4.set_ylim(0, 1.05)
         
         # Add value labels
         for bar, val in zip(bars, mean_asr['asr']):
             ax4.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02,
-                     f'{val:.1%}', ha='center', fontsize=9, fontweight='bold')
+                     f'{val:.1%}', ha='center', fontsize=10, fontweight='bold')
     else:
         ax4.text(0.5, 0.5, 'ASR data not available', ha='center', va='center',
                  transform=ax4.transAxes, fontsize=12)
         ax4.set_title('(d) Attack Success Rate', fontweight='bold')
     
-    fig.suptitle('Detection Evasion Results Summary', fontsize=16, fontweight='bold', y=1.02)
+    fig.suptitle('Detection Evasion Results Summary', fontsize=17, fontweight='bold', y=1.02)
     plt.tight_layout()
     
     if output_path:
@@ -1685,6 +1688,14 @@ def create_quality_table(
         'edit_rate': 'mean',
         'valid': 'mean',
     }
+    if 'bertscore_f1' in df.columns:
+        agg_cols = {
+            'sim_e5': 'mean',
+            'bertscore_f1': 'mean',
+            'ppl_score': 'mean',
+            'edit_rate': 'mean',
+            'valid': 'mean',
+        }
     if 'quality_rating' in df.columns:
         agg_cols['quality_rating'] = 'mean'
     if 'similarity_rating' in df.columns:
@@ -1707,6 +1718,7 @@ def create_quality_table(
         columns={
             "method": "Method",
             "sim_e5": "E5 Sim.",
+            "bertscore_f1": "BERTScore",
             "ppl_score": "PPL",
             "edit_rate": "Edit Rate",
             "valid": "Valid",
@@ -1723,7 +1735,7 @@ def create_quality_table(
     if format == "markdown":
         table = summary.to_markdown(index=False)
     elif format == "latex":
-        table = summary.to_latex(index=False, escape=False, column_format="lrrrrrr")
+        table = summary.to_latex(index=False, escape=False, column_format="l" + "r" * (len(summary.columns) - 1))
     else:
         table = summary.to_string(index=False)
     

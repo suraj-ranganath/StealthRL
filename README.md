@@ -7,7 +7,7 @@
 
 ## Abstract
 
-AI-text detectors face a critical robustness challenge: adversarial paraphrasing attacks that preserve semantics while evading detection. We introduce StealthRL, a reinforcement learning framework that stress-tests detector robustness under realistic adversarial conditions. StealthRL trains a paraphrase policy against a multi-detector ensemble using Group Relative Policy Optimization (GRPO) with LoRA adapters on Qwen3-4B, optimizing a composite reward that balances detector evasion with semantic preservation. We evaluate six attack settings (M0-M5) on the full filtered MAGE test pool (15,310 human / 14,656 AI) against four detectors: RoBERTa, Fast-DetectGPT, Binoculars, and MAGE. StealthRL achieves near-zero detection on three of the four detectors and a 0.024 mean TPR@1%FPR, reducing mean AUROC from 0.79 to 0.43 and attaining a 97.6% attack success rate. Critically, attacks transfer to two held-out detectors not seen during training, revealing shared architectural vulnerabilities rather than detector-specific brittleness. We additionally conduct LLM-based quality evaluation via Likert scoring on 500 matched samples per method, analyze detector score distributions to explain why evasion succeeds, and provide per-detector AUROC with bootstrap confidence intervals. Our results expose significant robustness gaps in current AI-text detection and establish StealthRL as a principled adversarial evaluation protocol.
+AI-text detectors are increasingly used in high-stakes settings, yet their robustness to meaning-preserving adversarial rewriting remains uncertain. We introduce StealthRL, a reinforcement learning framework for stress-testing AI-text detectors with adaptive paraphrase attacks. StealthRL trains a paraphrase policy against a detector ensemble while preserving semantic content, then evaluates transfer to held-out detector families. On the full filtered MAGE test pool (15,310 human / 14,656 AI), StealthRL reduces mean AUROC from 0.79 to 0.43 and achieves a 0.024 mean TPR@1%FPR across RoBERTa, Fast-DetectGPT, Binoculars, and MAGE. The attack transfers to two detectors not used during training, exposing shared vulnerabilities rather than a single-detector failure. We further analyze detector score distributions and evaluate quality with E5, BERTScore, and LLM-based Likert ratings. Our results show that current AI-text detectors remain brittle under realistic paraphrasing pressure and provide a reproducible protocol for adversarial robustness evaluation.
 
 ## What This Repository Contains
 
@@ -152,6 +152,18 @@ python scripts/run_gpt_quality_only.py \
   --env-file ~/.config/stealthrl/eval.env
 ```
 
+6. If you only need to add BERTScore to an assembled run with cached outputs:
+
+```bash
+python scripts/compute_bertscore_for_run.py \
+  --run-dir outputs/eval_runs/full_mage_repro/assembled \
+  --device cuda:0 \
+  --batch-size 16 \
+  --chunk-size 512
+```
+
+The BERTScore script updates `quality.parquet` and `quality.csv` in place after every chunk, so interrupted runs can be resumed without recomputing completed rows. Use `--limit-per-method` for a small smoke test and `--force` only when intentionally recomputing existing BERTScore columns.
+
 ### Main output artifacts
 
 The staged run produces:
@@ -163,6 +175,10 @@ The staged run produces:
 - `assembled/quality.parquet`: automatic quality metrics
 - `assembled/quality_gpt.parquet`: GPT/Likert quality ratings
 - `assembled/figures/`: paper-ready plots
+
+### Canonical paper settings
+
+The primary paper checkpoint uses `configs/tinker_mage_10k.yaml` as the canonical training configuration: Qwen3-4B-Instruct with LoRA rank 32, GRPO group size 8, 10,000 MAGE training samples, three epochs, learning rate `2.8e-4`, KL coefficient `0.05`, temperature `1.0`, top-p `0.9`, and a two-detector reward ensemble weighted `0.6` RoBERTa / `0.4` Fast-DetectGPT. Other configs in `configs/` are retained as legacy examples, smoke-test settings, or ablation templates and should not be treated as paper-authoritative unless explicitly documented.
 
 ## Training Implementation
 
@@ -243,6 +259,7 @@ The public evaluation code computes:
 - TPR@5%FPR
 - ASR
 - E5 similarity
+- BERTScore precision/recall/F1
 - perplexity
 - edit rate
 - GPT/Likert quality and similarity scores
