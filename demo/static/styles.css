@@ -117,7 +117,7 @@ h2 {
 }
 
 .disclaimer {
-  max-width: 820px;
+  max-width: none;
   margin-top: 18px;
   padding: 13px 15px;
   color: #31271f;
@@ -125,6 +125,7 @@ h2 {
   border: 1px solid #c59639;
   font-size: 0.94rem;
   line-height: 1.45;
+  white-space: nowrap;
 }
 
 .link-row {
@@ -477,6 +478,10 @@ summary {
   }
 
   .pill {
+    white-space: normal;
+  }
+
+  .disclaimer {
     white-space: normal;
   }
 
