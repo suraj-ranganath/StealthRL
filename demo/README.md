@@ -5,7 +5,8 @@ This is a lightweight FastAPI demo for StealthRL. It serves a static single-page
 The demo is designed to be cheap by default:
 
 - `mock` backend is zero-cost and deterministic for UI/local testing.
-- `tinker` backend lazily calls the released StealthRL sampler through Tinker when configured.
+- `hf` backend lazily loads the released Hugging Face PEFT adapter for real local inference.
+- `tinker` backend lazily calls a StealthRL sampler through Tinker when configured.
 - unauthenticated users are limited to 20 public responses per day by default.
 - API-key users can bypass the public quota or receive their own daily quota.
 
@@ -46,7 +47,20 @@ The quota database stores only daily counters keyed by hashed identifiers; it do
 
 ## Use Real StealthRL Inference
 
-The default `mock` backend is intentionally cost-free. To call the actual StealthRL sampler:
+The default `mock` backend is intentionally cost-free. To run the released Hugging Face adapter locally:
+
+```bash
+export CUDA_VISIBLE_DEVICES=4
+export STEALTHRL_DEMO_INFERENCE_BACKEND=hf
+export STEALTHRL_DEMO_HF_BASE_MODEL=Qwen/Qwen3-4B-Instruct-2507
+export STEALTHRL_DEMO_HF_ADAPTER_MODEL=suraj-ranganath/StealthRL
+export STEALTHRL_DEMO_REQUEST_TIMEOUT_S=240
+uvicorn demo.stealthrl_demo.app:app --host 0.0.0.0 --port 8080
+```
+
+The Hugging Face backend uses the released PEFT adapter and chunks multi-sentence inputs before generation so the demo preserves paragraph coverage instead of summarizing to a single sentence.
+
+To call a Tinker-hosted sampler instead:
 
 ```bash
 export STEALTHRL_DEMO_INFERENCE_BACKEND=tinker
@@ -66,14 +80,15 @@ docker run --rm -p 8080:8080 --env-file demo/.env stealthrl-demo
 
 ## AWS Deployment Notes
 
-For a judicious first deployment, use a small CPU container service and Tinker-backed inference rather than renting a GPU instance:
+For a judicious first deployment, keep the FastAPI service small and choose the inference path explicitly:
 
-- AWS App Runner or ECS Fargate with `0.5-1 vCPU` and `1-2 GB` RAM is enough for the FastAPI frontend/backend.
+- AWS App Runner or ECS Fargate with `0.5-1 vCPU` and `1-2 GB` RAM is enough for the FastAPI frontend/backend when inference is remote or mocked.
+- For fully local real inference, use a GPU host with enough memory for `Qwen/Qwen3-4B-Instruct-2507` plus the PEFT adapter, then set `STEALTHRL_DEMO_INFERENCE_BACKEND=hf`.
 - Mount persistent storage only for `STEALTHRL_DEMO_DB_PATH` if you need quota counters to survive container replacement; otherwise use a small managed database later.
-- Store `TINKER_API_KEY`, `STEALTHRL_DEMO_API_KEYS`, and checkpoint path/JSON in AWS Secrets Manager or the service secret-env mechanism.
+- Store `STEALTHRL_DEMO_API_KEYS` and any provider credentials in AWS Secrets Manager or the service secret-env mechanism.
 - Set `STEALTHRL_DEMO_PUBLIC_QUOTA_SCOPE=global` if you want a hard public cost cap across all unauthenticated users instead of a per-IP quota.
 
-If you later want fully local inference on AWS, use a GPU instance only after measuring Tinker latency/cost. A CPU web service plus remote sampler is the cheapest credible demo architecture.
+If you later add a hosted remote sampler, keep the web tier CPU-only and call that sampler from the backend. The current real local path is the Hugging Face PEFT backend.
 
 ## API
 

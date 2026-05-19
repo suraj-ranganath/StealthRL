@@ -16,6 +16,14 @@ from typing import Any
 from .config import DemoSettings
 
 
+PARAPHRASE_PROMPT = """Please paraphrase the following text while maintaining its meaning and style. Preserve every source claim, keep the paraphrase close to the original length, do not summarize, do not add new details, and output only the paraphrased text without any additional explanation.
+
+Original text:
+{text}
+
+Paraphrased text:"""
+
+
 @dataclass(frozen=True)
 class ParaphraseResult:
     request_id: str
@@ -67,7 +75,7 @@ class MockStealthBackend(BaseDemoBackend):
             output = text.strip()
         return output, {
             "mode": "deterministic_preview",
-            "note": "Set STEALTHRL_DEMO_INFERENCE_BACKEND=tinker for real StealthRL sampler calls.",
+            "note": "Set STEALTHRL_DEMO_INFERENCE_BACKEND=hf for real StealthRL adapter inference.",
         }
 
     def _rewrite_sentence(self, sentence: str, idx: int) -> str:
@@ -154,11 +162,104 @@ class TinkerStealthBackend(BaseDemoBackend):
         }
 
 
+class HuggingFaceStealthBackend(BaseDemoBackend):
+    name = "hf"
+
+    def __init__(self, settings: DemoSettings) -> None:
+        self.settings = settings
+        self._runtime: dict[str, Any] | None = None
+        self._lock = asyncio.Lock()
+
+    async def _ensure_loaded(self) -> dict[str, Any]:
+        if self._runtime is not None:
+            return self._runtime
+        async with self._lock:
+            if self._runtime is not None:
+                return self._runtime
+
+            def _load() -> dict[str, Any]:
+                import torch
+                from peft import PeftModel
+                from transformers import AutoModelForCausalLM, AutoTokenizer
+
+                dtype = _torch_dtype(torch, self.settings.hf_dtype)
+                tokenizer = AutoTokenizer.from_pretrained(
+                    self.settings.hf_base_model,
+                    trust_remote_code=True,
+                )
+                model = AutoModelForCausalLM.from_pretrained(
+                    self.settings.hf_base_model,
+                    dtype=dtype,
+                    device_map=self.settings.hf_device_map,
+                    trust_remote_code=True,
+                )
+                model = PeftModel.from_pretrained(model, self.settings.hf_adapter_model)
+                model.eval()
+                return {
+                    "model": model,
+                    "tokenizer": tokenizer,
+                    "base_model": self.settings.hf_base_model,
+                    "adapter_model": self.settings.hf_adapter_model,
+                }
+
+            self._runtime = await asyncio.to_thread(_load)
+            return self._runtime
+
+    async def paraphrase(self, text: str, temperature: float, top_p: float) -> tuple[str, dict[str, Any]]:
+        runtime = await self._ensure_loaded()
+        chunks = _split_generation_chunks(text)
+
+        def _generate_one(chunk: str) -> str:
+            import torch
+
+            model = runtime["model"]
+            tokenizer = runtime["tokenizer"]
+            prompt_text = PARAPHRASE_PROMPT.format(text=chunk)
+            messages = [{"role": "user", "content": prompt_text}]
+            if hasattr(tokenizer, "apply_chat_template"):
+                formatted = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            else:
+                formatted = prompt_text
+
+            inputs = tokenizer(
+                formatted,
+                return_tensors="pt",
+                truncation=True,
+                max_length=1024,
+            ).to(model.device)
+            with torch.no_grad():
+                output_ids = model.generate(
+                    **inputs,
+                    max_new_tokens=_estimate_generation_max_tokens(text, default_max_tokens=512),
+                    do_sample=temperature > 0,
+                    temperature=max(temperature, 1e-5),
+                    top_p=top_p,
+                    pad_token_id=tokenizer.eos_token_id,
+                )
+            new_tokens = output_ids[0, inputs["input_ids"].shape[1] :]
+            output = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+            return _clean_model_output(output)
+
+        def _run() -> str:
+            return " ".join(_generate_one(chunk) for chunk in chunks).strip()
+
+        output = await asyncio.to_thread(_run)
+        return output, {
+            "method": "stealthrl",
+            "backend": "hf_peft",
+            "base_model": runtime["base_model"],
+            "adapter_model": runtime["adapter_model"],
+            "chunk_count": len(chunks),
+        }
+
+
 def build_backend(settings: DemoSettings) -> BaseDemoBackend:
     if settings.inference_backend == "tinker":
         return TinkerStealthBackend(settings)
+    if settings.inference_backend in {"hf", "huggingface", "peft"}:
+        return HuggingFaceStealthBackend(settings)
     if settings.inference_backend != "mock":
-        raise ValueError("STEALTHRL_DEMO_INFERENCE_BACKEND must be 'mock' or 'tinker'")
+        raise ValueError("STEALTHRL_DEMO_INFERENCE_BACKEND must be 'mock', 'tinker', or 'hf'")
     return MockStealthBackend()
 
 
@@ -212,6 +313,50 @@ def _estimate_generation_max_tokens(original: str, default_max_tokens: int, min_
     char_based = max(int(len(original) / 6), min_tokens)
     word_based = max(int(word_count * 1.6), min_tokens)
     return min(default_max_tokens, max(char_based, word_based))
+
+
+def _split_generation_chunks(text: str, max_chunks: int = 12) -> list[str]:
+    sentences = _split_sentences(text)
+    if len(sentences) <= 1:
+        return [text.strip()]
+    if len(sentences) <= max_chunks:
+        return sentences
+
+    chunk_size = max(1, (len(sentences) + max_chunks - 1) // max_chunks)
+    chunks = []
+    for start in range(0, len(sentences), chunk_size):
+        chunks.append(" ".join(sentences[start : start + chunk_size]).strip())
+    return chunks
+
+
+def _torch_dtype(torch: Any, dtype_name: str) -> Any:
+    if dtype_name in {"auto", ""}:
+        return "auto"
+    if dtype_name in {"bf16", "bfloat16"}:
+        return torch.bfloat16
+    if dtype_name in {"fp16", "float16", "half"}:
+        return torch.float16
+    if dtype_name in {"fp32", "float32", "float"}:
+        return torch.float32
+    raise ValueError("STEALTHRL_DEMO_HF_DTYPE must be one of: auto, bfloat16, float16, float32")
+
+
+def _clean_model_output(output: str) -> str:
+    text = output.strip()
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE).strip()
+    for marker in ("PARAPHRASE:", "Paraphrase:", "paraphrase:"):
+        if marker in text:
+            text = text.split(marker, 1)[-1].strip()
+    lines = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.lower().startswith(("note:", "(note:")):
+            continue
+        lines.append(stripped)
+    text = " ".join(lines).strip().strip('"')
+    return text or output.strip()
 
 
 def _normalize_spacing(text: str) -> str:

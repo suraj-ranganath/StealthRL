@@ -25,6 +25,10 @@ class DemoSettings:
     api_keys: tuple[ApiKeyConfig, ...] = ()
     inference_backend: str = "mock"
     checkpoint_json: str | None = None
+    hf_base_model: str = "Qwen/Qwen3-4B-Instruct-2507"
+    hf_adapter_model: str = "suraj-ranganath/StealthRL"
+    hf_dtype: str = "bfloat16"
+    hf_device_map: str = "auto"
     max_chars: int = 5000
     request_timeout_s: int = 90
 
@@ -74,6 +78,10 @@ def load_settings() -> DemoSettings:
         api_keys=_parse_api_keys(os.getenv("STEALTHRL_DEMO_API_KEYS")),
         inference_backend=os.getenv("STEALTHRL_DEMO_INFERENCE_BACKEND", "mock").strip().lower(),
         checkpoint_json=os.getenv("STEALTHRL_DEMO_CHECKPOINT_JSON") or None,
+        hf_base_model=os.getenv("STEALTHRL_DEMO_HF_BASE_MODEL", "Qwen/Qwen3-4B-Instruct-2507").strip(),
+        hf_adapter_model=os.getenv("STEALTHRL_DEMO_HF_ADAPTER_MODEL", "suraj-ranganath/StealthRL").strip(),
+        hf_dtype=os.getenv("STEALTHRL_DEMO_HF_DTYPE", "bfloat16").strip().lower(),
+        hf_device_map=os.getenv("STEALTHRL_DEMO_HF_DEVICE_MAP", "auto").strip(),
         max_chars=_int_env("STEALTHRL_DEMO_MAX_CHARS", 5000),
         request_timeout_s=_int_env("STEALTHRL_DEMO_REQUEST_TIMEOUT_S", 90),
     )
