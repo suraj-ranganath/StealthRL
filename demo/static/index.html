@@ -69,18 +69,22 @@
           spellcheck="true"
         >During sustained cardio exercise, the heart increases its workload and the rest of the body adjusts to support that effort. Blood vessels widen to improve circulation, leg and core muscles help push blood back toward the heart, and the lungs breathe faster to bring in oxygen while clearing waste gases such as carbon dioxide throughout the workout and recovery period.</textarea>
 
-        <div class="settings-grid">
-          <label>
-            Temperature
-            <span id="temperatureValue">0.90</span>
-            <input id="temperature" name="temperature" type="range" min="0" max="1.5" value="0.9" step="0.05" />
-          </label>
-          <label>
-            Top-p
-            <span id="topPValue">0.95</span>
-            <input id="topP" name="top_p" type="range" min="0.1" max="1" value="0.95" step="0.05" />
-          </label>
-        </div>
+        <details class="config-box">
+          <summary>Generation config</summary>
+          <p>Defaults match the paper evaluation setting.</p>
+          <div class="settings-grid">
+            <label>
+              Temperature
+              <span id="temperatureValue">1.00</span>
+              <input id="temperature" name="temperature" type="range" min="0" max="1.5" value="1.0" step="0.05" />
+            </label>
+            <label>
+              Top-p
+              <span id="topPValue">0.90</span>
+              <input id="topP" name="top_p" type="range" min="0.1" max="1" value="0.9" step="0.05" />
+            </label>
+          </div>
+        </details>
 
         <details class="api-key-box">
           <summary>Use API key for extended access</summary>

@@ -97,8 +97,8 @@ If you later add a hosted remote sampler, keep the web tier CPU-only and call th
 ```json
 {
   "text": "Paste AI-generated text here...",
-  "temperature": 0.9,
-  "top_p": 0.95
+  "temperature": 1.0,
+  "top_p": 0.9
 }
 ```
 

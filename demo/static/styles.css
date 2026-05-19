@@ -246,7 +246,7 @@ input[type="password"]:focus {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  margin: 14px 0;
+  margin: 10px 0 0;
 }
 
 .settings-grid label {
@@ -274,11 +274,18 @@ input[type="range"] {
 }
 
 .api-key-box,
+.config-box,
 .original-box {
   margin-top: 12px;
   padding: 12px;
   background: rgba(247, 240, 220, 0.74);
   border: 1px dashed var(--line-strong);
+}
+
+.config-box {
+  color: var(--muted);
+  background: rgba(247, 240, 220, 0.46);
+  border-color: rgba(139, 128, 100, 0.6);
 }
 
 summary {
@@ -292,10 +299,16 @@ summary {
 }
 
 .api-key-box p,
+.config-box p,
 .original-box p {
   margin: 10px 0 0;
   color: var(--muted);
   line-height: 1.5;
+}
+
+.config-box p {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.76rem;
 }
 
 .field.compact {
