@@ -23,7 +23,12 @@ sys.path.insert(0, str(project_root))
 
 from eval.data import load_eval_dataset_with_ids
 from eval.plots import create_quality_table, create_quality_likert_chart
-from eval.quality_judge import GPTQualityConfig, run_gpt_quality_judge
+from eval.quality_judge import (
+    GPTQualityConfig,
+    _hash_key,
+    _load_cache,
+    run_gpt_quality_judge,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -34,6 +39,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-per-method", type=int, default=200)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--concurrency", type=int, default=32)
+    parser.add_argument("--max-retries", type=int, default=6)
+    parser.add_argument("--request-timeout-s", type=int, default=60)
     parser.add_argument("--cache-dir", type=str, default="cache")
     parser.add_argument("--openai-api-key", type=str, default=None)
     parser.add_argument("--no-clear-existing", action="store_true")
@@ -62,6 +69,8 @@ def main() -> None:
     if not quality_path.exists():
         raise SystemExit(f"Missing {quality_path}")
     quality_df = pd.read_parquet(quality_path)
+    cache_path = run_dir / "quality_gpt.jsonl"
+    cache = _load_cache(cache_path)
 
     ids = json.loads((run_dir / "dataset_samples.json").read_text())
     raw_outputs = json.loads((run_dir / "raw_outputs.json").read_text())
@@ -117,6 +126,7 @@ def main() -> None:
         existing_ok = set(tuple(row) for row in existing.itertuples(index=False, name=None))
 
     items: List[Dict] = []
+    cache_hits = 0
     for dataset_name, split_ids in ids.items():
         ai_ids = split_ids["ai_ids"]
         selected_ids = selected_ids_by_ds[dataset_name]
@@ -141,18 +151,51 @@ def main() -> None:
                 key = (sid, method, setting, dataset_name)
                 if key in existing_ok:
                     continue
+                original = orig_map[sid]
+                paraphrased = para_map[sid]
+                quality_cache = cache.get(_hash_key(args.model, "quality", original, paraphrased))
+                similarity_cache = cache.get(_hash_key(args.model, "similarity", original, paraphrased))
+                if quality_cache and quality_cache.get("quality_rating") is not None:
+                    mask = (
+                        (quality_df["sample_id"] == sid)
+                        & (quality_df["method"] == method)
+                        & (quality_df["setting"] == setting)
+                        & (quality_df["dataset"] == dataset_name)
+                    )
+                    quality_df.loc[mask, "quality_rating"] = quality_cache.get("quality_rating")
+                    quality_df.loc[mask, "quality_justification"] = quality_cache.get("quality_justification")
+                    quality_df.loc[mask, "quality_model"] = args.model
+                if similarity_cache and similarity_cache.get("similarity_rating") is not None:
+                    mask = (
+                        (quality_df["sample_id"] == sid)
+                        & (quality_df["method"] == method)
+                        & (quality_df["setting"] == setting)
+                        & (quality_df["dataset"] == dataset_name)
+                    )
+                    quality_df.loc[mask, "similarity_rating"] = similarity_cache.get("similarity_rating")
+                    quality_df.loc[mask, "similarity_justification"] = similarity_cache.get("similarity_justification")
+                    quality_df.loc[mask, "quality_model"] = args.model
+                if (
+                    quality_cache
+                    and quality_cache.get("quality_rating") is not None
+                    and similarity_cache
+                    and similarity_cache.get("similarity_rating") is not None
+                ):
+                    cache_hits += 1
+                    continue
                 items.append({
                     "sample_id": sid,
                     "dataset": dataset_name,
                     "method": method,
                     "setting": setting,
-                    "original": orig_map[sid],
-                    "paraphrased": para_map[sid],
+                    "original": original,
+                    "paraphrased": paraphrased,
                 })
 
     if not items:
-        print("No items to evaluate.")
-        return
+        print(f"No items to evaluate. Loaded {cache_hits} fully cached items.")
+    else:
+        print(f"Loaded {cache_hits} fully cached items; evaluating {len(items)} remaining items.")
 
     by_method_counts = {}
     for item in items:
@@ -163,11 +206,13 @@ def main() -> None:
         model=args.model,
         max_per_method=max_per_method_total,
         seed=args.seed,
-        cache_path=run_dir / "quality_gpt.jsonl",
+        cache_path=cache_path,
         concurrency=args.concurrency,
+        max_retries=args.max_retries,
+        request_timeout_s=args.request_timeout_s,
     )
 
-    results = run_gpt_quality_judge(api_key=api_key, items=items, config=config)
+    results = run_gpt_quality_judge(api_key=api_key, items=items, config=config) if items else []
 
     if results:
         gpt_df = pd.DataFrame(results).set_index(["sample_id", "method", "setting"])
@@ -175,12 +220,16 @@ def main() -> None:
         quality_df.update(gpt_df)
         quality_df = quality_df.reset_index()
 
-        quality_df.to_parquet(quality_path)
-        quality_df.to_csv(run_dir / "quality.csv", index=False)
+    quality_df.to_parquet(quality_path)
+    quality_df.to_csv(run_dir / "quality.csv", index=False)
 
-        # Save GPT-only outputs for convenience
-        gpt_df.reset_index().to_parquet(run_dir / "quality_gpt.parquet")
-        gpt_df.reset_index().to_csv(run_dir / "quality_gpt.csv", index=False)
+    gpt_only = quality_df[
+        quality_df["method"].isin(methods)
+        & quality_df["quality_rating"].notna()
+        & quality_df["similarity_rating"].notna()
+    ].copy()
+    gpt_only.to_parquet(run_dir / "quality_gpt.parquet")
+    gpt_only.to_csv(run_dir / "quality_gpt.csv", index=False)
 
     create_quality_table(
         quality_df.to_dict("records"),

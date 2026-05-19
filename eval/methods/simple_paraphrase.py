@@ -7,13 +7,26 @@ Uses base LM (Qwen3-4B via vLLM) without RL training.
 import logging
 from typing import List, Optional
 
-from .base import BaseAttackMethod, AttackOutput, validate_attack_output
+from .base import (
+    BaseAttackMethod,
+    AttackOutput,
+    estimate_generation_max_tokens,
+    iter_length_bucket_indices,
+    validate_attack_output,
+)
 from .vllm_backend import get_vllm_generator
 
 logger = logging.getLogger(__name__)
 
 
-PARAPHRASE_PROMPT = """Please paraphrase the following text while maintaining its meaning and style. Output only the paraphrased text without any additional explanation.
+PARAPHRASE_PROMPT = """Please paraphrase the following text while maintaining its meaning and style. Keep the paraphrase close to the original length, do not add new details, and output only the paraphrased text without any additional explanation.
+
+Original text:
+{text}
+
+Paraphrased text:"""
+
+STRICT_LENGTH_PARAPHRASE_PROMPT = """Please paraphrase the following text while preserving its meaning and style. Keep the paraphrase very close to the original length, do not add new details, and return only the paraphrased text. Do not exceed the original length by more than about 20%.
 
 Original text:
 {text}
@@ -30,6 +43,7 @@ class SimpleParaphrase(BaseAttackMethod):
     """
     
     DEFAULT_MODEL = "Qwen/Qwen3-4B-Instruct-2507"
+    GENERATION_BUCKET_SIZE = 128
     
     def __init__(
         self,
@@ -71,6 +85,9 @@ class SimpleParaphrase(BaseAttackMethod):
         self.max_model_len = max_model_len
         self.rerank_detector = None
         self.generator = None
+
+    def _estimate_max_tokens(self, text: str) -> int:
+        return estimate_generation_max_tokens(text, self.max_new_tokens)
     
     def load(self):
         """Load shared vLLM generator."""
@@ -93,8 +110,63 @@ class SimpleParaphrase(BaseAttackMethod):
             n=n_candidates,
             temperature=self.temperature,
             top_p=self.top_p,
-            max_tokens=self.max_new_tokens,
+            max_tokens=self._estimate_max_tokens(text),
         )[0]
+
+    def _repair_invalid_output(
+        self,
+        text: str,
+        fail_reason: Optional[str],
+    ) -> Optional[AttackOutput]:
+        if not fail_reason:
+            return None
+
+        prompt = STRICT_LENGTH_PARAPHRASE_PROMPT.format(text=text)
+        retry_max_tokens = max(
+            48,
+            min(
+                self._estimate_max_tokens(text),
+                int(len(text.split()) * 1.2),
+            ),
+        )
+
+        try:
+            candidates = self.generator.generate_batch(
+                [prompt],
+                n=1,
+                temperature=min(self.temperature, 0.7),
+                top_p=min(self.top_p, 0.9),
+                max_tokens=retry_max_tokens,
+            )[0]
+        except Exception as e:
+            logger.warning("Length-repair generation failed: %s", e)
+            return None
+
+        if not candidates:
+            return None
+
+        candidate = candidates[0]
+        valid, repaired_fail_reason = validate_attack_output(
+            text,
+            candidate,
+            min_words=self.min_words,
+            max_length_ratio=self.max_length_ratio,
+        )
+        return AttackOutput(
+            text=candidate,
+            metadata={
+                "method": self.name,
+                "backend": "vllm",
+                "model": self.model_name,
+                "repair_attempt": True,
+                "repair_source_fail_reason": fail_reason,
+            },
+            all_candidates=candidates,
+            candidate_scores=[0.0],
+            original_text=text,
+            valid=valid,
+            fail_reason=repaired_fail_reason,
+        )
     
     def _attack_impl(
         self,
@@ -157,6 +229,22 @@ class SimpleParaphrase(BaseAttackMethod):
             candidate_scores=scores,
         )
 
+    def attack(
+        self,
+        text: str,
+        n_candidates: int = 1,
+        **kwargs,
+    ) -> AttackOutput:
+        result = super().attack(text, n_candidates=n_candidates, **kwargs)
+        if result.valid or not self.validate_outputs:
+            return result
+
+        repaired = self._repair_invalid_output(text, result.fail_reason)
+        if repaired is not None and repaired.valid:
+            logger.info("Recovered invalid %s output via strict length repair", self.name)
+            return repaired
+        return result
+
     def attack_batch(
         self,
         texts: List[str],
@@ -166,83 +254,94 @@ class SimpleParaphrase(BaseAttackMethod):
         if not self._loaded:
             self.load()
 
-        prompts = [PARAPHRASE_PROMPT.format(text=text) for text in texts]
-        try:
-            grouped_candidates = self.generator.generate_batch(
-                prompts,
-                n=n_candidates,
-                temperature=self.temperature,
-                top_p=self.top_p,
-                max_tokens=self.max_new_tokens,
-            )
-        except Exception as e:
-            logger.error(f"Batch generation failed: {e}")
-            grouped_candidates = [[] for _ in texts]
+        results: List[Optional[AttackOutput]] = [None] * len(texts)
 
-        flat_candidates: List[str] = []
-        group_sizes: List[int] = []
-        for candidates in grouped_candidates:
-            filtered = [candidate for candidate in candidates if candidate]
-            flat_candidates.extend(filtered)
-            group_sizes.append(len(filtered))
+        completed = 0
+        total = len(texts)
+        for batch in iter_length_bucket_indices(texts, self.GENERATION_BUCKET_SIZE):
+            batch_indices = [index for index, _ in batch]
+            batch_texts = [text for _, text in batch]
+            prompts = [PARAPHRASE_PROMPT.format(text=text) for text in batch_texts]
+            batch_max_tokens = max(self._estimate_max_tokens(text) for text in batch_texts)
 
-        flat_scores: List[float] = []
-        if n_candidates > 1 and flat_candidates:
-            if self.rerank_detector is None:
-                import torch
-                from ..detectors import get_detector
-
-                self.device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
-                logger.info(f"Loading reranking detector: {self.rerank_detector_name}")
-                self.rerank_detector = get_detector(self.rerank_detector_name, device=self.device)
-                self.rerank_detector.load()
-            flat_scores = self.rerank_detector.get_scores(flat_candidates)
-
-        results: List[AttackOutput] = []
-        cursor = 0
-        for text, size in zip(texts, group_sizes):
-            candidates = flat_candidates[cursor:cursor + size]
-            scores = flat_scores[cursor:cursor + size] if flat_scores else [0.0] * len(candidates)
-            cursor += size
-
-            if not candidates:
-                results.append(AttackOutput(
-                    text=text,
-                    original_text=text,
-                    valid=False,
-                    fail_reason="no_valid_candidates",
-                    metadata={"method": self.name, "backend": "vllm"},
-                ))
-                continue
-
-            best_idx = scores.index(min(scores)) if scores else 0
-            output = AttackOutput(
-                text=candidates[best_idx],
-                metadata={
-                    "method": self.name,
-                    "backend": "vllm",
-                    "model": self.model_name,
-                    "n_candidates": n_candidates,
-                    "best_idx": best_idx,
-                    "best_detector_score": scores[best_idx] if scores else 0.0,
-                    "rerank_detector": self.rerank_detector_name,
-                },
-                all_candidates=candidates,
-                candidate_scores=scores,
-                original_text=text,
-            )
-            if self.validate_outputs:
-                valid, fail_reason = validate_attack_output(
-                    text,
-                    output.text,
-                    min_words=self.min_words,
-                    max_length_ratio=self.max_length_ratio,
+            try:
+                grouped_candidates = self.generator.generate_batch(
+                    prompts,
+                    n=n_candidates,
+                    temperature=self.temperature,
+                    top_p=self.top_p,
+                    max_tokens=batch_max_tokens,
                 )
-                output.valid = valid
-                output.fail_reason = fail_reason
-            results.append(output)
+            except Exception as e:
+                logger.error(f"Batch generation failed: {e}")
+                grouped_candidates = [[] for _ in batch_texts]
 
-        return results
+            flat_candidates: List[str] = []
+            group_sizes: List[int] = []
+            for candidates in grouped_candidates:
+                filtered = [candidate for candidate in candidates if candidate]
+                flat_candidates.extend(filtered)
+                group_sizes.append(len(filtered))
+
+            flat_scores: List[float] = []
+            if n_candidates > 1 and flat_candidates:
+                if self.rerank_detector is None:
+                    import torch
+                    from ..detectors import get_detector
+
+                    self.device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
+                    logger.info(f"Loading reranking detector: {self.rerank_detector_name}")
+                    self.rerank_detector = get_detector(self.rerank_detector_name, device=self.device)
+                    self.rerank_detector.load()
+                flat_scores = self.rerank_detector.get_scores(flat_candidates)
+
+            cursor = 0
+            for index, text, size in zip(batch_indices, batch_texts, group_sizes):
+                candidates = flat_candidates[cursor:cursor + size]
+                scores = flat_scores[cursor:cursor + size] if flat_scores else [0.0] * len(candidates)
+                cursor += size
+
+                if not candidates:
+                    results[index] = AttackOutput(
+                        text=text,
+                        original_text=text,
+                        valid=False,
+                        fail_reason="no_valid_candidates",
+                        metadata={"method": self.name, "backend": "vllm"},
+                    )
+                    continue
+
+                best_idx = scores.index(min(scores)) if scores else 0
+                output = AttackOutput(
+                    text=candidates[best_idx],
+                    metadata={
+                        "method": self.name,
+                        "backend": "vllm",
+                        "model": self.model_name,
+                        "n_candidates": n_candidates,
+                        "best_idx": best_idx,
+                        "best_detector_score": scores[best_idx] if scores else 0.0,
+                        "rerank_detector": self.rerank_detector_name,
+                    },
+                    all_candidates=candidates,
+                    candidate_scores=scores,
+                    original_text=text,
+                )
+                if self.validate_outputs:
+                    valid, fail_reason = validate_attack_output(
+                        text,
+                        output.text,
+                        min_words=self.min_words,
+                        max_length_ratio=self.max_length_ratio,
+                    )
+                    output.valid = valid
+                    output.fail_reason = fail_reason
+                results[index] = output
+
+            completed += len(batch_texts)
+            logger.info("[%s] Progress: %d/%d", self.name, completed, total)
+
+        return [result for result in results if result is not None]
 
 
 class SimpleParaphraseWithReranking(SimpleParaphrase):

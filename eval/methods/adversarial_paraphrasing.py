@@ -8,7 +8,12 @@ Implements detector-guided selection using batched vLLM generation.
 import logging
 from typing import List, Optional
 
-from .base import BaseAttackMethod, AttackOutput
+from .base import (
+    BaseAttackMethod,
+    AttackOutput,
+    estimate_generation_max_tokens,
+    iter_length_bucket_indices,
+)
 from .simple_paraphrase import PARAPHRASE_PROMPT
 from .vllm_backend import get_vllm_generator
 
@@ -28,6 +33,7 @@ class AdversarialParaphrasing(BaseAttackMethod):
     """
     
     DEFAULT_MODEL = "Qwen/Qwen3-4B-Instruct-2507"
+    GENERATION_BUCKET_SIZE = 96
     
     def __init__(
         self,
@@ -70,6 +76,9 @@ class AdversarialParaphrasing(BaseAttackMethod):
         self.guidance_detector = None
         self.similarity_scorer = None
         self.generator = None
+
+    def _estimate_max_tokens(self, text: str) -> int:
+        return estimate_generation_max_tokens(text, self.max_new_tokens)
     
     def load(self):
         """Load detector, similarity scorer, and shared vLLM generator."""
@@ -107,7 +116,7 @@ class AdversarialParaphrasing(BaseAttackMethod):
             n=n_candidates,
             temperature=self.temperature,
             top_p=self.top_p,
-            max_tokens=self.max_new_tokens,
+            max_tokens=self._estimate_max_tokens(text),
         )[0]
     
     def _attack_impl(
@@ -196,80 +205,91 @@ class AdversarialParaphrasing(BaseAttackMethod):
         if not self._loaded:
             self.load()
 
-        prompts = [PARAPHRASE_PROMPT.format(text=text) for text in texts]
-        grouped_candidates = self.generator.generate_batch(
-            prompts,
-            n=n_candidates,
-            temperature=self.temperature,
-            top_p=self.top_p,
-            max_tokens=self.max_new_tokens,
-        )
+        results: List[Optional[AttackOutput]] = [None] * len(texts)
 
-        flat_candidates: List[str] = []
-        flat_originals: List[str] = []
-        group_sizes: List[int] = []
-        for original_text, candidates in zip(texts, grouped_candidates):
-            filtered = [candidate for candidate in candidates if candidate]
-            flat_candidates.extend(filtered)
-            flat_originals.extend([original_text] * len(filtered))
-            group_sizes.append(len(filtered))
+        completed = 0
+        total = len(texts)
+        for batch in iter_length_bucket_indices(texts, self.GENERATION_BUCKET_SIZE):
+            batch_indices = [index for index, _ in batch]
+            batch_texts = [text for _, text in batch]
+            prompts = [PARAPHRASE_PROMPT.format(text=text) for text in batch_texts]
+            batch_max_tokens = max(self._estimate_max_tokens(text) for text in batch_texts)
 
-        detector_scores = self.guidance_detector.get_scores(flat_candidates) if flat_candidates else []
-        similarities = (
-            self.similarity_scorer.compute_similarity(flat_originals, flat_candidates)
-            if flat_candidates else []
-        )
+            grouped_candidates = self.generator.generate_batch(
+                prompts,
+                n=n_candidates,
+                temperature=self.temperature,
+                top_p=self.top_p,
+                max_tokens=batch_max_tokens,
+            )
 
-        results: List[AttackOutput] = []
-        cursor = 0
-        for text, size in zip(texts, group_sizes):
-            candidates = flat_candidates[cursor:cursor + size]
-            det_scores = detector_scores[cursor:cursor + size] if detector_scores else []
-            sims = similarities[cursor:cursor + size] if similarities else []
-            cursor += size
+            flat_candidates: List[str] = []
+            flat_originals: List[str] = []
+            group_sizes: List[int] = []
+            for original_text, candidates in zip(batch_texts, grouped_candidates):
+                filtered = [candidate for candidate in candidates if candidate]
+                flat_candidates.extend(filtered)
+                flat_originals.extend([original_text] * len(filtered))
+                group_sizes.append(len(filtered))
 
-            if not candidates:
-                results.append(AttackOutput(
-                    text=text,
+            detector_scores = self.guidance_detector.get_scores(flat_candidates) if flat_candidates else []
+            similarities = (
+                self.similarity_scorer.compute_similarity(flat_originals, flat_candidates)
+                if flat_candidates else []
+            )
+
+            cursor = 0
+            for index, text, size in zip(batch_indices, batch_texts, group_sizes):
+                candidates = flat_candidates[cursor:cursor + size]
+                det_scores = detector_scores[cursor:cursor + size] if detector_scores else []
+                sims = similarities[cursor:cursor + size] if similarities else []
+                cursor += size
+
+                if not candidates:
+                    results[index] = AttackOutput(
+                        text=text,
+                        original_text=text,
+                        valid=False,
+                        fail_reason="no_valid_candidates",
+                        metadata={"method": self.name, "backend": "vllm"},
+                    )
+                    continue
+
+                best_candidate = None
+                best_score = float("inf")
+                best_idx = 0
+                for idx, (candidate, det_score, sim) in enumerate(zip(candidates, det_scores, sims)):
+                    if sim >= self.similarity_threshold and det_score < best_score:
+                        best_candidate = candidate
+                        best_score = det_score
+                        best_idx = idx
+
+                if best_candidate is None:
+                    best_idx = det_scores.index(min(det_scores)) if det_scores else 0
+                    best_candidate = candidates[best_idx]
+
+                results[index] = AttackOutput(
+                    text=best_candidate,
                     original_text=text,
-                    valid=False,
-                    fail_reason="no_valid_candidates",
-                    metadata={"method": self.name, "backend": "vllm"},
-                ))
-                continue
+                    metadata={
+                        "method": self.name,
+                        "backend": "vllm",
+                        "model": self.model_name,
+                        "guidance_detector": self.guidance_detector_name,
+                        "similarity_threshold": self.similarity_threshold,
+                        "n_candidates": n_candidates,
+                        "best_idx": best_idx,
+                        "best_detector_score": det_scores[best_idx] if det_scores else 0.0,
+                        "best_similarity": sims[best_idx] if sims else 0.0,
+                    },
+                    all_candidates=candidates,
+                    candidate_scores=det_scores,
+                )
 
-            best_candidate = None
-            best_score = float("inf")
-            best_idx = 0
-            for idx, (candidate, det_score, sim) in enumerate(zip(candidates, det_scores, sims)):
-                if sim >= self.similarity_threshold and det_score < best_score:
-                    best_candidate = candidate
-                    best_score = det_score
-                    best_idx = idx
+            completed += len(batch_texts)
+            logger.info("[%s] Progress: %d/%d", self.name, completed, total)
 
-            if best_candidate is None:
-                best_idx = det_scores.index(min(det_scores)) if det_scores else 0
-                best_candidate = candidates[best_idx]
-
-            results.append(AttackOutput(
-                text=best_candidate,
-                original_text=text,
-                metadata={
-                    "method": self.name,
-                    "backend": "vllm",
-                    "model": self.model_name,
-                    "guidance_detector": self.guidance_detector_name,
-                    "similarity_threshold": self.similarity_threshold,
-                    "n_candidates": n_candidates,
-                    "best_idx": best_idx,
-                    "best_detector_score": det_scores[best_idx] if det_scores else 0.0,
-                    "best_similarity": sims[best_idx] if sims else 0.0,
-                },
-                all_candidates=candidates,
-                candidate_scores=det_scores,
-            ))
-
-        return results
+        return [result for result in results if result is not None]
 
 
 class AdversarialParaphrasingEnsemble(AdversarialParaphrasing):

@@ -47,6 +47,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gpt-concurrency", type=int, default=32)
     parser.add_argument("--gpus", nargs="+", type=int, default=None)
     parser.add_argument("--min-free-gb", type=float, default=20.0)
+    parser.add_argument("--vllm-max-model-len", type=int, default=2048)
+    parser.add_argument("--vllm-gpu-memory-utilization", type=float, default=0.82)
     parser.add_argument("--poll-seconds", type=int, default=30)
     parser.add_argument("--log-level", default="INFO")
     return parser.parse_args()
@@ -111,11 +113,17 @@ def _start_job(
     cmd: list[str],
     env: dict[str, str],
     cwd: Path,
-    gpu: int,
+    gpu: int | list[int] | None,
     log_dir: Path,
 ) -> tuple[subprocess.Popen, Path]:
     proc_env = env.copy()
-    proc_env["CUDA_VISIBLE_DEVICES"] = str(gpu)
+    if gpu is None:
+        proc_env.pop("CUDA_VISIBLE_DEVICES", None)
+    else:
+        if isinstance(gpu, list):
+            proc_env["CUDA_VISIBLE_DEVICES"] = ",".join(str(gpu_id) for gpu_id in gpu)
+        else:
+            proc_env["CUDA_VISIBLE_DEVICES"] = str(gpu)
     log_path = log_dir / f"{name}.log"
     cmd_path = log_dir / f"{name}.cmd.sh"
     cmd_path.write_text(shlex.join(cmd) + "\n")
@@ -127,7 +135,12 @@ def _start_job(
         stdout=log_file,
         stderr=subprocess.STDOUT,
     )
-    logger.info("Started %s on GPU %s (pid=%s)", name, gpu, process.pid)
+    if gpu is None:
+        logger.info("Started %s on CPU (pid=%s)", name, process.pid)
+    elif isinstance(gpu, list):
+        logger.info("Started %s on GPUs %s (pid=%s)", name, gpu, process.pid)
+    else:
+        logger.info("Started %s on GPU %s (pid=%s)", name, gpu, process.pid)
     return process, log_path
 
 
@@ -164,6 +177,12 @@ def _combine_raw_outputs(method_dirs: dict[str, Path], combined_path: Path) -> N
             payload[dataset_name][method] = dataset_outputs[method]
     with open(combined_path, "w") as f:
         json.dump(payload, f, indent=2, ensure_ascii=False)
+
+
+def _method_n_candidates(method: str, default_n_candidates: int) -> int:
+    if method in {"m3", "adversarial_paraphrasing", "m3_roberta", "m3_fastdetect", "m3_ensemble"}:
+        return 4
+    return default_n_candidates
 
 
 def main() -> int:
@@ -228,7 +247,15 @@ def main() -> int:
 
     method_dirs = {method: method_root / method for method in args.methods}
     pending = deque()
+    cpu_pending = deque()
     for method in args.methods:
+        raw_outputs_path = method_dirs[method] / "raw_outputs.json"
+        if raw_outputs_path.exists():
+            logger.info("Skipping %s; existing outputs found at %s", method, raw_outputs_path)
+            continue
+
+        method_n_candidates = _method_n_candidates(method, args.n_candidates)
+        method_gpu_count = 1
         cmd = [
             str(project_root / "venv" / "bin" / "python"),
             str(project_root / "scripts" / "generate_method_outputs.py"),
@@ -241,20 +268,46 @@ def main() -> int:
             "--cache-dir",
             args.cache_dir,
             "--n-candidates",
-            str(args.n_candidates),
+            str(method_n_candidates),
             "--m1-backend",
             "vllm",
+            "--vllm-max-model-len",
+            str(args.vllm_max_model_len),
+            "--vllm-gpu-memory-utilization",
+            str(args.vllm_gpu_memory_utilization),
+            "--max-invalid-retries",
+            "3",
         ]
         if method == "m2":
             cmd.extend(["--checkpoint-json", args.checkpoint_json])
-        pending.append((method, cmd))
+        if method == "m3":
+            if len(gpus) >= 2:
+                method_gpu_count = 2
+                cmd.extend(["--method-device", "cuda:1"])
+            else:
+                cmd.extend(["--method-device", "cpu"])
+        if method in {"m0", "m5"}:
+            cpu_pending.append((method, cmd))
+        else:
+            pending.append((method, cmd, method_gpu_count))
 
-    running: dict[str, tuple[subprocess.Popen, int, Path]] = {}
+    running: dict[str, tuple[subprocess.Popen, int | list[int] | None, Path]] = {}
+    while cpu_pending:
+        method, cmd = cpu_pending.popleft()
+        process, log_path = _start_job(method, cmd, env, project_root, None, logs_dir)
+        running[method] = (process, None, log_path)
+
     free_gpus = deque(gpus)
     while pending or running:
-        while pending and free_gpus:
-            method, cmd = pending.popleft()
-            gpu = free_gpus.popleft()
+        while pending:
+            method, cmd, gpu_count = pending[0]
+            if len(free_gpus) < gpu_count:
+                break
+            pending.popleft()
+            if gpu_count == 1:
+                gpu: int | list[int] | None = free_gpus.popleft()
+            else:
+                gpu = [free_gpus.popleft() for _ in range(gpu_count)]
             process, log_path = _start_job(method, cmd, env, project_root, gpu, logs_dir)
             running[method] = (process, gpu, log_path)
 
@@ -265,9 +318,17 @@ def main() -> int:
             if code is None:
                 continue
             if code != 0:
-                raise RuntimeError(f"Method job {method} failed on GPU {gpu}. See {log_path}")
-            logger.info("Completed method %s on GPU %s", method, gpu)
-            free_gpus.append(gpu)
+                location = f"GPU {gpu}" if gpu is not None else "CPU"
+                raise RuntimeError(f"Method job {method} failed on {location}. See {log_path}")
+            if gpu is None:
+                logger.info("Completed method %s on CPU", method)
+            elif isinstance(gpu, list):
+                logger.info("Completed method %s on GPUs %s", method, gpu)
+                for gpu_id in gpu:
+                    free_gpus.append(gpu_id)
+            else:
+                logger.info("Completed method %s on GPU %s", method, gpu)
+                free_gpus.append(gpu)
             completed.append(method)
         for method in completed:
             del running[method]

@@ -1,0 +1,75 @@
+\begin{tikzpicture}[
+  font=\sffamily,
+  node distance=10mm and 13mm,
+  box/.style={
+    rectangle,
+    rounded corners=2pt,
+    draw=black!55,
+    very thick,
+    align=center,
+    minimum height=8mm,
+    text width=28mm,
+    fill=white
+  },
+  smallbox/.style={
+    rectangle,
+    rounded corners=2pt,
+    draw=black!50,
+    thick,
+    align=center,
+    minimum height=7mm,
+    text width=25mm,
+    fill=white
+  },
+  groupbox/.style={
+    rectangle,
+    rounded corners=3pt,
+    draw=black!30,
+    thick,
+    inner sep=4mm,
+    fill=black!2
+  },
+  arrow/.style={-{Latex[length=2.5mm]}, very thick, draw=black!65},
+  reward/.style={-{Latex[length=2.3mm]}, thick, draw=teal!70!black},
+  evalarrow/.style={-{Latex[length=2.5mm]}, very thick, draw=orange!80!black}
+]
+
+\node[box, fill=blue!8] (data) {MAGE train\\AI text};
+\node[box, fill=green!8, right=of data] (policy) {Qwen3-4B\\LoRA policy};
+\node[box, fill=green!8, right=of policy] (samples) {GRPO group\\paraphrases};
+
+\node[smallbox, fill=red!7, above right=8mm and 10mm of samples] (roberta) {RoBERTa\\score};
+\node[smallbox, fill=red!7, below=4mm of roberta] (fast) {Fast-DetectGPT\\score};
+\node[smallbox, fill=teal!8, below right=8mm and 10mm of samples] (e5) {E5 semantic\\similarity};
+\node[box, fill=yellow!12, right=17mm of samples] (reward) {Composite reward\\$R=\alpha R_{\rm det}+\beta R_{\rm sem}$};
+\node[box, fill=green!12, right=of reward] (update) {GRPO update\\single policy};
+
+\node[box, fill=purple!8, below=16mm of update] (evalpolicy) {Final StealthRL\\paraphraser};
+\node[smallbox, fill=orange!10, left=of evalpolicy] (evaldata) {Filtered MAGE\\test pool};
+\node[box, fill=orange!10, right=of evalpolicy] (evaldet) {Evaluation detectors\\RoBERTa, Fast-DetectGPT\\Binoculars, MAGE};
+\node[box, fill=gray!8, right=of evaldet] (metrics) {Metrics\\TPR@1\%/5\% FPR\\AUROC, ASR, quality};
+
+\node[groupbox, fit=(data)(policy)(samples)(roberta)(fast)(e5)(reward)(update), label={[font=\bfseries\sffamily]above:Offline RL training}] {};
+\node[groupbox, fit=(evaldata)(evalpolicy)(evaldet)(metrics), label={[font=\bfseries\sffamily]below:Held-out robustness evaluation}] {};
+
+\draw[arrow] (data) -- (policy);
+\draw[arrow] (policy) -- (samples);
+\draw[reward] (samples) -- (roberta);
+\draw[reward] (samples) -- (fast);
+\draw[reward] (samples) -- (e5);
+\draw[reward] (roberta.east) -- (reward.north west);
+\draw[reward] (fast.east) -- (reward.west);
+\draw[reward] (e5.east) -- (reward.south west);
+\draw[arrow] (reward) -- (update);
+\draw[arrow] (update.south) -- (evalpolicy.north);
+
+\draw[evalarrow] (evaldata) -- (evalpolicy);
+\draw[evalarrow] (evalpolicy) -- (evaldet);
+\draw[evalarrow] (evaldet) -- (metrics);
+
+\node[align=center, font=\footnotesize\sffamily, text width=44mm, below=3mm of samples] (note1)
+  {Training uses only RoBERTa and Fast-DetectGPT rewards.};
+\node[align=center, font=\footnotesize\sffamily, text width=46mm, above=3mm of evaldet] (note2)
+  {Binoculars and MAGE are held out until evaluation.};
+
+\end{tikzpicture}

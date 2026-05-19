@@ -30,6 +30,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--checkpoint-json", default=None, help="Tinker checkpoint JSON for m2")
     parser.add_argument("--n-candidates", type=int, default=1, help="Candidates per sample")
     parser.add_argument("--m1-backend", default="vllm", choices=["vllm", "tinker"])
+    parser.add_argument("--method-device", default=None, help="Optional detector/similarity device override")
+    parser.add_argument("--vllm-max-model-len", type=int, default=None, help="Override vLLM max model length")
+    parser.add_argument("--vllm-gpu-memory-utilization", type=float, default=None, help="Override vLLM GPU memory utilization")
+    parser.add_argument("--max-invalid-retries", type=int, default=3, help="Retry invalid samples up to N additional times")
     parser.add_argument("--tinker-concurrency", type=int, default=64)
     parser.add_argument("--tinker-chunk-size", type=int, default=256)
     parser.add_argument("--tinker-max-retries", type=int, default=2)
@@ -89,7 +93,15 @@ def main() -> int:
                 tinker_backoff_s=args.tinker_backoff_s,
             )
         else:
-            method = get_method(args.method)
+            method_kwargs = {}
+            if args.method in {"m1", "simple_paraphrase", "m3", "adversarial_paraphrasing", "m4", "authormist"}:
+                if args.method_device is not None:
+                    method_kwargs["device"] = args.method_device
+                if args.vllm_max_model_len is not None:
+                    method_kwargs["max_model_len"] = args.vllm_max_model_len
+                if args.vllm_gpu_memory_utilization is not None:
+                    method_kwargs["gpu_memory_utilization"] = args.vllm_gpu_memory_utilization
+            method = get_method(args.method, **method_kwargs)
 
         logger.info(
             "Generating outputs for %s on %s (%d AI samples, n_candidates=%d)",
@@ -103,6 +115,24 @@ def main() -> int:
             raise RuntimeError(
                 f"{args.method} returned {len(results)} outputs for {len(ai_texts)} inputs"
             )
+
+        invalid_indices = [index for index, result in enumerate(results) if not result.valid]
+        for retry_round in range(args.max_invalid_retries):
+            if not invalid_indices:
+                break
+            logger.warning(
+                "%s produced %d invalid outputs on %s; retry round %d/%d",
+                args.method,
+                len(invalid_indices),
+                dataset_name,
+                retry_round + 1,
+                args.max_invalid_retries,
+            )
+            retry_texts = [ai_texts[index] for index in invalid_indices]
+            retry_results = [method.attack(text, n_candidates=args.n_candidates) for text in retry_texts]
+            for index, retry_result in zip(invalid_indices, retry_results):
+                results[index] = retry_result
+            invalid_indices = [index for index, result in enumerate(results) if not result.valid]
 
         invalid = []
         attacked_texts = []

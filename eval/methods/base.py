@@ -4,7 +4,7 @@ Base class for attack methods.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Iterable, Iterator, Sequence, Tuple
 import logging
 import time
 
@@ -74,6 +74,40 @@ def validate_attack_output(
             return False, f"too_long_ratio_{length_ratio:.2f}"
     
     return True, None
+
+
+def estimate_generation_max_tokens(
+    original: str,
+    default_max_tokens: int,
+    min_tokens: int = 64,
+) -> int:
+    """
+    Estimate a length budget that keeps paraphrases near the source length.
+
+    The fixed 512-token budget used during early vLLM migration causes short
+    inputs to over-generate and violate the 3x length validity check. This
+    heuristic is intentionally conservative for short texts while preserving
+    the original ceiling for longer samples.
+    """
+    word_count = len(original.split())
+    char_based = max(int(len(original) / 6), min_tokens)
+    word_based = max(int(word_count * 1.6), min_tokens)
+    return min(default_max_tokens, max(char_based, word_based))
+
+
+def iter_length_bucket_indices(
+    texts: Sequence[str],
+    bucket_size: int,
+) -> Iterator[List[Tuple[int, str]]]:
+    """
+    Yield stable batches of (index, text) grouped by similar source length.
+
+    Grouping by length lets us use a tighter max token budget per generation
+    call without penalizing the longest samples in the dataset.
+    """
+    indexed = sorted(enumerate(texts), key=lambda item: len(item[1]))
+    for start in range(0, len(indexed), bucket_size):
+        yield indexed[start:start + bucket_size]
 
 
 class BaseAttackMethod(ABC):

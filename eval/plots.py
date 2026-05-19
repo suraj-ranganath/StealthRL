@@ -40,14 +40,14 @@ def _apply_paper_style():
         rc={
             "figure.dpi": 150,
             "savefig.dpi": 300,
-            "axes.titlesize": 12,
+            "axes.titlesize": 14,
             "axes.titlepad": 8,
-            "axes.labelsize": 11,
+            "axes.labelsize": 12,
             "axes.labelpad": 6,
-            "xtick.labelsize": 9,
-            "ytick.labelsize": 9,
-            "legend.fontsize": 9,
-            "legend.title_fontsize": 9,
+            "xtick.labelsize": 10,
+            "ytick.labelsize": 10,
+            "legend.fontsize": 10,
+            "legend.title_fontsize": 10,
             "axes.linewidth": 0.8,
             "grid.linewidth": 0.6,
             "grid.alpha": 0.25,
@@ -214,11 +214,14 @@ def create_heatmap(
         vmax=vmax,
         ax=ax,
         cbar_kws={"label": value_col},
+        annot_kws={"fontsize": 11},
     )
     
-    ax.set_title(title, fontsize=14, fontweight='bold')
+    ax.set_title(title, fontsize=15, fontweight='bold')
     ax.set_xlabel("Method", fontsize=12)
     ax.set_ylabel("Detector", fontsize=12)
+    ax.tick_params(axis="x", labelsize=10)
+    ax.tick_params(axis="y", labelsize=10)
     
     plt.tight_layout()
     
@@ -239,12 +242,16 @@ def create_tradeoff_plot(
     figsize: Tuple[int, int] = (8, 6),
     annotate: bool = True,
     show_pareto: bool = True,
+    y_label: Optional[str] = None,
+    y_higher_is_better: bool = False,
+    reference_y: Optional[float] = None,
+    reference_label: Optional[str] = None,
 ) -> None:
     """
     Create tradeoff/Pareto curve (Figure 2 in SPEC.md).
     
     X-axis: Quality metric (similarity)
-    Y-axis: Evasion metric (TPR@1%FPR, lower = better attack)
+    Y-axis: Evasion metric
     
     Args:
         data: DataFrame with method-level aggregated metrics
@@ -265,60 +272,145 @@ def create_tradeoff_plot(
     if label_col in data.columns:
         data["__order"] = data[label_col].map(_method_rank)
         data = data.sort_values("__order")
-    
+
+    label_offsets = {
+        "m0": (6, 4),
+        "m1": (6, 8),
+        "m2": (4, 8),
+        "m3": (16, -2),
+        "m4": (10, -20),
+        "m5": (4, 8),
+    }
+
     for _, row in data.iterrows():
         method = row[label_col]
         label = METHOD_NAMES.get(method, method)
         color = COLORS.get(method, "#333333")
-        
+
         ax.scatter(
             row[x_col],
             row[y_col],
-            s=150,
+            s=190,
             c=color,
-            label=label,
             edgecolors='white',
-            linewidth=2,
+            linewidth=1.8,
+            zorder=3,
         )
-        
+
         if annotate:
+            dx, dy = label_offsets.get(method, (6, 6))
+            ha = "left" if dx >= 0 else "right"
             ax.annotate(
                 label,
                 (row[x_col], row[y_col]),
-                xytext=(5, 5),
+                xytext=(dx, dy),
                 textcoords='offset points',
-                fontsize=9,
+                fontsize=9.5,
+                ha=ha,
+                va="bottom" if dy >= 0 else "top",
+                bbox={
+                    "boxstyle": "round,pad=0.18",
+                    "facecolor": "white",
+                    "edgecolor": "none",
+                    "alpha": 0.85,
+                },
+                zorder=4,
             )
-    
-    ax.set_xlabel("Semantic Similarity (E5)", fontsize=12)
-    ax.set_ylabel("Mean TPR@1%FPR (↓ better attack)", fontsize=12)
-    ax.set_title(title, fontsize=14, fontweight='bold')
 
-    # Pareto frontier (maximize similarity, minimize TPR)
+    ax.set_xlabel("Semantic Similarity (E5)", fontsize=13)
+    ax.set_ylabel(
+        y_label or (
+            "Mean evasion metric (higher is better)"
+            if y_higher_is_better
+            else "Mean evasion metric (lower is better)"
+        ),
+        fontsize=13,
+    )
+    ax.set_title(title, fontsize=16, fontweight='bold')
+
+    # Pareto frontier
+    pareto_handle = None
     if show_pareto:
         pareto_points = []
         filtered = data[[x_col, y_col]].dropna().sort_values(by=x_col, ascending=False)
-        best_tpr = float("inf")
+        best_y = -float("inf") if y_higher_is_better else float("inf")
         for _, row in filtered.iterrows():
-            tpr = row[y_col]
-            if tpr < best_tpr:
-                pareto_points.append((row[x_col], tpr))
-                best_tpr = tpr
+            y_val = row[y_col]
+            improved = y_val > best_y if y_higher_is_better else y_val < best_y
+            if improved:
+                pareto_points.append((row[x_col], y_val))
+                best_y = y_val
         if len(pareto_points) >= 2:
             pareto_points = sorted(pareto_points, key=lambda p: p[0])
             xs, ys = zip(*pareto_points)
-            ax.plot(xs, ys, color="#111111", linewidth=2.5, linestyle="-", label="Pareto frontier")
-    
+            pareto_handle, = ax.plot(
+                xs,
+                ys,
+                color="#111111",
+                linewidth=2.4,
+                linestyle="-",
+                label="Pareto frontier",
+                zorder=2,
+            )
+
     # Add reference lines
-    ax.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5, label='Random')
-    ax.axvline(x=0.9, color='gray', linestyle=':', alpha=0.5, label='Min similarity')
-    
-    ax.legend(loc='best', fontsize=9)
-    ax.grid(True, alpha=0.3)
-    
-    # Set axis limits
-    ax.set_xlim(0.7, 1.0)
-    ax.set_ylim(0.0, 1.0)
+    random_handle = None
+    if reference_y is not None:
+        random_handle = ax.axhline(
+            y=reference_y,
+            color="#9a9a9a",
+            linestyle="--",
+            linewidth=1.5,
+            alpha=0.7,
+            label=reference_label or "Reference",
+            zorder=1,
+        )
+    similarity_handle = ax.axvline(
+        x=0.9,
+        color="#b0b0b0",
+        linestyle=":",
+        linewidth=1.7,
+        alpha=0.9,
+        label="0.90 similarity",
+        zorder=1,
+    )
+
+    valid = data[[x_col, y_col]].dropna()
+    if not valid.empty:
+        x_vals = valid[x_col].to_numpy()
+        y_vals = valid[y_col].to_numpy()
+
+        x_min = min(x_vals.min(), 0.9)
+        x_max = x_vals.max()
+        x_pad = max(0.008, (x_max - x_min) * 0.18)
+        left = max(0.7, x_min - x_pad)
+        right = min(1.002, x_max + x_pad)
+        if right - left < 0.08:
+            mid = (left + right) / 2
+            left = max(0.7, mid - 0.04)
+            right = min(1.002, mid + 0.04)
+        ax.set_xlim(left, right)
+
+        y_min = y_vals.min()
+        y_max = y_vals.max()
+        if reference_y is not None:
+            y_min = min(y_min, reference_y)
+            y_max = max(y_max, reference_y)
+        y_span = max(y_max - y_min, 0.04)
+        y_pad = max(0.02, y_span * 0.16)
+        lower = max(0.0, y_min - y_pad)
+        upper = min(1.0, y_max + y_pad)
+        ax.set_ylim(lower, upper)
+
+    legend_handles = [h for h in [pareto_handle, random_handle, similarity_handle] if h is not None]
+    ax.legend(
+        handles=legend_handles,
+        loc="lower left",
+        bbox_to_anchor=(0.02, 0.03),
+        fontsize=9,
+        frameon=True,
+    )
+    ax.grid(True, alpha=0.22)
     
     plt.tight_layout()
     
@@ -686,9 +778,9 @@ def create_method_comparison_summary(
         [_pretty_detector_name(d).replace(' ', '\n') for d in detectors],
         rotation=45,
         ha='right',
-        fontsize=8,
+        fontsize=10,
     )
-    ax1.legend(fontsize=8, ncol=2)
+    ax1.legend(fontsize=10, ncol=2)
     ax1.set_ylim(0, 1.05)
     
     # Panel 2: Mean AUROC with error bars
@@ -706,14 +798,14 @@ def create_method_comparison_summary(
     ax2.set_xticks(x2)
     ax2.set_xticklabels(
         [METHOD_NAMES.get(m, m).replace(' ', '\n') for m in mean_aurocs[method_col]],
-        fontsize=9,
+        fontsize=10,
     )
     ax2.set_ylim(0, 1.05)
     
     # Add value labels
     for bar, val in zip(bars, mean_aurocs['mean']):
         ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02,
-                 f'{val:.2f}', ha='center', fontsize=9, fontweight='bold')
+                 f'{val:.2f}', ha='center', fontsize=10, fontweight='bold')
     
     # Panel 3: TPR@1%FPR grouped bars
     ax3 = axes[1, 0]
@@ -734,7 +826,7 @@ def create_method_comparison_summary(
         [_pretty_detector_name(d).replace(' ', '\n') for d in detectors],
         rotation=45,
         ha='right',
-        fontsize=8,
+        fontsize=10,
     )
     ax3.set_ylim(0, 1.05)
     
@@ -753,20 +845,20 @@ def create_method_comparison_summary(
         ax4.set_xticks(x4)
         ax4.set_xticklabels(
             [METHOD_NAMES.get(m, m).replace(' ', '\n') for m in mean_asr[method_col]],
-            fontsize=9,
+            fontsize=10,
         )
         ax4.set_ylim(0, 1.05)
         
         # Add value labels
         for bar, val in zip(bars, mean_asr['asr']):
             ax4.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02,
-                     f'{val:.1%}', ha='center', fontsize=9, fontweight='bold')
+                     f'{val:.1%}', ha='center', fontsize=10, fontweight='bold')
     else:
         ax4.text(0.5, 0.5, 'ASR data not available', ha='center', va='center',
                  transform=ax4.transAxes, fontsize=12)
         ax4.set_title('(d) Attack Success Rate', fontweight='bold')
     
-    fig.suptitle('Detection Evasion Results Summary', fontsize=16, fontweight='bold', y=1.02)
+    fig.suptitle('Detection Evasion Results Summary', fontsize=17, fontweight='bold', y=1.02)
     plt.tight_layout()
     
     if output_path:
@@ -1589,29 +1681,61 @@ def create_quality_table(
     """
     df = pd.DataFrame(quality_metrics)
     
-    # Aggregate by method
+    # Paper-facing table: report method means only, without per-column stds.
     agg_cols = {
-        'sim_e5': ['mean', 'std'],
-        'ppl_score': ['mean', 'std'],
-        'edit_rate': ['mean', 'std'],
+        'sim_e5': 'mean',
+        'ppl_score': 'mean',
+        'edit_rate': 'mean',
         'valid': 'mean',
     }
+    if 'bertscore_f1' in df.columns:
+        agg_cols = {
+            'sim_e5': 'mean',
+            'bertscore_f1': 'mean',
+            'ppl_score': 'mean',
+            'edit_rate': 'mean',
+            'valid': 'mean',
+        }
     if 'quality_rating' in df.columns:
-        agg_cols['quality_rating'] = ['mean', 'std']
+        agg_cols['quality_rating'] = 'mean'
     if 'similarity_rating' in df.columns:
-        agg_cols['similarity_rating'] = ['mean', 'std']
+        agg_cols['similarity_rating'] = 'mean'
 
     summary = df.groupby('method').agg(agg_cols).round(3)
     summary = summary.reindex(_order_methods(summary.index))
-    
-    # Flatten column names
-    summary.columns = ['_'.join(col).strip() for col in summary.columns.values]
     summary = summary.reset_index()
+
+    method_labels = {
+        "m0": "M0",
+        "m1": "M1",
+        "m2": "M2 (Ours)",
+        "m3": "M3",
+        "m4": "M4",
+        "m5": "M5",
+    }
+    summary["method"] = summary["method"].map(method_labels).fillna(summary["method"])
+    summary = summary.rename(
+        columns={
+            "method": "Method",
+            "sim_e5": "E5 Sim.",
+            "bertscore_f1": "BERTScore",
+            "ppl_score": "PPL",
+            "edit_rate": "Edit Rate",
+            "valid": "Valid",
+            "quality_rating": "Quality",
+            "similarity_rating": "Similarity",
+        }
+    )
+
+    for col in summary.columns:
+        if col == "Method":
+            continue
+        summary[col] = summary[col].map(lambda v: "---" if pd.isna(v) else f"{float(v):.3f}")
     
     if format == "markdown":
         table = summary.to_markdown(index=False)
     elif format == "latex":
-        table = summary.to_latex(index=False)
+        table = summary.to_latex(index=False, escape=False, column_format="l" + "r" * (len(summary.columns) - 1))
     else:
         table = summary.to_string(index=False)
     
@@ -2090,10 +2214,10 @@ def generate_all_plots(
     # ========================================================================
     
     # Prepare tradeoff data
-    tradeoff_data = detector_metrics.groupby('method').agg({
-        'tpr_at_1fpr': 'mean',
-    }).reset_index()
-    tradeoff_data.columns = ['method', 'mean_tpr']
+    tradeoff_data = detector_metrics.groupby('method').agg(
+        mean_tpr=('tpr_at_1fpr', 'mean'),
+        mean_asr=('asr', 'mean'),
+    ).reset_index()
     
     # Add quality metrics
     if 'sim_e5' in quality_metrics.columns:
@@ -2103,8 +2227,13 @@ def generate_all_plots(
         # Figure 5: Tradeoff plot
         create_tradeoff_plot(
             tradeoff_data,
+            y_col="mean_asr",
             title="Evasion-Quality Tradeoff",
             output_path=str(output_dir / "fig_tradeoff.png"),
+            y_label="Mean ASR@1%FPR (higher is better)",
+            y_higher_is_better=True,
+            reference_y=0.99,
+            reference_label="Random detector @1% FPR",
         )
     
     # ========================================================================

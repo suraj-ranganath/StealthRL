@@ -33,6 +33,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--cache-dir", default="cache")
     parser.add_argument("--device", default=None)
+    parser.add_argument("--precomputed-quality", default=None)
     parser.add_argument("--n-bootstrap", type=int, default=500)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--log-level", default="INFO")
@@ -97,7 +98,12 @@ def main() -> int:
     save_thresholds(runner.thresholds, str(out_dir / "thresholds.json"))
 
     runner.compute_all_metrics()
-    runner.compute_quality_metrics(raw_outputs, setting="default")
+    if args.precomputed_quality:
+        quality_df = pd.read_parquet(args.precomputed_quality)
+        runner.all_quality = quality_df.to_dict("records")
+        logger.info("Loaded precomputed quality metrics from %s", args.precomputed_quality)
+    else:
+        runner.compute_quality_metrics(raw_outputs, setting="default")
 
     with open(out_dir / "raw_outputs.json", "w") as f:
         json.dump(raw_outputs, f, indent=2, ensure_ascii=False)

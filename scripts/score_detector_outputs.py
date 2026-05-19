@@ -53,7 +53,7 @@ def _detector_kwargs(args: argparse.Namespace) -> dict:
     elif args.detector == "mage" and args.batch_size is not None:
         kwargs["batch_size"] = args.batch_size
     elif args.detector == "binoculars":
-        kwargs["use_full_models"] = args.binoculars_full
+        kwargs["use_lightweight"] = not args.binoculars_full
         if args.batch_size is not None:
             kwargs["batch_size"] = args.batch_size
     elif args.batch_size is not None:

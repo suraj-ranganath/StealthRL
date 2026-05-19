@@ -20,7 +20,12 @@ from typing import Optional, List, Tuple, Any, Dict
 import requests
 import torch
 
-from .base import BaseAttackMethod, AttackOutput
+from .base import (
+    BaseAttackMethod,
+    AttackOutput,
+    estimate_generation_max_tokens,
+    iter_length_bucket_indices,
+)
 from .vllm_backend import get_vllm_generator
 
 logger = logging.getLogger(__name__)
@@ -369,6 +374,7 @@ class AuthorMist(BaseAttackMethod):
     """
     
     MODEL_NAME = "authormist/authormist-originality"
+    GENERATION_BUCKET_SIZE = 96
     
     def __init__(
         self,
@@ -408,6 +414,9 @@ class AuthorMist(BaseAttackMethod):
         
         self.generator = None
         self.rerank_detector = None
+
+    def _estimate_max_tokens(self, text: str) -> int:
+        return estimate_generation_max_tokens(text, self.max_new_tokens)
     
     def load(self):
         """Load AuthorMist vLLM generator."""
@@ -425,7 +434,7 @@ class AuthorMist(BaseAttackMethod):
     
     @staticmethod
     def _build_prompt(text: str) -> str:
-        return f"""Please paraphrase the following text to make it more human-like while preserving the original meaning:
+        return f"""Please paraphrase the following text to make it more human-like while preserving the original meaning. Keep the paraphrase close to the original length and do not add new details:
 
 {text}
 
@@ -438,7 +447,7 @@ Paraphrased text:"""
             n=n_candidates,
             temperature=self.temperature,
             top_p=self.top_p,
-            max_tokens=self.max_new_tokens,
+            max_tokens=self._estimate_max_tokens(text),
         )[0]
     
     def _attack_impl(
@@ -511,66 +520,72 @@ Paraphrased text:"""
         if not self._loaded:
             self.load()
 
-        prompts = [self._build_prompt(text) for text in texts]
-        grouped_candidates = self.generator.generate_batch(
-            prompts,
-            n=n_candidates,
-            temperature=self.temperature,
-            top_p=self.top_p,
-            max_tokens=self.max_new_tokens,
-        )
+        results: List[Optional[AttackOutput]] = [None] * len(texts)
 
-        flat_candidates: List[str] = []
-        group_sizes: List[int] = []
-        for candidates in grouped_candidates:
-            filtered = [candidate for candidate in candidates if candidate]
-            flat_candidates.extend(filtered)
-            group_sizes.append(len(filtered))
+        for batch in iter_length_bucket_indices(texts, self.GENERATION_BUCKET_SIZE):
+            batch_indices = [index for index, _ in batch]
+            batch_texts = [text for _, text in batch]
+            prompts = [self._build_prompt(text) for text in batch_texts]
+            batch_max_tokens = max(self._estimate_max_tokens(text) for text in batch_texts)
 
-        flat_scores: List[float] = []
-        if n_candidates > 1 and flat_candidates:
-            if self.rerank_detector is None:
-                from ..detectors import get_detector
+            grouped_candidates = self.generator.generate_batch(
+                prompts,
+                n=n_candidates,
+                temperature=self.temperature,
+                top_p=self.top_p,
+                max_tokens=batch_max_tokens,
+            )
 
-                logger.info(f"Loading reranking detector: {self.rerank_detector_name}")
-                self.rerank_detector = get_detector(self.rerank_detector_name, device=self.device)
-                self.rerank_detector.load()
-            flat_scores = self.rerank_detector.get_scores(flat_candidates)
+            flat_candidates: List[str] = []
+            group_sizes: List[int] = []
+            for candidates in grouped_candidates:
+                filtered = [candidate for candidate in candidates if candidate]
+                flat_candidates.extend(filtered)
+                group_sizes.append(len(filtered))
 
-        results: List[AttackOutput] = []
-        cursor = 0
-        for text, size in zip(texts, group_sizes):
-            candidates = flat_candidates[cursor:cursor + size]
-            scores = flat_scores[cursor:cursor + size] if flat_scores else [0.0] * len(candidates)
-            cursor += size
+            flat_scores: List[float] = []
+            if n_candidates > 1 and flat_candidates:
+                if self.rerank_detector is None:
+                    from ..detectors import get_detector
 
-            if not candidates:
-                results.append(AttackOutput(
-                    text=text,
+                    logger.info(f"Loading reranking detector: {self.rerank_detector_name}")
+                    self.rerank_detector = get_detector(self.rerank_detector_name, device=self.device)
+                    self.rerank_detector.load()
+                flat_scores = self.rerank_detector.get_scores(flat_candidates)
+
+            cursor = 0
+            for index, text, size in zip(batch_indices, batch_texts, group_sizes):
+                candidates = flat_candidates[cursor:cursor + size]
+                scores = flat_scores[cursor:cursor + size] if flat_scores else [0.0] * len(candidates)
+                cursor += size
+
+                if not candidates:
+                    results[index] = AttackOutput(
+                        text=text,
+                        original_text=text,
+                        valid=False,
+                        fail_reason="generation_failed",
+                        metadata={"method": self.name, "backend": "vllm", "error": "generation_failed"},
+                    )
+                    continue
+
+                best_idx = scores.index(min(scores)) if scores else 0
+                results[index] = AttackOutput(
+                    text=candidates[best_idx],
+                    metadata={
+                        "method": self.name,
+                        "model": self.model_name,
+                        "backend": "vllm",
+                        "n_candidates": n_candidates,
+                        "best_idx": best_idx,
+                        "best_detector_score": scores[best_idx] if scores else 0.0,
+                        "rerank_detector": self.rerank_detector_name,
+                    },
+                    all_candidates=candidates,
+                    candidate_scores=scores,
                     original_text=text,
-                    valid=False,
-                    fail_reason="generation_failed",
-                    metadata={"method": self.name, "backend": "vllm", "error": "generation_failed"},
-                ))
-                continue
-
-            best_idx = scores.index(min(scores)) if scores else 0
-            results.append(AttackOutput(
-                text=candidates[best_idx],
-                metadata={
-                    "method": self.name,
-                    "model": self.model_name,
-                    "backend": "vllm",
-                    "n_candidates": n_candidates,
-                    "best_idx": best_idx,
-                    "best_detector_score": scores[best_idx] if scores else 0.0,
-                    "rerank_detector": self.rerank_detector_name,
-                },
-                all_candidates=candidates,
-                candidate_scores=scores,
-                original_text=text,
-            ))
-        return results
+                )
+        return [result for result in results if result is not None]
 
 
 class AuthorMistFallback(BaseAttackMethod):

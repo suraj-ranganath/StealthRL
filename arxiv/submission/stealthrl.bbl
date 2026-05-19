@@ -1,0 +1,171 @@
+\begin{thebibliography}{23}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Bao et~al.(2024)Bao, Zhao, Teng, Yang, and
+  Zhang]{bao2024fastdetectgptefficientzeroshotdetection}
+Guangsheng Bao, Yanbin Zhao, Zhiyang Teng, Linyi Yang, and Yue Zhang.
+\newblock Fast-detectgpt: Efficient zero-shot detection of machine-generated
+  text via conditional probability curvature, 2024.
+\newblock URL \url{https://arxiv.org/abs/2310.05130}.
+
+\bibitem[Cheng et~al.(2025)Cheng, Sadasivan, Saberi, Saha, and
+  Feizi]{cheng2025adversarialparaphrasinguniversalattack}
+Yize Cheng, Vinu~Sankar Sadasivan, Mehrdad Saberi, Shoumik Saha, and Soheil
+  Feizi.
+\newblock Adversarial paraphrasing: A universal attack for humanizing
+  ai-generated text, 2025.
+\newblock URL \url{https://arxiv.org/abs/2506.07001}.
+
+\bibitem[Creo and Pudasaini(2025)]{creo2025silverspeakevadingaigeneratedtext}
+Aldan Creo and Shushanta Pudasaini.
+\newblock Silverspeak: Evading ai-generated text detectors using homoglyphs,
+  2025.
+\newblock URL \url{https://arxiv.org/abs/2406.11239}.
+
+\bibitem[David and Gervais(2025)]{david2025authormistevadingaitext}
+Isaac David and Arthur Gervais.
+\newblock Authormist: Evading ai text detectors with reinforcement learning,
+  2025.
+\newblock URL \url{https://arxiv.org/abs/2503.08716}.
+
+\bibitem[Dettmers et~al.(2023)Dettmers, Pagnoni, Holtzman, and
+  Zettlemoyer]{dettmers2023qlora}
+Tim Dettmers, Artidoro Pagnoni, Ari Holtzman, and Luke Zettlemoyer.
+\newblock Qlora: Efficient finetuning of quantized llms, 2023.
+\newblock URL \url{https://arxiv.org/abs/2305.14314}.
+
+\bibitem[Dugan et~al.(2024)Dugan, Hwang, Trhlik, Ludan, Zhu, Xu, Ippolito, and
+  Callison-Burch]{dugan2024raidsharedbenchmarkrobust}
+Liam Dugan, Alyssa Hwang, Filip Trhlik, Josh~Magnus Ludan, Andrew Zhu, Hainiu
+  Xu, Daphne Ippolito, and Chris Callison-Burch.
+\newblock Raid: A shared benchmark for robust evaluation of machine-generated
+  text detectors, 2024.
+\newblock URL \url{https://arxiv.org/abs/2405.07940}.
+
+\bibitem[Fu et~al.(2023)Fu, Ng, Jiang, and Liu]{fu2023gptscore}
+Jinlan Fu, See-Kiong Ng, Zhengbao Jiang, and Pengfei Liu.
+\newblock Gptscore: Evaluate as you desire, 2023.
+\newblock URL \url{https://arxiv.org/abs/2302.04166}.
+
+\bibitem[Hans et~al.(2024)Hans, Schwarzschild, Cherepanova, Kazemi, Saha,
+  Goldblum, Geiping, and Goldstein]{hans2024spottingllmsbinocularszeroshot}
+Abhimanyu Hans, Avi Schwarzschild, Valeriia Cherepanova, Hamid Kazemi,
+  Aniruddha Saha, Micah Goldblum, Jonas Geiping, and Tom Goldstein.
+\newblock Spotting llms with binoculars: Zero-shot detection of
+  machine-generated text, 2024.
+\newblock URL \url{https://arxiv.org/abs/2401.12070}.
+
+\bibitem[Hu et~al.(2021)Hu, Shen, Wallis, Allen-Zhu, Li, Wang, Wang, and
+  Chen]{hu2021loralowrankadaptationlarge}
+Edward~J. Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean
+  Wang, Lu~Wang, and Weizhu Chen.
+\newblock Lora: Low-rank adaptation of large language models, 2021.
+\newblock URL \url{https://arxiv.org/abs/2106.09685}.
+
+\bibitem[Kim et~al.(2024)Kim, Suk, Longpre, Lin, Shin, Welleck, Neubig, Lee,
+  Lee, and Seo]{kim2024prometheus2}
+Seungone Kim, Juyoung Suk, Shayne Longpre, Bill~Yuchen Lin, Jamin Shin, Sean
+  Welleck, Graham Neubig, Moontae Lee, Kyungjae Lee, and Minjoon Seo.
+\newblock Prometheus 2: An open source language model specialized in evaluating
+  other language models, 2024.
+\newblock URL \url{https://arxiv.org/abs/2405.01535}.
+
+\bibitem[Kirchenbauer et~al.(2023)Kirchenbauer, Geiping, Wen, Katz, Miers, and
+  Goldstein]{kirchenbauer2023watermark}
+John Kirchenbauer, Jonas Geiping, Yuxin Wen, Jonathan Katz, Ian Miers, and Tom
+  Goldstein.
+\newblock A watermark for large language models, 2023.
+\newblock URL \url{https://arxiv.org/abs/2301.10226}.
+
+\bibitem[Krishna et~al.(2023{\natexlab{a}})Krishna, Song, Karpinska, Wieting,
+  and Iyyer]{krishna2023dipper}
+Kalpesh Krishna, Yixiao Song, Marzena Karpinska, John Wieting, and Mohit Iyyer.
+\newblock Dipper: Discourse paraphrasing via diverse paraphrasing,
+  2023{\natexlab{a}}.
+\newblock Paraphrase model released with Krishna et~al., 2023. Available at
+  \url{https://github.com/martiansideofthemoon/ai-detection-paraphrases}.
+
+\bibitem[Krishna et~al.(2023{\natexlab{b}})Krishna, Song, Karpinska, Wieting,
+  and Iyyer]{krishna2023paraphrasing}
+Kalpesh Krishna, Yixiao Song, Marzena Karpinska, John Wieting, and Mohit Iyyer.
+\newblock Paraphrasing evades detectors of ai-generated text, but retrieval is
+  an effective defense, 2023{\natexlab{b}}.
+\newblock URL \url{https://arxiv.org/abs/2303.13408}.
+
+\bibitem[Li et~al.(2024)Li, Li, Cui, Bi, Wang, Wang, Yang, Shi, and
+  Zhang]{li2024magemachinegeneratedtextdetection}
+Yafu Li, Qintong Li, Leyang Cui, Wei Bi, Zhilin Wang, Longyue Wang, Linyi Yang,
+  Shuming Shi, and Yue Zhang.
+\newblock Mage: Machine-generated text detection in the wild, 2024.
+\newblock URL \url{https://arxiv.org/abs/2305.13242}.
+
+\bibitem[Mitchell et~al.(2023)Mitchell, Lee, Khazatsky, Manning, and
+  Finn]{mitchell2023detectgptzeroshotmachinegeneratedtext}
+Eric Mitchell, Yoonho Lee, Alexander Khazatsky, Christopher~D. Manning, and
+  Chelsea Finn.
+\newblock Detectgpt: Zero-shot machine-generated text detection using
+  probability curvature, 2023.
+\newblock URL \url{https://arxiv.org/abs/2301.11305}.
+
+\bibitem[Ouyang et~al.(2022)Ouyang, Wu, Jiang, Almeida, Wainwright, Mishkin,
+  Zhang, Agarwal, Slama, Ray, et~al.]{ouyang2022training}
+Long Ouyang, Jeff Wu, Xu~Jiang, Diogo Almeida, Carroll~L. Wainwright, Pamela
+  Mishkin, Chong Zhang, Sandhini Agarwal, Katarina Slama, Alex Ray, et~al.
+\newblock Training language models to follow instructions with human feedback,
+  2022.
+\newblock URL \url{https://arxiv.org/abs/2203.02155}.
+
+\bibitem[Pang and Jin(2025)]{pang2025grpo}
+Lei Pang and Ruinan Jin.
+\newblock On the theory and practice of grpo: A trajectory-corrected approach
+  with fast convergence, 2025.
+\newblock URL \url{https://arxiv.org/abs/2508.02833}.
+
+\bibitem[Sadasivan et~al.(2023)Sadasivan, Kumar, Balasubramanian, Wang, and
+  Feizi]{sadasivan2023aigenerated}
+Vinu~Sankar Sadasivan, Aounon Kumar, Sriram Balasubramanian, Wenxiao Wang, and
+  Soheil Feizi.
+\newblock Can ai-generated text be reliably detected?, 2023.
+\newblock URL \url{https://arxiv.org/abs/2303.11156}.
+
+\bibitem[Schulman et~al.(2017)Schulman, Wolski, Dhariwal, Radford, and
+  Klimov]{schulman2017ppo}
+John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov.
+\newblock Proximal policy optimization algorithms, 2017.
+\newblock URL \url{https://arxiv.org/abs/1707.06347}.
+
+\bibitem[Shao et~al.(2024)Shao, Wang, Zhu, Xu, Song, Zhang, Li, Wu, and
+  Guo]{shao2024deepseekmath}
+Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Mingchuan Zhang,
+  Y.K. Li, Y.~Wu, and Daya Guo.
+\newblock Deepseekmath: Pushing the limits of mathematical reasoning in open
+  language models, 2024.
+\newblock URL \url{https://arxiv.org/abs/2402.03300}.
+
+\bibitem[Solaiman et~al.(2019)Solaiman, Brundage, Clark, Askell, Herbert-Voss,
+  Wu, Radford, and Wang]{solaiman2019release}
+Irene Solaiman, Miles Brundage, Jack Clark, Amanda Askell, Ariel Herbert-Voss,
+  Jeff Wu, Alec Radford, and Jasmine Wang.
+\newblock Release strategies and the social impacts of language models, 2019.
+\newblock URL \url{https://arxiv.org/abs/1908.09203}.
+
+\bibitem[Vu et~al.(2024)Vu, Krishna, Alzubi, Tar, Faruqui, and
+  Sung]{vu2024foundationalautoraters}
+Tu~Vu, Kalpesh Krishna, Salaheddin Alzubi, Chris Tar, Manaal Faruqui, and
+  Yun-Hsuan Sung.
+\newblock Foundational autoraters: Taming large language models for better
+  automatic evaluation, 2024.
+\newblock URL \url{https://arxiv.org/abs/2407.10817}.
+
+\bibitem[Wang et~al.(2022)Wang, Yang, Huang, Jiao, Yang, Jiang, Majumder, and
+  Wei]{wang2022e5}
+Liang Wang, Nan Yang, Xiaolong Huang, Binxing Jiao, Linjun Yang, Daxin Jiang,
+  Rangan Majumder, and Furu Wei.
+\newblock Text embeddings by weakly-supervised contrastive pre-training, 2022.
+\newblock URL \url{https://arxiv.org/abs/2212.03533}.
+
+\end{thebibliography}

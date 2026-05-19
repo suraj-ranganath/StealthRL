@@ -71,7 +71,7 @@ class GPTQualityConfig:
     cache_path: Optional[Path] = None
     concurrency: int = 32
     request_timeout_s: int = 60
-    max_retries: int = 2
+    max_retries: int = 6
     reasoning_effort: Optional[str] = None
     text_verbosity: Optional[str] = None
 
@@ -211,7 +211,7 @@ async def _judge_single_async(
                 temperature = None
                 continue
             if "rate limit" in msg or "rate_limit" in msg or "429" in msg:
-                wait_s = 0.5 * (2 ** attempt)
+                wait_s = 1.0 * (2 ** attempt) + random.uniform(0.0, 0.5)
                 if "try again in" in msg:
                     try:
                         tail = msg.split("try again in", 1)[1]

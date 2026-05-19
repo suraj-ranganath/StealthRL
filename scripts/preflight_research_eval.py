@@ -58,9 +58,12 @@ def _load_env_file(path: str) -> dict[str, str]:
     return env
 
 
-def _run(label: str, cmd: list[str], env: dict[str, str], gpu: int) -> None:
+def _run(label: str, cmd: list[str], env: dict[str, str], gpu: int | list[int]) -> None:
     proc_env = env.copy()
-    proc_env["CUDA_VISIBLE_DEVICES"] = str(gpu)
+    if isinstance(gpu, list):
+        proc_env["CUDA_VISIBLE_DEVICES"] = ",".join(str(gpu_id) for gpu_id in gpu)
+    else:
+        proc_env["CUDA_VISIBLE_DEVICES"] = str(gpu)
     logger.info("[%s] GPU %s | %s", label, gpu, shlex.join(cmd))
     subprocess.run(cmd, env=proc_env, check=True, cwd=project_root)
 
@@ -128,15 +131,28 @@ def main() -> int:
         )
 
     method_cmds = [
-        ("m1", {}),
+        ("m1", {"max_model_len": 2048, "gpu_memory_utilization": 0.82}),
         ("m2", {"checkpoint_json": args.checkpoint_json}),
-        ("m3", {}),
-        ("m4", {}),
+        (
+            "m3",
+            {
+                "device": "cuda:1" if len(method_gpus) >= 2 else "cpu",
+                "max_model_len": 2048,
+                "gpu_memory_utilization": 0.82,
+            },
+        ),
+        ("m4", {"max_model_len": 2048, "gpu_memory_utilization": 0.82}),
         ("m5", {}),
     ]
     for index, (method, extra) in enumerate(method_cmds):
         kwargs_expr = ", ".join(f"{key}={value!r}" for key, value in extra.items())
         constructor = f"m=get_method('{method}'" + (f", {kwargs_expr}" if kwargs_expr else "") + ")"
+        if method == "m3" and len(method_gpus) >= 2:
+            method_gpu: int | list[int] = [method_gpus[index % len(method_gpus)], method_gpus[(index + 1) % len(method_gpus)]]
+            n_candidates = 4
+        else:
+            method_gpu = method_gpus[index % len(method_gpus)]
+            n_candidates = 1
         _run(
             f"method:{method}",
             [
@@ -146,13 +162,13 @@ def main() -> int:
                     "from eval.methods import get_method; "
                     f"{constructor}; "
                     "m.load(); "
-                    f"out=m.attack({TEST_TEXT!r}, n_candidates=1); "
+                    f"out=m.attack({TEST_TEXT!r}, n_candidates={n_candidates}); "
                     "assert out.valid, out.fail_reason; "
                     "print({'words': len(out.text.split())})"
                 ),
             ],
             env=env,
-            gpu=method_gpus[index % len(method_gpus)],
+            gpu=method_gpu,
         )
 
     logger.info("Preflight completed successfully.")

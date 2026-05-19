@@ -558,6 +558,12 @@ class EvalRunner:
             sample_ids = [s.id for s in dataset.ai_samples]
             
             for method_name, attacked_texts in outputs.get(dataset_name, {}).items():
+                logger.info(
+                    "Quality metrics: dataset=%s method=%s n=%d",
+                    dataset_name,
+                    method_name,
+                    len(attacked_texts),
+                )
                 quality = compute_quality_metrics(
                     original_texts=original_texts,
                     paraphrased_texts=attacked_texts,
@@ -569,7 +575,14 @@ class EvalRunner:
                 )
                 
                 for q in quality:
-                    self.all_quality.append(q.to_dict())
+                    record = q.to_dict()
+                    record["dataset"] = dataset_name
+                    self.all_quality.append(record)
+                logger.info(
+                    "Completed quality metrics: dataset=%s method=%s",
+                    dataset_name,
+                    method_name,
+                )
         
         logger.info(f"Computed quality metrics for {len(self.all_quality)} samples")
 
