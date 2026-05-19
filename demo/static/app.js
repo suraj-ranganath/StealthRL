@@ -16,6 +16,7 @@ const topP = document.querySelector("#topP");
 const topPValue = document.querySelector("#topPValue");
 const resultPanel = document.querySelector("#resultPanel");
 const progressBar = document.querySelector("#progressBar");
+const detectorButtons = document.querySelectorAll("[data-detector-url]");
 
 const samples = [
   "AI-text detectors are increasingly used in high-stakes settings, but their robustness to adversarial rewriting remains uncertain. StealthRL trains a paraphrase policy that preserves semantic content while reducing detector confidence, exposing how brittle many current detection systems can be under realistic paraphrasing pressure.",
@@ -24,6 +25,7 @@ const samples = [
 ];
 
 let sampleIndex = 0;
+let latestOutput = "";
 
 function setStatus(message, tone = "neutral") {
   statusLine.textContent = message;
@@ -50,6 +52,12 @@ function updateMetrics(data) {
     <div><span>Edit rate</span><strong>${metrics.char_edit_rate ?? "-"}</strong></div>
     <div><span>Latency</span><strong>${data.latency_ms ?? "-"} ms</strong></div>
   `;
+}
+
+function setDetectorButtonsEnabled(enabled) {
+  detectorButtons.forEach((button) => {
+    button.disabled = !enabled;
+  });
 }
 
 function getHeaders() {
@@ -94,6 +102,8 @@ async function submitDemo(event) {
   localStorage.setItem("stealthrl_demo_api_key", apiKey.value.trim());
   resultPanel.hidden = false;
   submitButton.disabled = true;
+  setDetectorButtonsEnabled(false);
+  latestOutput = "";
   outputText.classList.add("placeholder");
   outputText.textContent = "Running StealthRL paraphrasing...";
   setStatus("Submitting request...", "busy");
@@ -117,10 +127,12 @@ async function submitDemo(event) {
 
     outputText.classList.remove("placeholder");
     outputText.textContent = data.output_text;
+    latestOutput = data.output_text;
     originalText.textContent = data.input_text;
     quotaPill.textContent = formatQuota(data.quota);
     backendPill.textContent = `backend: ${data.backend}`;
     updateMetrics(data);
+    setDetectorButtonsEnabled(true);
     setStatus(`Completed request ${data.request_id.slice(0, 8)}.`, "done");
   } catch (error) {
     outputText.classList.add("placeholder");
@@ -131,6 +143,22 @@ async function submitDemo(event) {
     setProgress(false);
   }
 }
+
+async function copyAndOpenDetector(event) {
+  const target = event.currentTarget;
+  const url = target.dataset.detectorUrl;
+  if (!url || !latestOutput) return;
+
+  try {
+    await navigator.clipboard.writeText(latestOutput);
+    setStatus(`Copied output. Opening ${target.textContent} in a new tab.`, "done");
+  } catch (error) {
+    setStatus(`Opening ${target.textContent}. Copy failed, so paste manually from the output box.`, "error");
+  }
+
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
 
 function bindRange(input, output) {
   const update = () => {
@@ -145,9 +173,13 @@ sampleButton.addEventListener("click", () => loadSample(sampleIndex + 1));
 sampleOptions.forEach((button) => {
   button.addEventListener("click", () => loadSample(Number(button.dataset.sample)));
 });
+detectorButtons.forEach((button) => {
+  button.addEventListener("click", copyAndOpenDetector);
+});
 bindRange(temperature, temperatureValue);
 bindRange(topP, topPValue);
 
 apiKey.value = localStorage.getItem("stealthrl_demo_api_key") || "";
+setDetectorButtonsEnabled(false);
 markActiveSample();
 refreshConfig();

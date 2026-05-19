@@ -410,6 +410,37 @@ summary {
   color: var(--faint);
 }
 
+.detector-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+}
+
+.detector-links button {
+  padding: 7px 9px;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: 1px solid var(--line-strong);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.detector-links button:hover:not(:disabled) {
+  color: #fff7e3;
+  background: var(--accent-2);
+}
+
+.detector-links button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
