@@ -108,6 +108,17 @@ python scripts/run_full_mage_research_eval.py \
   --gpus 0 1 2 3
 ```
 
+### Run the demo website
+
+The repository includes a FastAPI-backed demo website under `demo/`. It serves a polished static UI and exposes `POST /api/paraphrase` with API-key support plus a 20/day public quota for unauthenticated users.
+
+```bash
+pip install -r demo/requirements.txt
+uvicorn demo.stealthrl_demo.app:app --reload --port 8080
+```
+
+By default the demo runs in zero-cost `mock` mode for UI testing. To use the real StealthRL sampler, set `STEALTHRL_DEMO_INFERENCE_BACKEND=tinker`, `STEALTHRL_DEMO_CHECKPOINT_JSON`, and `TINKER_API_KEY`. See `demo/README.md` for API-key, quota, Docker, and AWS deployment notes.
+
 ## Reproducing the Paper Results
 
 The paper reports results on the full filtered MAGE evaluation pool:

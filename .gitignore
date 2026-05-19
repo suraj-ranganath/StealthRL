@@ -51,6 +51,7 @@ runs/
 *.jsonl
 *.json
 *.html
+!demo/static/*.html
 
 # Model files
 *.pt
@@ -98,3 +99,5 @@ AGENT.md
 cache/
 report/
 *.gguf
+*.sqlite3
+demo/data/
