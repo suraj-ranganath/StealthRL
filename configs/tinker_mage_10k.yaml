@@ -1,5 +1,5 @@
-# StealthRL Training Configuration - 10K MAGE samples with filtering
-# Optimized for fast iteration with production-quality hyperparameters
+# StealthRL Training Configuration - canonical paper checkpoint
+# 10K filtered MAGE training samples with the hyperparameters reported in the paper.
 
 # Model settings
 model:
@@ -16,9 +16,9 @@ lora:
 # Training hyperparameters
 training:
   learning_rate: 2.8e-4  # Optimized for rank 32
-  batch_size: 64  # Match your old successful run
+  batch_size: 16  # Paper setting
   group_size: 8  # Better than 4 for GRPO advantage estimation
-  num_epochs: 5  # Keep your original setting
+  num_epochs: 3  # Paper setting
   num_substeps: 1
   max_tokens: 512
 
@@ -27,7 +27,7 @@ sampling:
   temperature: 1.0
   temperature_schedule: "constant"
   temperature_decay: 0.95
-  top_p: 0.95
+  top_p: 0.9
   batched_sampling: true
 
 # GRPO settings
@@ -37,9 +37,9 @@ grpo:
   reward_clip: null
   remove_constant_reward_groups: true
 
-# KL divergence penalty - FIXED (was 0.05 in your old run, too high)
+# KL divergence penalty
 kl:
-  penalty_coef: 0.01  # Reduced from 0.05 for better exploration
+  penalty_coef: 0.05
   target: null
   adapt_rate: 0.1
 
@@ -58,9 +58,9 @@ curriculum:
 # Reward function configuration - Multi-objective RL formulation
 reward:
   # Multi-objective weights: R = α·R_det + β·R_sem
-  # Both components use full [0,1] range for balanced optimization
+  # Detector evasion is the dominant signal; E5 is a soft fidelity regularizer.
   detector_weight: 1.0      # α: detector evasion (1 - P(AI))
-  semantic_weight: 1.0      # β: semantic similarity (E5 cosine)
+  semantic_weight: 0.1      # β: semantic similarity (E5 cosine)
   perplexity_weight: 0.0    # Disabled - rely on KL penalty for fluency
   
   # Component toggles
