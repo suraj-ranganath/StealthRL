@@ -147,18 +147,18 @@ async function submitDemo(event) {
 async function copyAndOpenDetector(event) {
   const target = event.currentTarget;
   const url = target.dataset.detectorUrl;
+  const label = target.dataset.detectorName || target.textContent.trim();
   if (!url || !latestOutput) return;
 
   try {
     await navigator.clipboard.writeText(latestOutput);
-    setStatus(`Copied output. Opening ${target.textContent} in a new tab.`, "done");
+    setStatus(`Copied output. Opening ${label} in a new tab.`, "done");
   } catch (error) {
-    setStatus(`Opening ${target.textContent}. Copy failed, so paste manually from the output box.`, "error");
+    setStatus(`Opening ${label}. Copy failed, so paste manually from the output box.`, "error");
   }
 
   window.open(url, "_blank", "noopener,noreferrer");
 }
-
 
 function bindRange(input, output) {
   const update = () => {
