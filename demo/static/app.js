@@ -21,9 +21,9 @@ const progressBar = document.querySelector("#progressBar");
 const detectorButtons = document.querySelectorAll("[data-detector-url]");
 
 const samples = [
-  "AI-text detectors are increasingly used in high-stakes settings, but their robustness to adversarial rewriting remains uncertain. StealthRL trains a paraphrase policy that preserves semantic content while reducing detector confidence, exposing how brittle many current detection systems can be under realistic paraphrasing pressure.",
-  "Universities and publishers often rely on automated detectors to identify machine-written text. These systems may work on clean examples, but an adaptive writer can revise sentence structure, vocabulary, and rhythm while keeping the same meaning. A robust evaluation should measure how detection behaves under that pressure.",
-  "The experiment evaluates six attack settings on the full filtered MAGE test pool. StealthRL achieves low detector recall at strict false-positive operating points while retaining enough semantic similarity to illustrate a practical evasion-quality tradeoff."
+  "During sustained cardio exercise, the heart increases its workload and the rest of the body adjusts to support that effort. Blood vessels widen to improve circulation, leg and core muscles help push blood back toward the heart, and the lungs breathe faster to bring in oxygen while clearing waste gases such as carbon dioxide throughout the workout and recovery period.",
+  "Photosynthesis converts light energy into chemical energy that plants can store inside glucose molecules. The process occurs in chloroplasts and unfolds in two linked stages: light-dependent reactions capture sunlight and split water, while the Calvin cycle uses that energy to build sugars that support plant growth, cellular repair, and long-term energy storage during changing seasons and environmental stress across ecosystems.",
+  "Solar and wind power have become far cheaper over the past decade, allowing renewable energy to compete with fossil fuels in many electricity markets. Better storage systems, improved grid planning, public incentives, and larger manufacturing pipelines continue to accelerate adoption, while utilities weigh reliability, cost, emissions targets, and regional demand in their long-term investment decisions for new infrastructure projects nationwide."
 ];
 
 let sampleIndex = 0;
