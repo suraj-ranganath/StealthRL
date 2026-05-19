@@ -8,11 +8,14 @@ const backendPill = document.querySelector("#backendPill");
 const metricGrid = document.querySelector("#metricGrid");
 const submitButton = document.querySelector("#submitButton");
 const sampleButton = document.querySelector("#sampleButton");
+const sampleOptions = document.querySelectorAll("[data-sample]");
 const apiKey = document.querySelector("#apiKey");
 const temperature = document.querySelector("#temperature");
 const temperatureValue = document.querySelector("#temperatureValue");
 const topP = document.querySelector("#topP");
 const topPValue = document.querySelector("#topPValue");
+const resultPanel = document.querySelector("#resultPanel");
+const progressBar = document.querySelector("#progressBar");
 
 const samples = [
   "AI-text detectors are increasingly used in high-stakes settings, but their robustness to adversarial rewriting remains uncertain. StealthRL trains a paraphrase policy that preserves semantic content while reducing detector confidence, exposing how brittle many current detection systems can be under realistic paraphrasing pressure.",
@@ -25,6 +28,11 @@ let sampleIndex = 0;
 function setStatus(message, tone = "neutral") {
   statusLine.textContent = message;
   statusLine.dataset.tone = tone;
+}
+
+function setProgress(running) {
+  progressBar.classList.toggle("is-running", running);
+  progressBar.style.width = running ? "100%" : "0%";
 }
 
 function formatQuota(quota) {
@@ -51,6 +59,19 @@ function getHeaders() {
   return headers;
 }
 
+function markActiveSample() {
+  sampleOptions.forEach((button) => {
+    button.setAttribute("aria-pressed", String(Number(button.dataset.sample) === sampleIndex));
+  });
+}
+
+function loadSample(index) {
+  sampleIndex = index % samples.length;
+  sourceText.value = samples[sampleIndex];
+  markActiveSample();
+  sourceText.focus();
+}
+
 async function refreshConfig() {
   try {
     const response = await fetch("/api/config");
@@ -71,10 +92,12 @@ async function submitDemo(event) {
   if (!text) return;
 
   localStorage.setItem("stealthrl_demo_api_key", apiKey.value.trim());
+  resultPanel.hidden = false;
   submitButton.disabled = true;
   outputText.classList.add("placeholder");
   outputText.textContent = "Running StealthRL paraphrasing...";
   setStatus("Submitting request...", "busy");
+  setProgress(true);
 
   try {
     const response = await fetch("/api/paraphrase", {
@@ -105,18 +128,12 @@ async function submitDemo(event) {
     setStatus(error.message || "Something went wrong.", "error");
   } finally {
     submitButton.disabled = false;
+    setProgress(false);
   }
-}
-
-function rotateSample() {
-  sampleIndex = (sampleIndex + 1) % samples.length;
-  sourceText.value = samples[sampleIndex];
-  sourceText.focus();
 }
 
 function bindRange(input, output) {
   const update = () => {
-    output.value = Number(input.value).toFixed(2);
     output.textContent = Number(input.value).toFixed(2);
   };
   input.addEventListener("input", update);
@@ -124,9 +141,13 @@ function bindRange(input, output) {
 }
 
 form.addEventListener("submit", submitDemo);
-sampleButton.addEventListener("click", rotateSample);
+sampleButton.addEventListener("click", () => loadSample(sampleIndex + 1));
+sampleOptions.forEach((button) => {
+  button.addEventListener("click", () => loadSample(Number(button.dataset.sample)));
+});
 bindRange(temperature, temperatureValue);
 bindRange(topP, topPValue);
 
 apiKey.value = localStorage.getItem("stealthrl_demo_api_key") || "";
+markActiveSample();
 refreshConfig();

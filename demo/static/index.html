@@ -6,195 +6,129 @@
     <title>StealthRL Demo</title>
     <meta
       name="description"
-      content="Interactive demo for StealthRL, a reinforcement-learning paraphrase attack for stress-testing AI-text detectors."
+      content="Interactive research demo for StealthRL, a paraphrase policy for stress-testing AI-text detectors."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
-    <div class="grain" aria-hidden="true"></div>
-    <div class="orb orb-a" aria-hidden="true"></div>
-    <div class="orb orb-b" aria-hidden="true"></div>
+    <div class="bg-grid" aria-hidden="true"></div>
 
-    <header class="nav">
-      <a class="brand" href="/">
-        <span class="brand-mark">SRL</span>
-        <span>StealthRL Demo</span>
-      </a>
-      <nav class="nav-links" aria-label="Primary navigation">
-        <a href="#demo">Demo</a>
-        <a href="#method">Method</a>
-        <a href="https://arxiv.org/abs/2602.08934" target="_blank" rel="noreferrer">Paper</a>
-        <a href="https://huggingface.co/suraj-ranganath/StealthRL" target="_blank" rel="noreferrer">Model</a>
-      </nav>
-    </header>
-
-    <main>
-      <section class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow">Adversarial robustness playground</p>
-          <h1>Rewrite text the way detectors wish attackers could not.</h1>
-          <p class="lede">
-            StealthRL is a reinforcement-learning paraphrase policy trained to preserve meaning
-            while stress-testing AI-text detectors. This demo lets you run a bounded public preview
-            or use an API key for extended access.
-          </p>
-          <div class="hero-actions">
-            <a class="button primary" href="#demo">Try the demo</a>
-            <a class="button ghost" href="#method">How it works</a>
-          </div>
+    <main class="wrap">
+      <header class="hero">
+        <p class="kicker">RESEARCH DEMO</p>
+        <div class="title-row">
+          <span class="brand-mark">SRL</span>
+          <h1>StealthRL</h1>
         </div>
-        <aside class="hero-card" aria-label="Research result summary">
-          <div class="metric-ring">
-            <span class="metric-value">97.6%</span>
-            <span class="metric-label">attack success rate</span>
-          </div>
-          <div class="metric-list">
-            <div>
-              <span>Mean TPR@1%FPR</span>
-              <strong>0.024</strong>
-            </div>
-            <div>
-              <span>Detector panel</span>
-              <strong>4 families</strong>
-            </div>
-            <div>
-              <span>Evaluation pool</span>
-              <strong>29,966 texts</strong>
-            </div>
-          </div>
-        </aside>
-      </section>
+        <p class="subtitle">
+          A compact interface for running the StealthRL paraphrase policy and inspecting the
+          rewritten text. Public access is intentionally rate-limited.
+        </p>
+        <div class="disclaimer">
+          <strong>Research preview.</strong>
+          Do not paste private text. Outputs are for robustness exploration, not a guarantee of
+          detector evasion.
+        </div>
+        <nav class="link-row" aria-label="Project links">
+          <a href="https://arxiv.org/abs/2602.08934" target="_blank" rel="noreferrer">Paper</a>
+          <a href="https://huggingface.co/suraj-ranganath/StealthRL" target="_blank" rel="noreferrer">Model</a>
+          <a href="https://github.com/suraj-ranganath/StealthRL" target="_blank" rel="noreferrer">GitHub</a>
+        </nav>
+      </header>
 
-      <section class="demo-grid" id="demo">
-        <form class="panel input-panel" id="demoForm">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">Interactive rewrite</p>
-              <h2>Paste AI-written text</h2>
-            </div>
-            <span class="quota-pill" id="quotaPill">Loading quota...</span>
+      <form class="panel" id="demoForm">
+        <div class="panel-head">
+          <div>
+            <p class="section-label">Input</p>
+            <h2>Text to paraphrase</h2>
           </div>
+          <span class="pill" id="quotaPill">Loading quota...</span>
+        </div>
 
-          <label class="field">
-            <span>Source text</span>
-            <textarea
-              id="sourceText"
-              name="text"
-              minlength="20"
-              maxlength="5000"
-              required
-              spellcheck="true"
-            >AI-text detectors are increasingly used in high-stakes settings, but their robustness to adversarial rewriting remains uncertain. StealthRL trains a paraphrase policy that preserves semantic content while reducing detector confidence, exposing how brittle many current detection systems can be under realistic paraphrasing pressure.</textarea>
+        <div class="sample-row" aria-label="Sample texts">
+          <button type="button" class="sample-option" data-sample="0">Detector note</button>
+          <button type="button" class="sample-option" data-sample="1">University policy</button>
+          <button type="button" class="sample-option" data-sample="2">Experiment summary</button>
+        </div>
+
+        <label class="field" for="sourceText">Source text</label>
+        <textarea
+          id="sourceText"
+          name="text"
+          minlength="20"
+          maxlength="5000"
+          required
+          spellcheck="true"
+        >AI-text detectors are increasingly used in high-stakes settings, but their robustness to adversarial rewriting remains uncertain. StealthRL trains a paraphrase policy that preserves semantic content while reducing detector confidence, exposing how brittle many current detection systems can be under realistic paraphrasing pressure.</textarea>
+
+        <div class="settings-grid">
+          <label>
+            Temperature
+            <span id="temperatureValue">0.90</span>
+            <input id="temperature" name="temperature" type="range" min="0" max="1.5" value="0.9" step="0.05" />
           </label>
+          <label>
+            Top-p
+            <span id="topPValue">0.95</span>
+            <input id="topP" name="top_p" type="range" min="0.1" max="1" value="0.95" step="0.05" />
+          </label>
+        </div>
 
-          <div class="controls">
-            <label>
-              Temperature
-              <input id="temperature" name="temperature" type="range" min="0" max="1.5" value="0.9" step="0.05" />
-              <output id="temperatureValue">0.90</output>
-            </label>
-            <label>
-              Top-p
-              <input id="topP" name="top_p" type="range" min="0.1" max="1" value="0.95" step="0.05" />
-              <output id="topPValue">0.95</output>
-            </label>
+        <details class="api-key-box">
+          <summary>Use API key for extended access</summary>
+          <label class="field compact" for="apiKey">API key</label>
+          <input id="apiKey" type="password" placeholder="Bearer or X-StealthRL-API-Key" autocomplete="off" />
+          <p>Stored only in this browser. Public requests use the daily anonymous quota.</p>
+        </details>
+
+        <div class="action-row">
+          <button class="primary-button" type="submit" id="submitButton">Run StealthRL</button>
+          <button class="secondary-button" type="button" id="sampleButton">Next sample</button>
+          <span class="pill muted" id="backendPill">backend: unknown</span>
+        </div>
+
+        <div class="progress-wrap" aria-hidden="true">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <p class="status-line" id="statusLine">Ready.</p>
+      </form>
+
+      <section class="panel result-panel" id="resultPanel" aria-label="Result" hidden>
+        <div class="panel-head">
+          <div>
+            <p class="section-label">Output</p>
+            <h2>StealthRL rewrite</h2>
           </div>
+        </div>
 
-          <details class="api-key-box">
-            <summary>Use an API key</summary>
-            <label class="field compact">
-              <span>API key</span>
-              <input id="apiKey" type="password" placeholder="Bearer or X-StealthRL-API-Key" autocomplete="off" />
-            </label>
-            <p>Keys are stored only in your browser local storage. Public requests are capped daily.</p>
-          </details>
+        <div class="result-copy" id="outputText">
+          Your paraphrase will appear here after the request completes.
+        </div>
 
-          <div class="form-actions">
-            <button class="button primary" type="submit" id="submitButton">Run StealthRL</button>
-            <button class="button ghost" type="button" id="sampleButton">Load another sample</button>
-          </div>
-          <p class="fine-print">
-            Public demo outputs are for research exploration only. Do not submit private or sensitive text.
-          </p>
-        </form>
+        <div class="metric-grid" id="metricGrid">
+          <div><span>Input words</span><strong>-</strong></div>
+          <div><span>Output words</span><strong>-</strong></div>
+          <div><span>Edit rate</span><strong>-</strong></div>
+          <div><span>Latency</span><strong>-</strong></div>
+        </div>
 
-        <section class="panel output-panel" aria-live="polite">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">Result</p>
-              <h2>Paraphrased output</h2>
-            </div>
-            <span class="backend-pill" id="backendPill">backend: unknown</span>
-          </div>
-
-          <div class="status-line" id="statusLine">Ready.</div>
-
-          <div class="result-card">
-            <h3>StealthRL rewrite</h3>
-            <p id="outputText" class="placeholder">
-              Your paraphrase will appear here after the request completes.
-            </p>
-          </div>
-
-          <div class="metric-grid" id="metricGrid">
-            <div><span>Input words</span><strong>-</strong></div>
-            <div><span>Output words</span><strong>-</strong></div>
-            <div><span>Edit rate</span><strong>-</strong></div>
-            <div><span>Latency</span><strong>-</strong></div>
-          </div>
-
-          <div class="compare-box">
-            <h3>Original</h3>
-            <p id="originalText" class="muted-copy">Run the demo to compare source and rewritten text.</p>
-          </div>
-        </section>
+        <details class="original-box">
+          <summary>Show original text</summary>
+          <p id="originalText">Run the demo to compare source and rewritten text.</p>
+        </details>
       </section>
 
-      <section class="method" id="method">
-        <div class="section-heading">
-          <p class="eyebrow">Architecture</p>
-          <h2>Small public surface, research-grade backend hooks.</h2>
-        </div>
-        <div class="method-grid">
-          <article>
-            <span class="step">01</span>
-            <h3>Bounded access</h3>
-            <p>
-              Unauthenticated users get a persisted daily quota. API keys can be configured with
-              separate daily limits for collaborators, reviewers, or lab demos.
-            </p>
-          </article>
-          <article>
-            <span class="step">02</span>
-            <h3>Lazy inference</h3>
-            <p>
-              The service starts cheaply. Real StealthRL sampling loads only when the Tinker backend
-              is enabled and a request arrives.
-            </p>
-          </article>
-          <article>
-            <span class="step">03</span>
-            <h3>Research context</h3>
-            <p>
-              The UI reports text-shape diagnostics and links directly to the paper and model,
-              without presenting detector evasion as a production guarantee.
-            </p>
-          </article>
-        </div>
-      </section>
+      <footer class="footer">
+        <span>StealthRL demo</span>
+        <span>FastAPI service with public quota and optional API-key access</span>
+      </footer>
     </main>
-
-    <footer class="footer">
-      <span>StealthRL</span>
-      <span>Adversarial evaluation for AI-text detectors</span>
-      <span><a href="https://github.com/suraj-ranganath/StealthRL" target="_blank" rel="noreferrer">GitHub</a></span>
-    </footer>
 
     <script src="/static/app.js" type="module"></script>
   </body>
