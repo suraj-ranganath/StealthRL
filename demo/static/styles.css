@@ -410,6 +410,24 @@ summary {
   color: var(--faint);
 }
 
+.output-action-note {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  color: var(--success);
+  background: rgba(31, 107, 67, 0.09);
+  border: 1px solid rgba(31, 107, 67, 0.4);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.output-action-note[data-tone="error"] {
+  color: var(--danger);
+  background: rgba(169, 60, 46, 0.09);
+  border-color: rgba(169, 60, 46, 0.4);
+}
+
 .detector-links {
   display: flex;
   flex-wrap: wrap;

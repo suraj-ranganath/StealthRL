@@ -1,6 +1,8 @@
 const form = document.querySelector("#demoForm");
 const sourceText = document.querySelector("#sourceText");
 const outputText = document.querySelector("#outputText");
+const outputBody = document.querySelector("#outputBody");
+const outputActionNote = document.querySelector("#outputActionNote");
 const originalText = document.querySelector("#originalText");
 const statusLine = document.querySelector("#statusLine");
 const quotaPill = document.querySelector("#quotaPill");
@@ -30,6 +32,23 @@ let latestOutput = "";
 function setStatus(message, tone = "neutral") {
   statusLine.textContent = message;
   statusLine.dataset.tone = tone;
+}
+
+function setOutputText(message, placeholder = false) {
+  outputBody.textContent = message;
+  outputText.classList.toggle("placeholder", placeholder);
+}
+
+function setOutputAction(message, tone = "neutral") {
+  outputActionNote.textContent = message;
+  outputActionNote.dataset.tone = tone;
+  outputActionNote.hidden = false;
+}
+
+function clearOutputAction() {
+  outputActionNote.hidden = true;
+  outputActionNote.textContent = "";
+  delete outputActionNote.dataset.tone;
 }
 
 function setProgress(running) {
@@ -104,8 +123,8 @@ async function submitDemo(event) {
   submitButton.disabled = true;
   setDetectorButtonsEnabled(false);
   latestOutput = "";
-  outputText.classList.add("placeholder");
-  outputText.textContent = "Running StealthRL paraphrasing...";
+  clearOutputAction();
+  setOutputText("Running StealthRL paraphrasing...", true);
   setStatus("Submitting request...", "busy");
   setProgress(true);
 
@@ -125,8 +144,8 @@ async function submitDemo(event) {
       throw new Error(data.detail || "Request failed");
     }
 
-    outputText.classList.remove("placeholder");
-    outputText.textContent = data.output_text;
+    clearOutputAction();
+    setOutputText(data.output_text);
     latestOutput = data.output_text;
     originalText.textContent = data.input_text;
     quotaPill.textContent = formatQuota(data.quota);
@@ -135,8 +154,8 @@ async function submitDemo(event) {
     setDetectorButtonsEnabled(true);
     setStatus(`Completed request ${data.request_id.slice(0, 8)}.`, "done");
   } catch (error) {
-    outputText.classList.add("placeholder");
-    outputText.textContent = "No output generated.";
+    clearOutputAction();
+    setOutputText("No output generated.", true);
     setStatus(error.message || "Something went wrong.", "error");
   } finally {
     submitButton.disabled = false;
@@ -152,9 +171,13 @@ async function copyAndOpenDetector(event) {
 
   try {
     await navigator.clipboard.writeText(latestOutput);
-    setStatus(`Copied output. Opening ${label} in a new tab.`, "done");
+    const message = `Copied output. Opening ${label} in a new tab.`;
+    setStatus(message, "done");
+    setOutputAction(message, "done");
   } catch (error) {
-    setStatus(`Opening ${label}. Copy failed, so paste manually from the output box.`, "error");
+    const message = `Opening ${label}. Copy failed, so paste manually from the output box.`;
+    setStatus(message, "error");
+    setOutputAction(message, "error");
   }
 
   window.open(url, "_blank", "noopener,noreferrer");
