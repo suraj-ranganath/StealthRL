@@ -109,7 +109,7 @@ h2 {
 }
 
 .subtitle {
-  max-width: 780px;
+  max-width: none;
   margin: 18px 0 0;
   color: var(--muted);
   font-size: clamp(1rem, 1.8vw, 1.18rem);
