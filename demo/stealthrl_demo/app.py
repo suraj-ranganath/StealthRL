@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -77,6 +78,14 @@ def create_app(
     app.state.settings = settings
     app.state.quota_store = quota_store
     app.state.backend = backend
+
+    if settings.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=list(settings.cors_origins),
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["authorization", "content-type", "x-stealthrl-api-key"],
+        )
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 

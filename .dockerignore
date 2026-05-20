@@ -1,0 +1,17 @@
+.git
+.venv
+.venv-demo
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.DS_Store
+arxiv
+acl2026
+outputs
+data
+*.sqlite3
+*.db
+demo/.env

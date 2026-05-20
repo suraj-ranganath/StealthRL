@@ -29,6 +29,7 @@ class DemoSettings:
     hf_adapter_model: str = "suraj-ranganath/StealthRL"
     hf_dtype: str = "bfloat16"
     hf_device_map: str = "auto"
+    cors_origins: tuple[str, ...] = ()
     max_chars: int = 5000
     request_timeout_s: int = 90
 
@@ -66,6 +67,12 @@ def _parse_api_keys(raw: str | None) -> tuple[ApiKeyConfig, ...]:
     return tuple(configs)
 
 
+def _parse_csv_env(raw: str | None) -> tuple[str, ...]:
+    if not raw or not raw.strip():
+        return ()
+    return tuple(item.strip().rstrip("/") for item in raw.split(",") if item.strip())
+
+
 def load_settings() -> DemoSettings:
     quota_scope = os.getenv("STEALTHRL_DEMO_PUBLIC_QUOTA_SCOPE", "ip").strip().lower()
     if quota_scope not in {"ip", "global"}:
@@ -82,6 +89,7 @@ def load_settings() -> DemoSettings:
         hf_adapter_model=os.getenv("STEALTHRL_DEMO_HF_ADAPTER_MODEL", "suraj-ranganath/StealthRL").strip(),
         hf_dtype=os.getenv("STEALTHRL_DEMO_HF_DTYPE", "bfloat16").strip().lower(),
         hf_device_map=os.getenv("STEALTHRL_DEMO_HF_DEVICE_MAP", "auto").strip(),
+        cors_origins=_parse_csv_env(os.getenv("STEALTHRL_DEMO_CORS_ORIGINS")),
         max_chars=_int_env("STEALTHRL_DEMO_MAX_CHARS", 5000),
         request_timeout_s=_int_env("STEALTHRL_DEMO_REQUEST_TIMEOUT_S", 90),
     )

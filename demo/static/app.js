@@ -19,6 +19,7 @@ const topPValue = document.querySelector("#topPValue");
 const resultPanel = document.querySelector("#resultPanel");
 const progressBar = document.querySelector("#progressBar");
 const detectorButtons = document.querySelectorAll("[data-detector-url]");
+const apiBaseUrl = getApiBaseUrl();
 
 const samples = [
   "During sustained cardio exercise, the heart increases its workload and the rest of the body adjusts to support that effort. Blood vessels widen to improve circulation, leg and core muscles help push blood back toward the heart, and the lungs breathe faster to bring in oxygen while clearing waste gases such as carbon dioxide throughout the workout and recovery period.",
@@ -32,6 +33,15 @@ let latestOutput = "";
 function setStatus(message, tone = "neutral") {
   statusLine.textContent = message;
   statusLine.dataset.tone = tone;
+}
+
+function getApiBaseUrl() {
+  const meta = document.querySelector('meta[name="stealthrl-api-base-url"]');
+  return (meta?.content || "").trim().replace(/\/$/, "");
+}
+
+function apiUrl(path) {
+  return `${apiBaseUrl}${path}`;
 }
 
 function setOutputText(message, placeholder = false) {
@@ -101,7 +111,7 @@ function loadSample(index) {
 
 async function refreshConfig() {
   try {
-    const response = await fetch("/api/config");
+    const response = await fetch(apiUrl("/api/config"));
     if (!response.ok) throw new Error("config failed");
     const config = await response.json();
     quotaPill.textContent = formatQuota(config.public_quota);
@@ -129,7 +139,7 @@ async function submitDemo(event) {
   setProgress(true);
 
   try {
-    const response = await fetch("/api/paraphrase", {
+    const response = await fetch(apiUrl("/api/paraphrase"), {
       method: "POST",
       headers: getHeaders(),
       body: JSON.stringify({
