@@ -6,10 +6,8 @@ const outputActionNote = document.querySelector("#outputActionNote");
 const originalText = document.querySelector("#originalText");
 const statusLine = document.querySelector("#statusLine");
 const quotaPill = document.querySelector("#quotaPill");
-const backendPill = document.querySelector("#backendPill");
 const metricGrid = document.querySelector("#metricGrid");
 const submitButton = document.querySelector("#submitButton");
-const sampleButton = document.querySelector("#sampleButton");
 const sampleOptions = document.querySelectorAll("[data-sample]");
 const apiKey = document.querySelector("#apiKey");
 const temperature = document.querySelector("#temperature");
@@ -19,6 +17,9 @@ const topPValue = document.querySelector("#topPValue");
 const resultPanel = document.querySelector("#resultPanel");
 const progressBar = document.querySelector("#progressBar");
 const detectorButtons = document.querySelectorAll("[data-detector-url]");
+const feedbackRow = document.querySelector("#feedbackRow");
+const feedbackButtons = document.querySelectorAll("[data-feedback-rating]");
+const feedbackStatus = document.querySelector("#feedbackStatus");
 const apiBaseUrl = getApiBaseUrl();
 
 const samples = [
@@ -29,6 +30,7 @@ const samples = [
 
 let sampleIndex = 0;
 let latestOutput = "";
+let latestRequestId = "";
 
 function setStatus(message, tone = "neutral") {
   statusLine.textContent = message;
@@ -47,6 +49,11 @@ function apiUrl(path) {
 function setOutputText(message, placeholder = false) {
   outputBody.textContent = message;
   outputText.classList.toggle("placeholder", placeholder);
+}
+
+function appendOutputText(piece) {
+  outputBody.textContent += piece;
+  outputText.classList.remove("placeholder");
 }
 
 function setOutputAction(message, tone = "neutral") {
@@ -89,6 +96,15 @@ function setDetectorButtonsEnabled(enabled) {
   });
 }
 
+function setFeedbackEnabled(enabled) {
+  feedbackRow.hidden = !enabled;
+  feedbackButtons.forEach((button) => {
+    button.disabled = !enabled;
+    button.removeAttribute("aria-pressed");
+  });
+  feedbackStatus.textContent = "";
+}
+
 function getHeaders() {
   const headers = { "Content-Type": "application/json" };
   const key = apiKey.value.trim();
@@ -109,18 +125,102 @@ function loadSample(index) {
   sourceText.focus();
 }
 
+function startColdStartHints() {
+  const timers = [
+    setTimeout(() => {
+      setStatus("Azure GPU is likely waking from zero. Keep this tab open; first load can take a few minutes.", "busy");
+    }, 9000),
+    setTimeout(() => {
+      setOutputAction(
+        "Still waiting? The model server may be cold-starting. You can leave this tab open and come back in a few minutes.",
+        "neutral"
+      );
+    }, 30000)
+  ];
+  return () => timers.forEach((timer) => clearTimeout(timer));
+}
+
 async function refreshConfig() {
   try {
     const response = await fetch(apiUrl("/api/config"));
     if (!response.ok) throw new Error("config failed");
     const config = await response.json();
     quotaPill.textContent = formatQuota(config.public_quota);
-    backendPill.textContent = `backend: ${config.backend}`;
     sourceText.maxLength = config.max_chars || 5000;
   } catch (error) {
     quotaPill.textContent = "quota unavailable";
-    backendPill.textContent = "backend: unknown";
   }
+}
+
+async function parseErrorResponse(response) {
+  try {
+    const data = await response.json();
+    return data.detail || data.message || "Request failed";
+  } catch (error) {
+    return `Request failed (${response.status})`;
+  }
+}
+
+function applyFinalResult(data) {
+  clearOutputAction();
+  setOutputText(data.output_text || "No output generated.", !data.output_text);
+  latestOutput = data.output_text || "";
+  latestRequestId = data.request_id || "";
+  originalText.textContent = data.input_text || sourceText.value.trim();
+  quotaPill.textContent = formatQuota(data.quota);
+  updateMetrics(data);
+  setDetectorButtonsEnabled(Boolean(latestOutput));
+  setFeedbackEnabled(Boolean(latestRequestId));
+  setStatus(`Completed request ${latestRequestId.slice(0, 8)}.`, "done");
+}
+
+async function handleStream(response) {
+  if (!response.body) {
+    throw new Error("Streaming is not available in this browser.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let sawDelta = false;
+  let sawFinal = false;
+
+  const handleLine = (line) => {
+    if (!line.trim()) return;
+    const data = JSON.parse(line);
+    if (data.event === "status") {
+      setStatus(data.message || "Running...", data.tone || "busy");
+      return;
+    }
+    if (data.event === "delta") {
+      if (!sawDelta) {
+        setOutputText("");
+        sawDelta = true;
+      }
+      appendOutputText(data.text || "");
+      return;
+    }
+    if (data.event === "final") {
+      sawFinal = true;
+      applyFinalResult(data);
+      return;
+    }
+    if (data.event === "error") {
+      throw new Error(data.message || "Inference failed.");
+    }
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    for (const line of lines) handleLine(line);
+  }
+  buffer += decoder.decode();
+  if (buffer.trim()) handleLine(buffer);
+  if (!sawFinal) throw new Error("Stream ended before the final result arrived.");
 }
 
 async function submitDemo(event) {
@@ -132,14 +232,17 @@ async function submitDemo(event) {
   resultPanel.hidden = false;
   submitButton.disabled = true;
   setDetectorButtonsEnabled(false);
+  setFeedbackEnabled(false);
   latestOutput = "";
+  latestRequestId = "";
   clearOutputAction();
-  setOutputText("Running StealthRL paraphrasing...", true);
+  setOutputText("Starting StealthRL...", true);
   setStatus("Submitting request...", "busy");
   setProgress(true);
+  const clearColdStartHints = startColdStartHints();
 
   try {
-    const response = await fetch(apiUrl("/api/paraphrase"), {
+    const response = await fetch(apiUrl("/api/paraphrase/stream"), {
       method: "POST",
       headers: getHeaders(),
       body: JSON.stringify({
@@ -149,25 +252,17 @@ async function submitDemo(event) {
       })
     });
 
-    const data = await response.json();
     if (!response.ok) {
-      throw new Error(data.detail || "Request failed");
+      throw new Error(await parseErrorResponse(response));
     }
 
-    clearOutputAction();
-    setOutputText(data.output_text);
-    latestOutput = data.output_text;
-    originalText.textContent = data.input_text;
-    quotaPill.textContent = formatQuota(data.quota);
-    backendPill.textContent = `backend: ${data.backend}`;
-    updateMetrics(data);
-    setDetectorButtonsEnabled(true);
-    setStatus(`Completed request ${data.request_id.slice(0, 8)}.`, "done");
+    await handleStream(response);
   } catch (error) {
     clearOutputAction();
     setOutputText("No output generated.", true);
     setStatus(error.message || "Something went wrong.", "error");
   } finally {
+    clearColdStartHints();
     submitButton.disabled = false;
     setProgress(false);
   }
@@ -193,6 +288,35 @@ async function copyAndOpenDetector(event) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
+async function submitFeedback(event) {
+  const rating = event.currentTarget.dataset.feedbackRating;
+  if (!latestRequestId || !rating) return;
+
+  feedbackButtons.forEach((button) => {
+    button.disabled = true;
+    button.setAttribute("aria-pressed", String(button.dataset.feedbackRating === rating));
+  });
+  feedbackStatus.textContent = "Sending...";
+
+  try {
+    const response = await fetch(apiUrl("/api/feedback"), {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({
+        request_id: latestRequestId,
+        rating
+      })
+    });
+    if (!response.ok) throw new Error(await parseErrorResponse(response));
+    feedbackStatus.textContent = "Thanks.";
+  } catch (error) {
+    feedbackStatus.textContent = "Could not save.";
+    feedbackButtons.forEach((button) => {
+      button.disabled = false;
+    });
+  }
+}
+
 function bindRange(input, output) {
   const update = () => {
     output.textContent = Number(input.value).toFixed(2);
@@ -202,17 +326,20 @@ function bindRange(input, output) {
 }
 
 form.addEventListener("submit", submitDemo);
-sampleButton.addEventListener("click", () => loadSample(sampleIndex + 1));
 sampleOptions.forEach((button) => {
   button.addEventListener("click", () => loadSample(Number(button.dataset.sample)));
 });
 detectorButtons.forEach((button) => {
   button.addEventListener("click", copyAndOpenDetector);
 });
+feedbackButtons.forEach((button) => {
+  button.addEventListener("click", submitFeedback);
+});
 bindRange(temperature, temperatureValue);
 bindRange(topP, topPValue);
 
 apiKey.value = localStorage.getItem("stealthrl_demo_api_key") || "";
 setDetectorButtonsEnabled(false);
+setFeedbackEnabled(false);
 markActiveSample();
 refreshConfig();

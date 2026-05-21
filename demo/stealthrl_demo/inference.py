@@ -6,12 +6,13 @@ import asyncio
 import json
 import random
 import re
+import threading
 import time
 import uuid
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncIterator
 
 from .config import DemoSettings
 
@@ -40,6 +41,28 @@ class BaseDemoBackend:
 
     async def paraphrase(self, text: str, temperature: float, top_p: float) -> tuple[str, dict[str, Any]]:
         raise NotImplementedError
+
+    async def paraphrase_stream(
+        self,
+        text: str,
+        temperature: float,
+        top_p: float,
+    ) -> AsyncIterator[dict[str, Any]]:
+        yield {
+            "event": "status",
+            "message": "Running StealthRL generation.",
+            "tone": "busy",
+        }
+        output, metadata = await self.paraphrase(text=text, temperature=temperature, top_p=top_p)
+        yield {
+            "event": "delta",
+            "text": output,
+        }
+        yield {
+            "event": "final",
+            "output_text": output,
+            "metadata": metadata,
+        }
 
 
 class MockStealthBackend(BaseDemoBackend):
@@ -251,6 +274,128 @@ class HuggingFaceStealthBackend(BaseDemoBackend):
             "adapter_model": runtime["adapter_model"],
             "chunk_count": len(chunks),
         }
+
+    async def paraphrase_stream(
+        self,
+        text: str,
+        temperature: float,
+        top_p: float,
+    ) -> AsyncIterator[dict[str, Any]]:
+        yield {
+            "event": "status",
+            "message": "Loading StealthRL weights. If the GPU has been idle, this first step can take a few minutes.",
+            "tone": "busy",
+        }
+        runtime = await self._ensure_loaded()
+        chunks = _split_generation_chunks(text)
+        raw_parts: list[str] = []
+
+        for index, chunk in enumerate(chunks, start=1):
+            yield {
+                "event": "status",
+                "message": f"Generating rewrite chunk {index}/{len(chunks)}...",
+                "tone": "busy",
+            }
+            async for piece in self._stream_generate_one(
+                runtime=runtime,
+                chunk=chunk,
+                temperature=temperature,
+                top_p=top_p,
+            ):
+                raw_parts.append(piece)
+                yield {
+                    "event": "delta",
+                    "text": piece,
+                }
+            if index < len(chunks):
+                raw_parts.append(" ")
+                yield {
+                    "event": "delta",
+                    "text": " ",
+                }
+
+        output = _clean_model_output("".join(raw_parts))
+        yield {
+            "event": "final",
+            "output_text": output,
+            "metadata": {
+                "method": "stealthrl",
+                "backend": "hf_peft",
+                "base_model": runtime["base_model"],
+                "adapter_model": runtime["adapter_model"],
+                "chunk_count": len(chunks),
+                "streaming": True,
+            },
+        }
+
+    async def _stream_generate_one(
+        self,
+        runtime: dict[str, Any],
+        chunk: str,
+        temperature: float,
+        top_p: float,
+    ) -> AsyncIterator[str]:
+        import torch
+        from transformers import TextIteratorStreamer
+
+        model = runtime["model"]
+        tokenizer = runtime["tokenizer"]
+        prompt_text = PARAPHRASE_PROMPT.format(text=chunk)
+        messages = [{"role": "user", "content": prompt_text}]
+        if hasattr(tokenizer, "apply_chat_template"):
+            formatted = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        else:
+            formatted = prompt_text
+
+        inputs = tokenizer(
+            formatted,
+            return_tensors="pt",
+            truncation=True,
+            max_length=1024,
+        ).to(model.device)
+        streamer = TextIteratorStreamer(
+            tokenizer,
+            skip_prompt=True,
+            skip_special_tokens=True,
+        )
+        errors: list[BaseException] = []
+
+        def _generate() -> None:
+            try:
+                with torch.no_grad():
+                    model.generate(
+                        **inputs,
+                        max_new_tokens=_estimate_generation_max_tokens(chunk, default_max_tokens=512),
+                        do_sample=temperature > 0,
+                        temperature=max(temperature, 1e-5),
+                        top_p=top_p,
+                        pad_token_id=tokenizer.eos_token_id,
+                        streamer=streamer,
+                    )
+            except BaseException as exc:
+                errors.append(exc)
+                streamer.on_finalized_text("", stream_end=True)
+
+        thread = threading.Thread(target=_generate, daemon=True)
+        thread.start()
+        sentinel = object()
+
+        def _next_piece() -> str | object:
+            try:
+                return next(streamer)
+            except StopIteration:
+                return sentinel
+
+        while True:
+            piece = await asyncio.to_thread(_next_piece)
+            if piece is sentinel:
+                break
+            if piece:
+                yield str(piece)
+
+        thread.join(timeout=1)
+        if errors:
+            raise errors[0]
 
 
 def build_backend(settings: DemoSettings) -> BaseDemoBackend:

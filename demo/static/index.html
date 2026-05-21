@@ -96,8 +96,6 @@
 
         <div class="action-row">
           <button class="primary-button" type="submit" id="submitButton">Run StealthRL</button>
-          <button class="secondary-button" type="button" id="sampleButton">Next sample</button>
-          <span class="pill muted" id="backendPill">backend: unknown</span>
         </div>
 
         <div class="progress-wrap" aria-hidden="true">
@@ -115,7 +113,6 @@
         </div>
 
         <div class="result-copy" id="outputText">
-          <div class="output-action-note" id="outputActionNote" hidden></div>
           <div id="outputBody">Your paraphrase will appear here after the request completes.</div>
         </div>
 
@@ -146,10 +143,19 @@
           </button>
         </div>
 
+        <div class="output-action-note" id="outputActionNote" hidden></div>
+
         <details class="original-box">
           <summary>Show original text</summary>
           <p id="originalText">Run the demo to compare source and rewritten text.</p>
         </details>
+
+        <div class="feedback-row" id="feedbackRow" hidden>
+          <span>Was this rewrite useful?</span>
+          <button type="button" data-feedback-rating="up" aria-label="Thumbs up">Thumbs up</button>
+          <button type="button" data-feedback-rating="down" aria-label="Thumbs down">Thumbs down</button>
+          <strong id="feedbackStatus" aria-live="polite"></strong>
+        </div>
       </section>
 
       <footer class="footer">

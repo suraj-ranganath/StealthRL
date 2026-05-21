@@ -55,6 +55,24 @@ class QuotaStore:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS feedback_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    request_id TEXT NOT NULL,
+                    rating TEXT NOT NULL CHECK (rating IN ('up', 'down')),
+                    client_hash TEXT NOT NULL,
+                    api_key_label TEXT,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS feedback_events_request_id_idx
+                ON feedback_events(request_id)
+                """
+            )
             conn.commit()
 
     @staticmethod
@@ -173,3 +191,24 @@ class QuotaStore:
             label="public",
             reason=None if count < self.public_daily_limit else "daily_quota_exceeded",
         )
+
+    def record_feedback(
+        self,
+        request_id: str,
+        rating: str,
+        client_id: str,
+        api_key_label: str | None,
+    ) -> None:
+        if rating not in {"up", "down"}:
+            raise ValueError("rating must be 'up' or 'down'")
+        now = dt.datetime.now(dt.timezone.utc).isoformat()
+        with self._lock:
+            with sqlite3.connect(self.db_path, timeout=10) as conn:
+                conn.execute(
+                    """
+                    INSERT INTO feedback_events(request_id, rating, client_hash, api_key_label, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (request_id, rating, self._hash_subject(client_id), api_key_label, now),
+                )
+                conn.commit()

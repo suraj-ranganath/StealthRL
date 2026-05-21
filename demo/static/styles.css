@@ -416,15 +416,22 @@ summary {
   color: var(--ink);
   font-size: 1rem;
   line-height: 1.6;
+  text-align: left;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .result-copy.placeholder {
   color: var(--faint);
 }
 
+#outputBody {
+  display: block;
+  min-height: 118px;
+}
+
 .output-action-note {
-  margin-bottom: 10px;
+  margin-top: 10px;
   padding: 8px 10px;
   color: var(--success);
   background: rgba(31, 107, 67, 0.09);
@@ -439,6 +446,12 @@ summary {
   color: var(--danger);
   background: rgba(169, 60, 46, 0.09);
   border-color: rgba(169, 60, 46, 0.4);
+}
+
+.output-action-note[data-tone="neutral"] {
+  color: var(--accent-2);
+  background: rgba(214, 165, 50, 0.12);
+  border-color: rgba(184, 95, 44, 0.36);
 }
 
 .detector-links {
@@ -539,6 +552,47 @@ summary {
   color: var(--ink);
   font-family: "IBM Plex Mono", monospace;
   font-size: 1rem;
+}
+
+.feedback-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+}
+
+.feedback-row button {
+  min-height: 34px;
+  padding: 6px 10px;
+  color: var(--ink);
+  background: #fffdf6;
+  border: 1px solid var(--line-strong);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.feedback-row button:hover:not(:disabled),
+.feedback-row button[aria-pressed="true"] {
+  color: #fff7e3;
+  background: var(--accent);
+}
+
+.feedback-row button:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.feedback-row strong {
+  min-width: 72px;
+  color: var(--success);
+  font-weight: 600;
 }
 
 .footer {
