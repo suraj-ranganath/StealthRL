@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StealthRL Demo</title>
+    <meta
+      name="description"
+      content="Interactive research demo for StealthRL, a paraphrase policy for stress-testing AI-text detectors."
+    />
+    <meta name="stealthrl-api-base-url" content="" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="bg-grid" aria-hidden="true"></div>
+
+    <main class="wrap">
+      <header class="hero">
+        <p class="kicker">RESEARCH DEMO</p>
+        <div class="title-row">
+          <span class="brand-mark">SRL</span>
+          <h1>StealthRL</h1>
+        </div>
+        <p class="subtitle">
+          AI-text detectors are increasingly used in high-stakes settings, yet their robustness to
+          meaning-preserving adversarial rewriting remains uncertain. StealthRL is an RL framework
+          for stress-testing AI-text detectors with adaptive paraphrase attacks. StealthRL trains a
+          paraphrase policy against a detector ensemble while preserving semantic content, then
+          evaluates transfer to held-out detector families.
+        </p>
+        <div class="disclaimer">
+          <strong>Research preview.</strong>
+          Do not paste private text. Outputs are for robustness exploration, not detector-evasion guarantees.
+        </div>
+        <nav class="link-row" aria-label="Project links">
+          <a href="https://arxiv.org/abs/2602.08934" target="_blank" rel="noreferrer">Paper</a>
+          <a href="https://huggingface.co/suraj-ranganath/StealthRL" target="_blank" rel="noreferrer">Model</a>
+          <a href="https://github.com/suraj-ranganath/StealthRL" target="_blank" rel="noreferrer">GitHub</a>
+        </nav>
+      </header>
+
+      <form class="panel" id="demoForm">
+        <div class="panel-head">
+          <div>
+            <p class="section-label">Input</p>
+            <h2>Text to paraphrase</h2>
+          </div>
+          <span class="pill" id="quotaPill">Loading quota...</span>
+        </div>
+
+        <div class="sample-row" aria-label="Sample texts">
+          <button type="button" class="sample-option" data-sample="0">Cardio physiology</button>
+          <button type="button" class="sample-option" data-sample="1">Photosynthesis</button>
+          <button type="button" class="sample-option" data-sample="2">Renewable energy</button>
+        </div>
+
+        <label class="field" for="sourceText">Source text</label>
+        <textarea
+          id="sourceText"
+          name="text"
+          minlength="20"
+          maxlength="5000"
+          required
+          spellcheck="true"
+        >During sustained cardio exercise, the heart increases its workload and the rest of the body adjusts to support that effort. Blood vessels widen to improve circulation, leg and core muscles help push blood back toward the heart, and the lungs breathe faster to bring in oxygen while clearing waste gases such as carbon dioxide throughout the workout and recovery period.</textarea>
+
+        <details class="config-box">
+          <summary>Generation config</summary>
+          <p>Defaults match the paper evaluation setting.</p>
+          <div class="settings-grid">
+            <label>
+              Temperature
+              <span id="temperatureValue">1.00</span>
+              <input id="temperature" name="temperature" type="range" min="0" max="1.5" value="1.0" step="0.05" />
+            </label>
+            <label>
+              Top-p
+              <span id="topPValue">0.90</span>
+              <input id="topP" name="top_p" type="range" min="0.1" max="1" value="0.9" step="0.05" />
+            </label>
+          </div>
+        </details>
+
+        <details class="api-key-box">
+          <summary>Use API key for extended access</summary>
+          <label class="field compact" for="apiKey">API key</label>
+          <input id="apiKey" type="password" placeholder="Bearer or X-StealthRL-API-Key" autocomplete="off" />
+          <p>Stored only in this browser. Public requests use the daily anonymous quota.</p>
+        </details>
+
+        <div class="action-row">
+          <button class="primary-button" type="submit" id="submitButton">Run StealthRL</button>
+        </div>
+
+        <div class="progress-wrap" aria-hidden="true">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <p class="status-line" id="statusLine">Ready.</p>
+      </form>
+
+      <section class="panel result-panel" id="resultPanel" aria-label="Result" hidden>
+        <div class="panel-head">
+          <div>
+            <p class="section-label">Output</p>
+            <h2>StealthRL rewrite</h2>
+          </div>
+        </div>
+
+        <div class="result-copy" id="outputText">
+          <div id="outputBody">Your paraphrase will appear here after the request completes.</div>
+        </div>
+
+        <div class="metric-grid" id="metricGrid">
+          <div><span>Input words</span><strong>-</strong></div>
+          <div><span>Output words</span><strong>-</strong></div>
+          <div><span>Edit rate</span><strong>-</strong></div>
+          <div><span>Latency</span><strong>-</strong></div>
+        </div>
+
+        <div class="detector-links" aria-label="External detector handoff">
+          <span class="detector-links-label">Copy output and open:</span>
+          <button type="button" data-detector-name="Pangram" data-detector-url="https://www.pangram.com/" disabled>
+            <span class="detector-logo pangram-logo" aria-hidden="true">P</span>
+            <span>Pangram</span>
+          </button>
+          <button type="button" data-detector-name="GPTZero" data-detector-url="https://gptzero.me/" disabled>
+            <span class="detector-logo gptzero-logo" aria-hidden="true">G0</span>
+            <span>GPTZero</span>
+          </button>
+          <button type="button" data-detector-name="Grammarly" data-detector-url="https://www.grammarly.com/ai-detector" disabled>
+            <span class="detector-logo grammarly-logo" aria-hidden="true">G</span>
+            <span>Grammarly</span>
+          </button>
+          <button type="button" data-detector-name="TELL" data-detector-url="https://ai-tells.tech/" disabled>
+            <span class="detector-logo tell-logo" aria-hidden="true">T</span>
+            <span>TELL</span>
+          </button>
+        </div>
+
+        <div class="output-action-note" id="outputActionNote" hidden></div>
+
+        <details class="original-box">
+          <summary>Show original text</summary>
+          <p id="originalText">Run the demo to compare source and rewritten text.</p>
+        </details>
+
+        <div class="feedback-row" id="feedbackRow" hidden>
+          <span>Did it preserve meaning and read naturally?</span>
+          <button type="button" data-feedback-rating="up" aria-label="Good output" title="Good output">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M7 10v10H4V10h3Zm3 10h7.2c1.1 0 2-.8 2.2-1.9l1-5.5A2.2 2.2 0 0 0 18.2 10H15V6.8C15 5.3 13.9 4 12.4 4h-.5L10 9.2V20Z" />
+            </svg>
+          </button>
+          <button type="button" data-feedback-rating="down" aria-label="Poor output" title="Poor output">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M7 4v10H4V4h3Zm3 0h7.2c1.1 0 2 .8 2.2 1.9l1 5.5A2.2 2.2 0 0 1 18.2 14H15v3.2c0 1.5-1.1 2.8-2.6 2.8h-.5L10 14.8V4Z" />
+            </svg>
+          </button>
+          <strong id="feedbackStatus" aria-live="polite"></strong>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <span>
+          <a href="https://www.linkedin.com/in/suraj-ranganath/" target="_blank" rel="noreferrer">Suraj Ranganath</a>
+          &amp;
+          <a href="https://www.linkedin.com/in/atharv-ramesh/" target="_blank" rel="noreferrer">Atharv Ramesh</a>
+        </span>
+        <span><a href="/privacy">Privacy</a></span>
+        <span>Copyright &copy; 2026. All rights reserved.</span>
+      </footer>
+    </main>
+
+    <script src="/static/app.js" type="module"></script>
+  </body>
+</html>

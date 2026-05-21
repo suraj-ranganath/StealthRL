@@ -51,6 +51,7 @@ runs/
 *.jsonl
 *.json
 *.html
+!demo/static/*.html
 
 # Model files
 *.pt
@@ -70,6 +71,9 @@ runs/
 # Environment
 .env
 .env.local
+.venv-azure/
+.azure-tools/
+.cloudflare-tools/
 
 # Testing
 .pytest_cache/
@@ -98,3 +102,7 @@ AGENT.md
 cache/
 report/
 *.gguf
+*.sqlite3
+demo/data/
+deploy/azure/static_dist/
+deploy/cloudflare/static_dist/

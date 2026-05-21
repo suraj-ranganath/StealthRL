@@ -1,0 +1,38 @@
+FROM pytorch/pytorch:2.7.1-cuda12.6-cudnn9-runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    HF_HOME=/opt/stealthrl/hf-cache \
+    HF_HUB_ENABLE_HF_TRANSFER=1 \
+    STEALTHRL_DEMO_INFERENCE_BACKEND=hf \
+    STEALTHRL_DEMO_HF_BASE_MODEL=/opt/stealthrl/models/qwen3-4b-instruct-2507 \
+    STEALTHRL_DEMO_HF_ADAPTER_MODEL=/opt/stealthrl/models/stealthrl-adapter \
+    STEALTHRL_DEMO_HF_DTYPE=float16 \
+    STEALTHRL_DEMO_HF_DEVICE_MAP=auto \
+    STEALTHRL_DEMO_REQUEST_TIMEOUT_S=240
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY demo/requirements.txt /app/demo/requirements.txt
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r /app/demo/requirements.txt \
+    && pip install --no-cache-dir \
+        "transformers>=4.56.0" \
+        "accelerate>=1.1.0" \
+        "safetensors>=0.4.5" \
+        "huggingface_hub[hf_transfer]>=0.25.0"
+
+# Bake the model into the image so scale-to-zero cold starts do not redownload
+# multi-GB weights from Hugging Face.
+RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('Qwen/Qwen3-4B-Instruct-2507', local_dir='/opt/stealthrl/models/qwen3-4b-instruct-2507'); snapshot_download('suraj-ranganath/StealthRL', local_dir='/opt/stealthrl/models/stealthrl-adapter')"
+
+COPY demo /app/demo
+
+EXPOSE 8080
+
+CMD ["sh", "-c", "exec uvicorn demo.stealthrl_demo.app:app --host 0.0.0.0 --port ${PORT:-8080}"]
