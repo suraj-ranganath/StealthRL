@@ -66,7 +66,7 @@ def _quota_payload(decision: QuotaDecision) -> dict[str, Any]:
 
 
 def _stream_event(payload: dict[str, Any]) -> str:
-    return json.dumps(payload, ensure_ascii=False) + "\n"
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
 def create_app(
@@ -255,8 +255,8 @@ def create_app(
 
         return StreamingResponse(
             events(),
-            media_type="application/x-ndjson",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
         )
 
     @app.post("/api/feedback")

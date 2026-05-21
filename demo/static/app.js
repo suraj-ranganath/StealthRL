@@ -185,9 +185,9 @@ async function handleStream(response) {
   let sawDelta = false;
   let sawFinal = false;
 
-  const handleLine = (line) => {
-    if (!line.trim()) return;
-    const data = JSON.parse(line);
+  const handlePayload = (payload) => {
+    if (!payload.trim()) return;
+    const data = JSON.parse(payload);
     if (data.event === "status") {
       setStatus(data.message || "Running...", data.tone || "busy");
       return;
@@ -214,13 +214,27 @@ async function handleStream(response) {
     const { value, done } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-    for (const line of lines) handleLine(line);
+    const blocks = buffer.split("\n\n");
+    buffer = blocks.pop() || "";
+    for (const block of blocks) handleStreamBlock(block, handlePayload);
   }
   buffer += decoder.decode();
-  if (buffer.trim()) handleLine(buffer);
+  if (buffer.trim()) handleStreamBlock(buffer, handlePayload);
   if (!sawFinal) throw new Error("Stream ended before the final result arrived.");
+}
+
+function handleStreamBlock(block, handlePayload) {
+  const dataLines = block
+    .split("\n")
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trimStart());
+  if (dataLines.length) {
+    handlePayload(dataLines.join("\n"));
+    return;
+  }
+
+  // Local/dev fallback for newline-delimited JSON streams.
+  block.split("\n").forEach((line) => handlePayload(line));
 }
 
 async function submitDemo(event) {
