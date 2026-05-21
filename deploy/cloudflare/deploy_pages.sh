@@ -21,22 +21,18 @@ python deploy/azure/build_static_dist.py \
   --api-base-url "$STEALTHRL_API_BASE_URL" \
   --out "$STATIC_DIST"
 
+mkdir -p "$STATIC_DIST/privacy"
+cp "$STATIC_DIST/privacy.html" "$STATIC_DIST/privacy/index.html"
+
 cat > "$STATIC_DIST/_redirects" <<'EOF'
-/privacy  /privacy.html  200
+/privacy  /privacy/  308
 EOF
 
-if [[ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]]; then
-  if ! create_output="$(wrangler pages project create "$CLOUDFLARE_PAGES_PROJECT" \
-    --production-branch "$CLOUDFLARE_PAGES_BRANCH" 2>&1)"; then
-    if ! grep -Eiq 'already exists|already.*project|project.*exists' <<<"$create_output"; then
-      printf '%s\n' "$create_output" >&2
-      exit 1
-    fi
-  fi
-else
-  if ! wrangler pages project list | awk 'NR > 1 {print $1}' | grep -Fxq "$CLOUDFLARE_PAGES_PROJECT"; then
-    wrangler pages project create "$CLOUDFLARE_PAGES_PROJECT" \
-      --production-branch "$CLOUDFLARE_PAGES_BRANCH"
+if ! create_output="$(wrangler pages project create "$CLOUDFLARE_PAGES_PROJECT" \
+  --production-branch "$CLOUDFLARE_PAGES_BRANCH" 2>&1)"; then
+  if ! grep -Eiq 'already exists|project with this name already exists|project.*exists' <<<"$create_output"; then
+    printf '%s\n' "$create_output" >&2
+    exit 1
   fi
 fi
 
