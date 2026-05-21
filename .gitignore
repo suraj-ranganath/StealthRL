@@ -103,3 +103,4 @@ report/
 *.gguf
 *.sqlite3
 demo/data/
+deploy/azure/static_dist/

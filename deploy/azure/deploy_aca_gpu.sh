@@ -15,6 +15,26 @@ fi
 
 az account show >/dev/null
 
+ensure_provider() {
+  local namespace="$1"
+  local state
+  state="$(az provider show --namespace "$namespace" --query registrationState -o tsv 2>/dev/null || true)"
+  if [[ "$state" != "Registered" ]]; then
+    az provider register --namespace "$namespace" --output none
+  fi
+
+  for _ in {1..60}; do
+    state="$(az provider show --namespace "$namespace" --query registrationState -o tsv 2>/dev/null || true)"
+    if [[ "$state" == "Registered" ]]; then
+      return 0
+    fi
+    sleep 10
+  done
+
+  echo "Timed out waiting for provider $namespace to register; last state: ${state:-unknown}" >&2
+  return 1
+}
+
 AZURE_RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:-stealthrl-demo-rg}"
 AZURE_LOCATION="${AZURE_LOCATION:-eastus}"
 AZURE_ACR_NAME="${AZURE_ACR_NAME:?Set AZURE_ACR_NAME to a globally unique lowercase registry name, e.g. stealthrldemo123}"
@@ -30,9 +50,9 @@ STEALTHRL_DEMO_PUBLIC_QUOTA_SCOPE="${STEALTHRL_DEMO_PUBLIC_QUOTA_SCOPE:-ip}"
 STEALTHRL_DEMO_MAX_CHARS="${STEALTHRL_DEMO_MAX_CHARS:-5000}"
 STEALTHRL_DEMO_API_KEYS="${STEALTHRL_DEMO_API_KEYS:-}"
 
-az provider register --namespace Microsoft.App --wait
-az provider register --namespace Microsoft.OperationalInsights --wait
-az provider register --namespace Microsoft.ContainerRegistry --wait
+ensure_provider Microsoft.App
+ensure_provider Microsoft.OperationalInsights
+ensure_provider Microsoft.ContainerRegistry
 
 az group create \
   --name "$AZURE_RESOURCE_GROUP" \

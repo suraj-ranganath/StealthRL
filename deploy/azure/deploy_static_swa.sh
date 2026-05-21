@@ -15,13 +15,33 @@ fi
 
 az account show >/dev/null
 
+ensure_provider() {
+  local namespace="$1"
+  local state
+  state="$(az provider show --namespace "$namespace" --query registrationState -o tsv 2>/dev/null || true)"
+  if [[ "$state" != "Registered" ]]; then
+    az provider register --namespace "$namespace" --output none
+  fi
+
+  for _ in {1..60}; do
+    state="$(az provider show --namespace "$namespace" --query registrationState -o tsv 2>/dev/null || true)"
+    if [[ "$state" == "Registered" ]]; then
+      return 0
+    fi
+    sleep 10
+  done
+
+  echo "Timed out waiting for provider $namespace to register; last state: ${state:-unknown}" >&2
+  return 1
+}
+
 AZURE_RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:-stealthrl-demo-rg}"
 AZURE_STATIC_LOCATION="${AZURE_STATIC_LOCATION:-eastus2}"
 AZURE_STATIC_WEBAPP_NAME="${AZURE_STATIC_WEBAPP_NAME:-stealthrl-demo-web}"
 STEALTHRL_API_BASE_URL="${STEALTHRL_API_BASE_URL:?Set STEALTHRL_API_BASE_URL, e.g. https://<container-app-fqdn>}"
 STATIC_DIST="${STATIC_DIST:-deploy/azure/static_dist}"
 
-az provider register --namespace Microsoft.Web --wait
+ensure_provider Microsoft.Web
 
 az staticwebapp create \
   --name "$AZURE_STATIC_WEBAPP_NAME" \
