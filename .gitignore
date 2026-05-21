@@ -73,6 +73,7 @@ runs/
 .env.local
 .venv-azure/
 .azure-tools/
+.cloudflare-tools/
 
 # Testing
 .pytest_cache/
@@ -104,3 +105,4 @@ report/
 *.sqlite3
 demo/data/
 deploy/azure/static_dist/
+deploy/cloudflare/static_dist/
