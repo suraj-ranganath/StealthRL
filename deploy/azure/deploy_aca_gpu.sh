@@ -44,7 +44,9 @@ AZURE_CONTAINERAPP_NAME="${AZURE_CONTAINERAPP_NAME:-stealthrl-demo-api}"
 AZURE_WORKLOAD_PROFILE_NAME="${AZURE_WORKLOAD_PROFILE_NAME:-gpu-t4}"
 AZURE_IMAGE_NAME="${AZURE_IMAGE_NAME:-stealthrl-demo-gpu}"
 AZURE_IMAGE_TAG="${AZURE_IMAGE_TAG:-$(git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)}"
-STEALTHRL_DEMO_CORS_ORIGINS="${STEALTHRL_DEMO_CORS_ORIGINS:-*}"
+AZURE_CONTAINERAPP_COOLDOWN_PERIOD="${AZURE_CONTAINERAPP_COOLDOWN_PERIOD:-120}"
+AZURE_CONTAINERAPP_POLLING_INTERVAL="${AZURE_CONTAINERAPP_POLLING_INTERVAL:-30}"
+STEALTHRL_DEMO_CORS_ORIGINS="${STEALTHRL_DEMO_CORS_ORIGINS:-https://stealthrl.pages.dev}"
 STEALTHRL_DEMO_PUBLIC_DAILY_LIMIT="${STEALTHRL_DEMO_PUBLIC_DAILY_LIMIT:-20}"
 STEALTHRL_DEMO_PUBLIC_QUOTA_SCOPE="${STEALTHRL_DEMO_PUBLIC_QUOTA_SCOPE:-ip}"
 STEALTHRL_DEMO_MAX_CHARS="${STEALTHRL_DEMO_MAX_CHARS:-5000}"
@@ -144,6 +146,19 @@ else
     --output table
 fi
 
+APP_ID="$(az containerapp show \
+  --name "$AZURE_CONTAINERAPP_NAME" \
+  --resource-group "$AZURE_RESOURCE_GROUP" \
+  --query id \
+  -o tsv)"
+
+az rest \
+  --method patch \
+  --url "https://management.azure.com${APP_ID}?api-version=2026-03-02-preview" \
+  --headers 'Content-Type=application/json' \
+  --body "{\"properties\":{\"template\":{\"scale\":{\"minReplicas\":0,\"maxReplicas\":1,\"cooldownPeriod\":${AZURE_CONTAINERAPP_COOLDOWN_PERIOD},\"pollingInterval\":${AZURE_CONTAINERAPP_POLLING_INTERVAL},\"rules\":null}}}}" \
+  --output none
+
 FQDN="$(az containerapp show \
   --name "$AZURE_CONTAINERAPP_NAME" \
   --resource-group "$AZURE_RESOURCE_GROUP" \
@@ -151,4 +166,4 @@ FQDN="$(az containerapp show \
   -o tsv)"
 
 echo "API URL: https://$FQDN"
-echo "Use this as --api-base-url for deploy_static_swa.sh."
+echo "Use this as STEALTHRL_API_BASE_URL for deploy/cloudflare/deploy_pages.sh."
