@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export PATH="$PWD/.venv-azure/bin:$PWD/.azure-tools/node_modules/.bin:$PATH"
+
 if ! command -v az >/dev/null 2>&1; then
   cat >&2 <<'EOF'
 Azure CLI is required but was not found.
-Install it, then run:
+Install it, or run from the repo root after installing local tooling, then run:
   az login --use-device-code
   az account set --subscription <SUBSCRIPTION_ID_OR_NAME>
 EOF

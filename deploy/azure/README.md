@@ -13,11 +13,12 @@ The GPU app uses `Consumption-GPU-NC8as-T4`, `minReplicas=0`, and `maxReplicas=1
 Install and authenticate:
 
 ```bash
+export PATH="$PWD/.venv-azure/bin:$PWD/.azure-tools/node_modules/.bin:$PATH"
 az login --use-device-code
 az account set --subscription <SUBSCRIPTION_ID_OR_NAME>
-npm install -g @azure/static-web-apps-cli
-az extension add --name containerapp --upgrade
 ```
+
+On this server, Azure CLI is installed locally in `.venv-azure/` and the Static Web Apps CLI is installed locally in `.azure-tools/`. If you are setting up a new machine, install equivalent tools with Azure's official installer and `npm install -g @azure/static-web-apps-cli`, or recreate the local installs.
 
 You also need serverless T4 GPU quota in the target region. Check support with:
 

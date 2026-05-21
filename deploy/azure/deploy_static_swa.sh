@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export PATH="$PWD/.venv-azure/bin:$PWD/.azure-tools/node_modules/.bin:$PATH"
+
 if ! command -v az >/dev/null 2>&1; then
   echo "Azure CLI is required. Install it and run az login first." >&2
   exit 1

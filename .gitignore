@@ -71,6 +71,8 @@ runs/
 # Environment
 .env
 .env.local
+.venv-azure/
+.azure-tools/
 
 # Testing
 .pytest_cache/
