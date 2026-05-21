@@ -151,9 +151,17 @@
         </details>
 
         <div class="feedback-row" id="feedbackRow" hidden>
-          <span>Was this rewrite useful?</span>
-          <button type="button" data-feedback-rating="up" aria-label="Thumbs up">Thumbs up</button>
-          <button type="button" data-feedback-rating="down" aria-label="Thumbs down">Thumbs down</button>
+          <span>Did it preserve meaning and read naturally?</span>
+          <button type="button" data-feedback-rating="up" aria-label="Good output" title="Good output">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M7 10v10H4V10h3Zm3 10h7.2c1.1 0 2-.8 2.2-1.9l1-5.5A2.2 2.2 0 0 0 18.2 10H15V6.8C15 5.3 13.9 4 12.4 4h-.5L10 9.2V20Z" />
+            </svg>
+          </button>
+          <button type="button" data-feedback-rating="down" aria-label="Poor output" title="Poor output">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M7 4v10H4V4h3Zm3 0h7.2c1.1 0 2 .8 2.2 1.9l1 5.5A2.2 2.2 0 0 1 18.2 14H15v3.2c0 1.5-1.1 2.8-2.6 2.8h-.5L10 14.8V4Z" />
+            </svg>
+          </button>
           <strong id="feedbackStatus" aria-live="polite"></strong>
         </div>
       </section>
