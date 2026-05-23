@@ -49,11 +49,22 @@
   at (1.09,3.50) {\resizebox{1.58cm}{!}{1. Data Foundation}\\(Input)};
 
 \node[card, minimum width=1.42cm, minimum height=0.58cm,
-      font=\sffamily\fontsize{4.7}{5.1}\selectfont, align=center, fill=gray!15]
-  (trainData) at (1.09,4.18) {\textbf{Training Data}\\10K samples,\\MAGE};
+      align=center, fill=gray!15]
+  (trainData) at (1.09,4.18)
+  {\resizebox{1.22cm}{!}{\sffamily\begin{tabular}{c}
+    \textbf{Training Data}\\
+    10K samples,\\
+    MAGE
+  \end{tabular}}};
 \node[card, minimum width=1.42cm, minimum height=0.74cm,
-      font=\sffamily\fontsize{4.25}{4.65}\selectfont, align=center, fill=gray!15]
-  (testData) at (1.09,5.05) {\textbf{Test Set}\\(15310 Human+ 14656\\AI, MAGE test set\\filtered)};
+      align=center, fill=gray!15]
+  (testData) at (1.09,5.05)
+  {\resizebox{1.28cm}{!}{\sffamily\begin{tabular}{c}
+    \textbf{Test Set}\\
+    (15310 Human+ 14656\\
+    AI, MAGE test set\\
+    filtered)
+  \end{tabular}}};
 
 % -------------------------------------------------------------------------
 % 2--4. GRPO training loop
@@ -97,27 +108,29 @@
 \draw[arrow] (split) -- (3.825,3.82) -- (detReward.north);
 \draw[arrow] (split) -- (6.285,3.82) -- (semReward.north);
 
-\node[orange, minimum width=2.24cm, minimum height=0.60cm, body] (rewardCombo) at (5.08,6.55)
+\node[orange, minimum width=2.24cm, minimum height=0.58cm, body] (rewardCombo) at (5.08,6.40)
   {\textbf{Multi-objective Reward}\\\textbf{Combination}\\(Stealth + Similarity)};
-\draw[arrow] (detReward.south) -- (3.825,6.36) -- (rewardCombo.west);
-\draw[arrow] (semReward.south) -- (6.285,6.36) -- (rewardCombo.east);
-\node[font=\sffamily\fontsize{6.0}{6.5}\selectfont\bfseries, align=left] at (2.83,6.32)
+\draw[arrow] (detReward.south) -- (3.825,6.16) -- (rewardCombo.west);
+\draw[arrow] (semReward.south) -- (6.285,6.16) -- (rewardCombo.east);
+\node[font=\sffamily\fontsize{4.1}{4.45}\selectfont\bfseries, align=left,
+      anchor=west, text width=0.72cm, fill=gray!5, inner sep=0.55pt] at (2.51,5.58)
   {Reward\\Components};
 
-\node[blue, minimum width=2.24cm, minimum height=0.62cm, body] (grpo) at (5.08,7.43)
+\node[blue, minimum width=2.24cm, minimum height=0.58cm, body] (grpo) at (5.08,7.48)
   {\textbf{GRPO Update}\\(Group Relative Policy\\Optimization)};
 \draw[arrow] (rewardCombo.south) -- (grpo.north);
 
 % Feedback path into LoRA.
-\draw[arrow] (grpo.east) -- (7.58,7.43) -- (7.58,2.32) -- (lora.east);
-\node[font=\sffamily\fontsize{5.6}{6.0}\selectfont\bfseries, align=center] at (7.13,2.91)
+\draw[arrow] (grpo.east) -- (7.58,7.48) -- (7.58,2.32) -- (lora.east);
+\node[font=\sffamily\fontsize{4.75}{5.15}\selectfont\bfseries, align=center,
+      anchor=east, text width=0.82cm, fill=gray!5, inner sep=0.45pt] at (7.32,2.90)
   {Update LoRA\\Weights};
 
 % Data enters the training loop without using held-out labels in the RL loop.
 \draw[arrow] (dataPanel.east) -- (trainPanel.west |- dataPanel.east);
 
 % Compact circular GRPO loop glyph.
-\draw[arrow] (3.12,7.50) arc[start angle=35,end angle=330,radius=0.25cm];
+\draw[arrow] (3.08,7.29) arc[start angle=35,end angle=330,radius=0.17cm];
 
 % -------------------------------------------------------------------------
 % 5. Checkpoint selection and Pareto analysis
@@ -139,14 +152,16 @@
   {\resizebox{2.18cm}{!}{\sffamily\bfseries Pareto Frontier Analysis}\\[-1pt]
    \resizebox{1.48cm}{!}{\sffamily (Stealth vs. Quality)}};
 
-% Mini Pareto plot icon.
-\draw[draw=gray!62, line width=0.48pt, -{Latex[length=1.1mm,width=0.8mm]}]
-  (10.00,3.22) -- (10.00,2.78);
-\draw[draw=gray!62, line width=0.48pt, -{Latex[length=1.1mm,width=0.8mm]}]
-  (10.00,3.22) -- (10.58,3.22);
-\draw[draw=gray!38, line width=0.38pt] (10.04,3.16) -- (10.50,2.82);
-\draw[draw=gray!58, line width=0.50pt, -{Latex[length=1.0mm,width=0.75mm]}]
-  (10.08,3.06) .. controls (10.22,2.89) and (10.42,2.82) .. (10.52,2.88);
+% Mini Pareto plot icon, matching the reference axes plus frontier curves.
+\draw[draw=gray!58, line width=0.50pt, -{Latex[length=1.1mm,width=0.8mm]}]
+  (10.05,3.20) -- (10.05,2.76);
+\draw[draw=gray!58, line width=0.50pt, -{Latex[length=1.1mm,width=0.8mm]}]
+  (10.05,3.20) -- (10.62,3.20);
+\draw[draw=gray!40, line width=0.38pt] (10.09,3.15) -- (10.51,2.81);
+\draw[draw=gray!55, line width=0.50pt, -{Latex[length=1.0mm,width=0.75mm]}]
+  (10.12,3.04) .. controls (10.23,2.86) and (10.43,2.75) .. (10.55,2.82);
+\draw[draw=gray!55, line width=0.50pt, -{Latex[length=1.0mm,width=0.75mm]}]
+  (10.12,2.84) .. controls (10.35,2.94) and (10.51,3.09) .. (10.47,3.18);
 
 % -------------------------------------------------------------------------
 % 6--8. Held-out evaluation, comparisons, and reporting
@@ -169,7 +184,8 @@
     \textbf{6.3 Detectors}\\
     ROBERTa, Fast-DetectGPT, Binocular, MAGE
   \end{tabular}}};
-\node[boxtitle] at (13.09,3.60) {6.4 Metrics};
+\node[align=center] at (13.09,3.60)
+  {\resizebox{0.72cm}{!}{\sffamily\textbf{6.4 Metrics}}};
 \node[card, minimum width=3.52cm, minimum height=0.28cm, fill=gray!15] at (13.09,3.88)
   {\resizebox{3.26cm}{!}{\sffamily\textbf{Evasion:} AUROC, TPR@1\% FPR, TPR@5\% FPR, ASR}};
 \node[card, minimum width=3.52cm, minimum height=0.28cm, fill=gray!15] at (13.09,4.23)
