@@ -1,75 +1,205 @@
 \begin{tikzpicture}[
+  x=1cm,
+  y=-1cm,
   font=\sffamily,
-  node distance=10mm and 13mm,
-  box/.style={
+  >=Latex,
+  outer/.style={
     rectangle,
-    rounded corners=2pt,
-    draw=black!55,
-    very thick,
+    rounded corners=5pt,
+    draw=gray!72!black,
+    line width=0.70pt,
+    fill=gray!5,
+    inner sep=0pt
+  },
+  card/.style={
+    rectangle,
+    rounded corners=4pt,
+    draw=gray!72!black,
+    line width=0.60pt,
+    fill=gray!12,
     align=center,
-    minimum height=8mm,
-    text width=28mm,
-    fill=white
+    inner sep=1.4pt
   },
-  smallbox/.style={
-    rectangle,
-    rounded corners=2pt,
-    draw=black!50,
-    thick,
-    align=center,
-    minimum height=7mm,
-    text width=25mm,
-    fill=white
-  },
-  groupbox/.style={
-    rectangle,
-    rounded corners=3pt,
-    draw=black!30,
-    thick,
-    inner sep=4mm,
-    fill=black!2
-  },
-  arrow/.style={-{Latex[length=2.5mm]}, very thick, draw=black!65},
-  reward/.style={-{Latex[length=2.3mm]}, thick, draw=teal!70!black},
-  evalarrow/.style={-{Latex[length=2.5mm]}, very thick, draw=orange!80!black}
+  blue/.style={card, fill=cyan!11},
+  orange/.style={card, fill=orange!18},
+  arrow/.style={-{Latex[length=1.9mm,width=1.35mm]}, draw=black!90, line width=0.78pt},
+  line/.style={draw=black!90, line width=0.78pt},
+  bus/.style={draw=black!90, line width=0.86pt},
+  faintline/.style={draw=gray!55, line width=0.45pt},
+  title/.style={font=\sffamily\Large\bfseries, align=center},
+  paneltitle/.style={font=\sffamily\fontsize{8.0}{8.8}\selectfont\bfseries, align=center},
+  boxtitle/.style={font=\sffamily\fontsize{6.2}{6.8}\selectfont\bfseries, align=center},
+  body/.style={font=\sffamily\fontsize{5.7}{6.2}\selectfont, align=center},
+  tiny/.style={font=\sffamily\fontsize{4.8}{5.2}\selectfont, align=center},
+  righttiny/.style={font=\sffamily\fontsize{3.85}{4.25}\selectfont, align=center}
 ]
 
-\node[box, fill=blue!8] (data) {MAGE train\\AI text};
-\node[box, fill=green!8, right=of data] (policy) {Qwen3-4B\\LoRA policy};
-\node[box, fill=green!8, right=of policy] (samples) {GRPO group\\paraphrases};
+\path[use as bounding box] (0,0) rectangle (15.12,8.14);
 
-\node[smallbox, fill=red!7, above right=8mm and 10mm of samples] (roberta) {RoBERTa\\score};
-\node[smallbox, fill=red!7, below=4mm of roberta] (fast) {Fast-DetectGPT\\score};
-\node[smallbox, fill=teal!8, below right=8mm and 10mm of samples] (e5) {E5 semantic\\similarity};
-\node[box, fill=yellow!12, right=17mm of samples] (reward) {Composite reward\\$R=\alpha R_{\rm det}+\beta R_{\rm sem}$};
-\node[box, fill=green!12, right=of reward] (update) {GRPO update\\single policy};
+% -------------------------------------------------------------------------
+% Title
+% -------------------------------------------------------------------------
+\node[title] at (7.56,0.32) {StealthRL Pipeline};
 
-\node[box, fill=purple!8, below=16mm of update] (evalpolicy) {Final StealthRL\\paraphraser};
-\node[smallbox, fill=orange!10, left=of evalpolicy] (evaldata) {Filtered MAGE\\test pool};
-\node[box, fill=orange!10, right=of evalpolicy] (evaldet) {Evaluation detectors\\RoBERTa, Fast-DetectGPT\\Binoculars, MAGE};
-\node[box, fill=gray!8, right=of evaldet] (metrics) {Metrics\\TPR@1\%/5\% FPR\\AUROC, ASR, quality};
+% -------------------------------------------------------------------------
+% 1. Data foundation
+% -------------------------------------------------------------------------
+\node[outer, minimum width=1.78cm, minimum height=2.33cm] (dataPanel) at (1.09,4.365) {};
+\node[font=\sffamily\fontsize{5.2}{5.8}\selectfont\bfseries, align=center, text width=1.66cm]
+  at (1.09,3.50) {\resizebox{1.58cm}{!}{1. Data Foundation}\\(Input)};
 
-\node[groupbox, fit=(data)(policy)(samples)(roberta)(fast)(e5)(reward)(update), label={[font=\bfseries\sffamily]above:Offline RL training}] {};
-\node[groupbox, fit=(evaldata)(evalpolicy)(evaldet)(metrics), label={[font=\bfseries\sffamily]below:Held-out robustness evaluation}] {};
+\node[card, minimum width=1.42cm, minimum height=0.58cm,
+      font=\sffamily\fontsize{4.7}{5.1}\selectfont, align=center, fill=gray!15]
+  (trainData) at (1.09,4.18) {\textbf{Training Data}\\10K samples,\\MAGE};
+\node[card, minimum width=1.42cm, minimum height=0.74cm,
+      font=\sffamily\fontsize{4.25}{4.65}\selectfont, align=center, fill=gray!15]
+  (testData) at (1.09,5.05) {\textbf{Test Set}\\(15310 Human+ 14656\\AI, MAGE test set\\filtered)};
 
-\draw[arrow] (data) -- (policy);
-\draw[arrow] (policy) -- (samples);
-\draw[reward] (samples) -- (roberta);
-\draw[reward] (samples) -- (fast);
-\draw[reward] (samples) -- (e5);
-\draw[reward] (roberta.east) -- (reward.north west);
-\draw[reward] (fast.east) -- (reward.west);
-\draw[reward] (e5.east) -- (reward.south west);
-\draw[arrow] (reward) -- (update);
-\draw[arrow] (update.south) -- (evalpolicy.north);
+% -------------------------------------------------------------------------
+% 2--4. GRPO training loop
+% -------------------------------------------------------------------------
+\node[outer, minimum width=5.54cm, minimum height=6.86cm] (trainPanel) at (5.04,4.50) {};
+\node[paneltitle] at (5.04,1.32) {4. GRPO Training Loop (3 Epochs)};
 
-\draw[evalarrow] (evaldata) -- (evalpolicy);
-\draw[evalarrow] (evalpolicy) -- (evaldet);
-\draw[evalarrow] (evaldet) -- (metrics);
+\node[blue, minimum width=3.10cm, minimum height=1.18cm] (arch) at (5.03,2.17) {};
+\node[boxtitle] at (5.03,1.78) {2. Model Architecture (Actor)};
+\node[card, minimum width=1.78cm, minimum height=0.64cm, body, fill=white] (base) at (4.49,2.32)
+  {\resizebox{1.52cm}{!}{\sffamily\textbf{Qwen3-4B-Instruct}}\\(Base)};
+\node[card, minimum width=0.98cm, minimum height=0.64cm, body, fill=white] (lora) at (5.94,2.32)
+  {\textbf{LoRA}\\(Rank 32)};
 
-\node[align=center, font=\footnotesize\sffamily, text width=44mm, below=3mm of samples] (note1)
-  {Training uses only RoBERTa and Fast-DetectGPT rewards.};
-\node[align=center, font=\footnotesize\sffamily, text width=46mm, above=3mm of evaldet] (note2)
-  {Binoculars and MAGE are held out until evaluation.};
+\node[blue, minimum width=1.85cm, minimum height=0.49cm, body] (gen) at (5.03,3.335)
+  {\textbf{3. Generate Paraphrases}\\(Batch size 16)};
+\draw[arrow] (arch.south) -- (gen.north);
+
+\node[draw=gray!65, dashed, dash pattern=on 4pt off 4pt, rounded corners=5pt,
+      line width=0.55pt, minimum width=5.08cm, minimum height=2.15cm,
+      fill=none] (rewardFrame) at (4.94,4.965) {};
+
+\node[orange, minimum width=1.39cm, minimum height=1.80cm] (detReward) at (3.825,5.00) {};
+\node[boxtitle] at (3.825,4.38) {Detector\\Ensemble};
+\node[card, minimum width=0.95cm, minimum height=0.18cm, tiny, fill=orange!7, rounded corners=2pt]
+  at (3.825,4.86) {Fast-DetectGPT};
+\node[card, minimum width=0.72cm, minimum height=0.18cm, tiny, fill=orange!7, rounded corners=2pt]
+  at (3.825,5.12) {RoBERTa};
+\draw[faintline, -{Latex[length=1.2mm,width=0.9mm]}] (3.825,5.28) -- (3.825,5.50);
+\node[boxtitle] at (3.825,5.67) {Detection\\Score (Avg)};
+
+\node[orange, minimum width=1.39cm, minimum height=1.80cm] (semReward) at (6.285,5.00) {};
+\node[boxtitle] at (6.285,4.38) {Semantic\\Similarity};
+\node[card, minimum width=0.62cm, minimum height=0.30cm, body, fill=orange!7, rounded corners=2pt]
+  at (6.285,5.10) {E5};
+\draw[faintline, -{Latex[length=1.2mm,width=0.9mm]}] (6.285,5.31) -- (6.285,5.52);
+\node[boxtitle] at (6.285,5.69) {Similarity\\Score};
+
+\coordinate (split) at (5.03,3.82);
+\draw[line] (gen.south) -- (split);
+\draw[arrow] (split) -- (3.825,3.82) -- (detReward.north);
+\draw[arrow] (split) -- (6.285,3.82) -- (semReward.north);
+
+\node[orange, minimum width=2.24cm, minimum height=0.60cm, body] (rewardCombo) at (5.08,6.55)
+  {\textbf{Multi-objective Reward}\\\textbf{Combination}\\(Stealth + Similarity)};
+\draw[arrow] (detReward.south) -- (3.825,6.36) -- (rewardCombo.west);
+\draw[arrow] (semReward.south) -- (6.285,6.36) -- (rewardCombo.east);
+\node[font=\sffamily\fontsize{6.0}{6.5}\selectfont\bfseries, align=left] at (2.83,6.32)
+  {Reward\\Components};
+
+\node[blue, minimum width=2.24cm, minimum height=0.62cm, body] (grpo) at (5.08,7.43)
+  {\textbf{GRPO Update}\\(Group Relative Policy\\Optimization)};
+\draw[arrow] (rewardCombo.south) -- (grpo.north);
+
+% Feedback path into LoRA.
+\draw[arrow] (grpo.east) -- (7.58,7.43) -- (7.58,2.32) -- (lora.east);
+\node[font=\sffamily\fontsize{5.6}{6.0}\selectfont\bfseries, align=center] at (7.13,2.91)
+  {Update LoRA\\Weights};
+
+% Data enters the training loop without using held-out labels in the RL loop.
+\draw[arrow] (dataPanel.east) -- (trainPanel.west |- dataPanel.east);
+
+% Compact circular GRPO loop glyph.
+\draw[arrow] (3.12,7.50) arc[start angle=35,end angle=330,radius=0.25cm];
+
+% -------------------------------------------------------------------------
+% 5. Checkpoint selection and Pareto analysis
+% -------------------------------------------------------------------------
+\node[diamond, aspect=1.0, draw=gray!72!black, line width=0.70pt, fill=cyan!11,
+      align=center, inner sep=1pt, text width=0.90cm,
+      font=\sffamily\fontsize{4.85}{5.25}\selectfont\bfseries] (ckpt) at (8.65,4.55)
+  {5.\\[-1pt]\resizebox{0.78cm}{!}{Checkpoint}\\[-1pt]\resizebox{0.68cm}{!}{Selection}};
+\draw[arrow] (trainPanel.east |- ckpt.west) -- (ckpt.west);
+
+\node[blue, minimum width=1.17cm, minimum height=0.90cm,
+      font=\sffamily\fontsize{4.55}{4.95}\selectfont\bfseries, align=center,
+      text width=1.14cm] (selected) at (10.215,4.59)
+  {Selected\\Checkpoint\\(Final StealthRL\\Model)};
+\draw[arrow] (ckpt.east) -- (selected.west);
+
+\draw[arrow] (ckpt.north) -- (8.65,3.05) -- (9.84,3.05);
+\node[align=center] at (9.36,2.58)
+  {\resizebox{2.18cm}{!}{\sffamily\bfseries Pareto Frontier Analysis}\\[-1pt]
+   \resizebox{1.48cm}{!}{\sffamily (Stealth vs. Quality)}};
+
+% Mini Pareto plot icon.
+\draw[draw=gray!62, line width=0.48pt, -{Latex[length=1.1mm,width=0.8mm]}]
+  (10.00,3.22) -- (10.00,2.78);
+\draw[draw=gray!62, line width=0.48pt, -{Latex[length=1.1mm,width=0.8mm]}]
+  (10.00,3.22) -- (10.58,3.22);
+\draw[draw=gray!38, line width=0.38pt] (10.04,3.16) -- (10.50,2.82);
+\draw[draw=gray!58, line width=0.50pt, -{Latex[length=1.0mm,width=0.75mm]}]
+  (10.08,3.06) .. controls (10.22,2.89) and (10.42,2.82) .. (10.52,2.88);
+
+% -------------------------------------------------------------------------
+% 6--8. Held-out evaluation, comparisons, and reporting
+% -------------------------------------------------------------------------
+\node[outer, minimum width=3.78cm, minimum height=3.52cm] (evalPanel) at (13.09,2.83) {};
+\node[paneltitle] at (13.09,1.25) {6. Evaluation (Test Set)};
+\node[card, minimum width=3.52cm, minimum height=0.46cm, fill=gray!15] at (13.09,1.67)
+  {\resizebox{3.22cm}{!}{\sffamily\begin{tabular}{c}
+    \textbf{6.1 Dataset}\\
+    MAGE test set filtered, 15310 Human + 14656 AI)
+  \end{tabular}}};
+\node[card, minimum width=3.52cm, minimum height=0.76cm, fill=gray!15] at (13.09,2.32)
+  {\resizebox{3.34cm}{!}{\sffamily\begin{tabular}{c}
+    \textbf{6.2 Attack Methods (M0-M5)}\\
+    M0: No Attack, M1: Simple Paraphrase, M2: StealthRL,\\
+    M3: Adv. Paraphrasing, M4: Authormist, M5: Homoglyph
+  \end{tabular}}};
+\node[card, minimum width=3.52cm, minimum height=0.54cm, fill=gray!15] at (13.09,3.08)
+  {\resizebox{3.18cm}{!}{\sffamily\begin{tabular}{c}
+    \textbf{6.3 Detectors}\\
+    ROBERTa, Fast-DetectGPT, Binocular, MAGE
+  \end{tabular}}};
+\node[boxtitle] at (13.09,3.60) {6.4 Metrics};
+\node[card, minimum width=3.52cm, minimum height=0.28cm, fill=gray!15] at (13.09,3.88)
+  {\resizebox{3.26cm}{!}{\sffamily\textbf{Evasion:} AUROC, TPR@1\% FPR, TPR@5\% FPR, ASR}};
+\node[card, minimum width=3.52cm, minimum height=0.28cm, fill=gray!15] at (13.09,4.23)
+  {\resizebox{1.35cm}{!}{\sffamily\textbf{Quality:} E5, Edit Rate}};
+
+\node[outer, minimum width=3.78cm, minimum height=1.40cm] (compPanel) at (13.09,5.40) {};
+\node[paneltitle] at (13.09,4.88) {7. Comparisons};
+\node[card, minimum width=3.52cm, minimum height=0.24cm, fill=gray!15] at (13.09,5.20)
+  {\resizebox{2.25cm}{!}{\sffamily\textbf{StealthRL vs. Simple (M2 vs M1)}}};
+\node[card, minimum width=3.52cm, minimum height=0.24cm, fill=gray!15] at (13.09,5.55)
+  {\resizebox{3.18cm}{!}{\sffamily\textbf{StealthRL vs. Strong Baselines (M2 vs M3/M4/M5)}}};
+\node[card, minimum width=3.52cm, minimum height=0.24cm, fill=gray!15] at (13.09,5.90)
+  {\resizebox{1.70cm}{!}{\sffamily\textbf{No-Attack Reference (M0)}}};
+
+\node[outer, minimum width=3.78cm, minimum height=1.73cm] (resultPanel) at (13.09,7.065) {};
+\node[paneltitle] at (13.09,6.44) {8. Results \& Analysis};
+\node[card, minimum width=3.52cm, minimum height=0.22cm, fill=gray!15] at (13.09,6.77)
+  {\resizebox{1.45cm}{!}{\sffamily Detector wise Metrics}};
+\node[card, minimum width=3.52cm, minimum height=0.22cm, fill=gray!15] at (13.09,7.08)
+  {\resizebox{1.78cm}{!}{\sffamily Attack-wise Metrics (M0-M5)}};
+\node[card, minimum width=3.52cm, minimum height=0.22cm, fill=gray!15] at (13.09,7.39)
+  {\resizebox{1.08cm}{!}{\sffamily Pareto Frontiers}};
+\node[card, minimum width=3.52cm, minimum height=0.22cm, fill=gray!15] at (13.09,7.70)
+  {\resizebox{1.80cm}{!}{\sffamily Final Metrics \& Checkpoints}};
+
+% Selected checkpoint routes into a vertical bus, which branches to all right panels.
+\draw[bus, rounded corners=3pt] (selected.east) -- (11.00,4.59) -- (11.00,2.55);
+\draw[bus] (11.00,2.55) -- (11.00,6.80);
+\draw[arrow] (11.00,2.55) -- (11.20,2.55);
+\draw[arrow] (11.00,5.30) -- (11.20,5.30);
+\draw[arrow] (11.00,6.80) -- (11.20,6.80);
 
 \end{tikzpicture}
