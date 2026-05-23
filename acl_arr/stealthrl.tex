@@ -10,7 +10,7 @@
 
 \usepackage{graphicx}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,fit}
+\usetikzlibrary{arrows.meta,positioning,fit,shapes.geometric}
 \usepackage{booktabs}
 \usepackage{tabularx}
 \usepackage{multirow}
@@ -216,6 +216,8 @@ We compare six attack settings:
 StealthRL fine-tunes Qwen3-4B-Instruct with LoRA adapters (rank 32, LoRA $\alpha=32$, dropout 0.05) for 3 epochs on 10,000 AI-generated MAGE training samples. GRPO uses batch size 16, group size 8, learning rate $2.8 \times 10^{-4}$, maximum 512 generated tokens, and KL coefficient $\lambda_{\text{KL}}=0.05$ against the frozen reference policy. The inference prompt is \texttt{``Paraphrase the following text while preserving its meaning: [TEXT]''}; decoding uses temperature 1.0 and top-p 0.9.
 
 The training reward uses RoBERTa and Fast-DetectGPT because they expose complementary detector signals while remaining fast enough for repeated reward calls inside GRPO. Binoculars and MAGE are excluded from training and reserved for held-out transfer evaluation. This design makes the evaluation stricter, but it also means our training ensemble is not exhaustive; scaling RL to larger and slower detector panels remains future work.
+
+Appendix~\ref{app:ablations} reports the small-subset ablations used for model selection. These ablations were run on a 1,000-human / 1,000-AI MAGE selection subset and were used to choose the final reward setting before full-test evaluation; all main results in Section~\ref{sec:results} are recomputed on the full filtered MAGE test pool.
 
 \subsection{Evaluation Metrics}
 
@@ -530,6 +532,57 @@ Seed & 42 \\
 \captionof{table}{Complete hyperparameters and configuration for reproducibility.}
 \label{tab:hyperparams}
 \end{center}
+
+\FloatBarrier
+\section{Model-Selection Ablations}
+\label{app:ablations}
+
+The main results use the full filtered MAGE test pool (15,310 human / 14,656 AI). Before running that expensive evaluation, we used smaller ablations for model selection. These ablations are diagnostic: they use smaller subsets, fewer detectors, or training-dashboard metrics, and are therefore not directly comparable to the full-test numbers in Tables~\ref{tab:app_main_binoc}--\ref{tab:app_main_part2}.
+
+Table~\ref{tab:reward_ablation} reports the initial reward-weight sweep. All runs use RoBERTa and Fast-DetectGPT as the training detectors and are evaluated with the training-loop detector score rather than the final low-FPR detector panel. The sweep identifies $\alpha{=}1.0,\beta{=}0.1$ as the best balanced setting: it has the lowest detector probability and highest evasion rate while retaining high E5 similarity. Increasing the semantic weight to 0.3 does not improve fidelity and weakens evasion, while removing detector reward makes the objective less aligned with the attack goal.
+
+\begin{table*}[t]
+\centering
+\small
+\setlength{\tabcolsep}{6pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Reward setting} & \textbf{Detector prob.} & \textbf{Evasion rate} & \textbf{E5 Sim.} & \textbf{Total reward} \\
+\midrule
+$\alpha{=}1.0,\beta{=}0.0$ & 0.331 & 0.669 & 0.978 & -0.136 \\
+$\alpha{=}1.0,\beta{=}0.1$ (selected) & 0.226 & 0.774 & 0.970 & 0.127 \\
+$\alpha{=}1.0,\beta{=}0.3$ & 0.327 & 0.673 & 0.968 & 0.200 \\
+$\alpha{=}0.0,\beta{=}1.0$ & 0.359 & 0.641 & 0.964 & 0.970 \\
+\bottomrule
+\end{tabular}
+}
+\caption{Training-time reward-weight ablation on the small MAGE development setup. Detector probability is the mean training-ensemble probability of AI generation, so lower detector probability and higher evasion rate are better for the attacker. This diagnostic sweep selected the nonzero but small semantic weight $\beta{=}0.1$.}
+\label{tab:reward_ablation}
+\end{table*}
+
+Table~\ref{tab:ablation_selection} reports the later checkpoint-selection evaluation on a fixed 1,000-human / 1,000-AI MAGE selection set. This pass uses the same low-FPR calibration procedure as the main evaluation, but only three detectors (RoBERTa, Fast-DetectGPT, and Binoculars); MAGE was kept for the final full-panel evaluation. The selected $\alpha{=}1.0,\beta{=}0.1$ checkpoint improves low-FPR evasion and generation quality relative to the no-semantic-reward checkpoint, and the replicate shows the same quality-preserving trend.
+
+\begin{table*}[t]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Selection run} & \textbf{Mean AUROC} & \textbf{Mean TPR@1\%FPR} & \textbf{Mean ASR} & \textbf{E5 Sim.} & \textbf{PPL} & \textbf{Judge quality} \\
+\midrule
+No semantic reward / low-fidelity checkpoint & 0.460 & 0.089 & 0.911 & 0.909 & 91.5 & 1.63 \\
+$\alpha{=}1.0,\beta{=}0.1$ (selected) & 0.546 & 0.050 & 0.950 & 0.973 & 31.7 & 4.10 \\
+$\alpha{=}1.0,\beta{=}0.1$ (replicate) & 0.554 & 0.063 & 0.937 & 0.974 & 30.5 & -- \\
+\bottomrule
+\end{tabular}
+}
+\caption{Checkpoint-selection ablations on a fixed 1,000-human / 1,000-AI MAGE selection set. Metrics are averaged across RoBERTa, Fast-DetectGPT, and Binoculars; lower AUROC and TPR are better for the attacker, while higher ASR and quality metrics are better. The full paper results are recomputed separately on the full filtered MAGE test pool.}
+\label{tab:ablation_selection}
+\end{table*}
+
+We also ran a candidate-budget sweep for the selected M2 policy. Increasing candidates from 1 to 2, 4, and 8 raised mean ASR from 0.997 to 1.000 on the small selection setup, while E5 similarity remained in a narrow 0.898--0.904 band. We therefore report the stricter single-shot setting in the main paper: one generation per input, with no test-time detector-guided search or reranking.
 
 \FloatBarrier
 \section{Per-Detector Results with Confidence Intervals}
