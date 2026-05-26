@@ -1,4 +1,4 @@
-\begin{thebibliography}{23}
+\begin{thebibliography}{28}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -58,6 +58,12 @@ Abhimanyu Hans, Avi Schwarzschild, Valeriia Cherepanova, Hamid Kazemi,
 \newblock Spotting llms with binoculars: Zero-shot detection of
   machine-generated text, 2024.
 \newblock URL \url{https://arxiv.org/abs/2401.12070}.
+
+\bibitem[He et~al.(2021)He, Liu, Gao, and Chen]{he2021deberta}
+Pengcheng He, Xiaodong Liu, Jianfeng Gao, and Weizhu Chen.
+\newblock {DeBERTa}: Decoding-enhanced {BERT} with disentangled attention.
+\newblock In \emph{International Conference on Learning Representations}, 2021.
+\newblock URL \url{https://openreview.net/forum?id=XPZIaotutsD}.
 
 \bibitem[Hu et~al.(2021)Hu, Shen, Wallis, Allen-Zhu, Li, Wang, Wang, and
   Chen]{hu2021loralowrankadaptationlarge}
@@ -125,6 +131,16 @@ Lei Pang and Ruinan Jin.
   with fast convergence, 2025.
 \newblock URL \url{https://arxiv.org/abs/2508.02833}.
 
+\bibitem[Park et~al.(2025)Park, Kim, Kim, and Han]{park-etal-2025-katfishnet}
+Shinwoo Park, Shubin Kim, Do-Kyung Kim, and Yo-Sub Han.
+\newblock {K}at{F}ish{N}et: Detecting {LLM}-generated {K}orean text through
+  linguistic feature analysis.
+\newblock In \emph{Proceedings of the 63rd Annual Meeting of the Association
+  for Computational Linguistics (Volume 1: Long Papers)}, pages 21189--21222,
+  Vienna, Austria, July 2025. Association for Computational Linguistics.
+\newblock \doi{10.18653/v1/2025.acl-long.1030}.
+\newblock URL \url{https://aclanthology.org/2025.acl-long.1030/}.
+
 \bibitem[Sadasivan et~al.(2023)Sadasivan, Kumar, Balasubramanian, Wang, and
   Feizi]{sadasivan2023aigenerated}
 Vinu~Sankar Sadasivan, Aounon Kumar, Sriram Balasubramanian, Wenxiao Wang, and
@@ -153,6 +169,24 @@ Irene Solaiman, Miles Brundage, Jack Clark, Amanda Askell, Ariel Herbert-Voss,
 \newblock Release strategies and the social impacts of language models, 2019.
 \newblock URL \url{https://arxiv.org/abs/1908.09203}.
 
+\bibitem[Tufts et~al.(2025)Tufts, Zhao, and Li]{tufts-etal-2025-practical}
+Brian Tufts, Xuandong Zhao, and Lei Li.
+\newblock A practical examination of {AI}-generated text detectors for large
+  language models.
+\newblock In \emph{Findings of the Association for Computational Linguistics:
+  NAACL 2025}, pages 4839--4856, Albuquerque, New Mexico, April 2025.
+  Association for Computational Linguistics.
+\newblock \doi{10.18653/v1/2025.findings-naacl.271}.
+\newblock URL \url{https://aclanthology.org/2025.findings-naacl.271/}.
+
+\bibitem[{Turnitin}(2023)]{turnitin2023falsepositives}
+{Turnitin}.
+\newblock Understanding false positives within our {AI} writing detection
+  capabilities, 2023.
+\newblock URL
+  \url{https://www.turnitin.com/blog/understanding-false-positives-within-our-ai-writing-detection-capabilities}.
+\newblock Accessed 2026-05-19.
+
 \bibitem[Vu et~al.(2024)Vu, Krishna, Alzubi, Tar, Faruqui, and
   Sung]{vu2024foundationalautoraters}
 Tu~Vu, Kalpesh Krishna, Salaheddin Alzubi, Chris Tar, Manaal Faruqui, and
@@ -167,5 +201,12 @@ Liang Wang, Nan Yang, Xiaolong Huang, Binxing Jiao, Linjun Yang, Daxin Jiang,
   Rangan Majumder, and Furu Wei.
 \newblock Text embeddings by weakly-supervised contrastive pre-training, 2022.
 \newblock URL \url{https://arxiv.org/abs/2212.03533}.
+
+\bibitem[Zhang et~al.(2020)Zhang, Kishore, Wu, Weinberger, and
+  Artzi]{zhang2020bertscore}
+Tianyi Zhang, Varsha Kishore, Felix Wu, Kilian~Q. Weinberger, and Yoav Artzi.
+\newblock {BERTScore}: Evaluating text generation with {BERT}.
+\newblock In \emph{International Conference on Learning Representations}, 2020.
+\newblock URL \url{https://openreview.net/forum?id=SkeHuCVFDr}.
 
 \end{thebibliography}

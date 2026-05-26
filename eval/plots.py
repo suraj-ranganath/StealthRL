@@ -28,10 +28,10 @@ def _apply_paper_style():
     global _STYLE_APPLIED
     if _STYLE_APPLIED:
         return
-    
+
     import matplotlib as mpl
     import seaborn as sns
-    
+
     sns.set_theme(
         context="paper",
         style="whitegrid",
@@ -737,7 +737,7 @@ def create_method_comparison_summary(
     method_col: str = "method",
     detector_col: str = "detector",
     output_path: str = None,
-    figsize: Tuple[int, int] = (14, 8),
+    figsize: Tuple[int, int] = (10, 7),
 ) -> None:
     """
     Create comprehensive method comparison figure (AuthorMist-style).
@@ -752,58 +752,106 @@ def create_method_comparison_summary(
     import matplotlib.pyplot as plt
     
     fig, axes = plt.subplots(2, 2, figsize=figsize)
-    
-    methods = data[method_col].unique()
-    detectors = data[detector_col].unique()
+    fig.set_tight_layout(False)
+
+    plot_data = data.copy()
+    if "ghostbuster" in set(plot_data[detector_col]) and "roberta" in set(plot_data[detector_col]):
+        # Ghostbuster was removed from the paper; older metric artifacts retain it as a
+        # duplicate RoBERTa-style detector, so keep the plotted panel aligned with the paper.
+        plot_data = plot_data[plot_data[detector_col] != "ghostbuster"]
+
+    method_rank = {method: idx for idx, method in enumerate(METHOD_ORDER)}
+    detector_rank = {
+        "binoculars": 0,
+        "fast_detectgpt": 1,
+        "mage": 2,
+        "roberta": 3,
+    }
+    methods = sorted(plot_data[method_col].unique(), key=lambda m: method_rank.get(_canonical_method(m), 999))
+    detectors = sorted(plot_data[detector_col].unique(), key=lambda d: detector_rank.get(d, 999))
+
+    method_labels = {
+        "m0": "M0 No attack",
+        "m1": "M1 Simple",
+        "m2": "M2 StealthRL",
+        "m3": "M3 Adv. para.",
+        "m4": "M4 AuthorMist",
+        "m5": "M5 Homoglyph",
+    }
+    detector_labels = {
+        "binoculars": "Binoculars",
+        "fast_detectgpt": "Fast-DetectGPT",
+        "mage": "MAGE",
+        "roberta": "RoBERTa",
+    }
     
     # Panel 1: AUROC grouped bars
     ax1 = axes[0, 0]
     x = np.arange(len(detectors))
     width = 0.8 / len(methods)
+    legend_handles = []
+    legend_labels = []
     
     for i, method in enumerate(methods):
-        method_data = data[data[method_col] == method]
-        aurocs = [method_data[method_data[detector_col] == d]['auroc'].values[0] 
-                  if len(method_data[method_data[detector_col] == d]) > 0 else np.nan 
-                  for d in detectors]
-        color = COLORS.get(method, f"C{i}")
+        method_data = plot_data[plot_data[method_col] == method]
+        aurocs = [
+            method_data.loc[method_data[detector_col] == d, "auroc"].values[0]
+            if len(method_data.loc[method_data[detector_col] == d]) > 0 else np.nan
+            for d in detectors
+        ]
+        canon = _canonical_method(method)
+        color = COLORS.get(canon, COLORS.get(method, f"C{i}"))
         offset = (i - len(methods)/2 + 0.5) * width
-        ax1.bar(x + offset, aurocs, width, label=METHOD_NAMES.get(method, method), color=color)
+        bars = ax1.bar(
+            x + offset,
+            aurocs,
+            width,
+            label=method_labels.get(canon, METHOD_NAMES.get(method, method)),
+            color=color,
+        )
+        legend_handles.append(bars[0])
+        legend_labels.append(method_labels.get(canon, METHOD_NAMES.get(method, method)))
     
-    ax1.axhline(y=0.5, color='red', linestyle='--', alpha=0.7)
-    ax1.set_ylabel('AUROC')
-    ax1.set_title('(a) AUROC by Detector', fontweight='bold')
+    ax1.axhline(y=0.5, color="gray", linestyle="--", alpha=0.75, linewidth=1.0)
+    ax1.set_ylabel("AUROC")
+    ax1.set_title("(a) AUROC by detector", fontweight="bold", pad=9)
     ax1.set_xticks(x)
     ax1.set_xticklabels(
-        [_pretty_detector_name(d).replace(' ', '\n') for d in detectors],
-        rotation=45,
+        [detector_labels.get(d, _pretty_detector_name(d)) for d in detectors],
+        rotation=15,
         ha='right',
         fontsize=10,
     )
-    ax1.legend(fontsize=10, ncol=2)
     ax1.set_ylim(0, 1.05)
-    
+
     # Panel 2: Mean AUROC with error bars
     ax2 = axes[0, 1]
-    mean_aurocs = data.groupby(method_col)['auroc'].agg(['mean', 'std']).reset_index()
+    mean_aurocs = plot_data.groupby(method_col)["auroc"].agg(["mean", "std"]).reset_index()
     mean_aurocs = mean_aurocs.sort_values(by=method_col, key=lambda s: s.map(_method_rank))
     x2 = np.arange(len(mean_aurocs))
-    colors = [COLORS.get(m, f"C{i}") for i, m in enumerate(mean_aurocs[method_col])]
-    
-    bars = ax2.bar(x2, mean_aurocs['mean'], yerr=mean_aurocs['std'], capsize=5,
-                   color=colors, edgecolor='black', linewidth=0.5)
-    ax2.axhline(y=0.5, color='red', linestyle='--', alpha=0.7, label='Random')
-    ax2.set_ylabel('Mean AUROC ± std')
-    ax2.set_title('(b) Mean AUROC Across Detectors', fontweight='bold')
+    colors = [COLORS.get(_canonical_method(m), COLORS.get(m, f"C{i}")) for i, m in enumerate(mean_aurocs[method_col])]
+
+    bars = ax2.bar(
+        x2,
+        mean_aurocs["mean"],
+        yerr=mean_aurocs["std"],
+        capsize=5,
+        color=colors,
+        edgecolor="black",
+        linewidth=0.5,
+    )
+    ax2.axhline(y=0.5, color="gray", linestyle="--", alpha=0.75, linewidth=1.0)
+    ax2.set_ylabel("Mean AUROC")
+    ax2.set_title("(b) Mean AUROC", fontweight="bold", pad=9)
     ax2.set_xticks(x2)
     ax2.set_xticklabels(
-        [METHOD_NAMES.get(m, m).replace(' ', '\n') for m in mean_aurocs[method_col]],
+        [_canonical_method(m).upper() for m in mean_aurocs[method_col]],
         fontsize=10,
     )
     ax2.set_ylim(0, 1.05)
     
     # Add value labels
-    for bar, val in zip(bars, mean_aurocs['mean']):
+    for bar, val in zip(bars, mean_aurocs["mean"]):
         ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02,
                  f'{val:.2f}', ha='center', fontsize=10, fontweight='bold')
     
@@ -811,20 +859,23 @@ def create_method_comparison_summary(
     ax3 = axes[1, 0]
     
     for i, method in enumerate(methods):
-        method_data = data[data[method_col] == method]
-        tprs = [method_data[method_data[detector_col] == d]['tpr_at_1fpr'].values[0] 
-                if len(method_data[method_data[detector_col] == d]) > 0 else np.nan 
-                for d in detectors]
-        color = COLORS.get(method, f"C{i}")
+        method_data = plot_data[plot_data[method_col] == method]
+        tprs = [
+            method_data.loc[method_data[detector_col] == d, "tpr_at_1fpr"].values[0]
+            if len(method_data.loc[method_data[detector_col] == d]) > 0 else np.nan
+            for d in detectors
+        ]
+        canon = _canonical_method(method)
+        color = COLORS.get(canon, COLORS.get(method, f"C{i}"))
         offset = (i - len(methods)/2 + 0.5) * width
         ax3.bar(x + offset, tprs, width, label=METHOD_NAMES.get(method, method), color=color)
     
-    ax3.set_ylabel('TPR@1%FPR')
-    ax3.set_title('(c) True Positive Rate at 1% FPR', fontweight='bold')
+    ax3.set_ylabel("TPR@1%FPR")
+    ax3.set_title("(c) TPR at 1% FPR", fontweight="bold", pad=9)
     ax3.set_xticks(x)
     ax3.set_xticklabels(
-        [_pretty_detector_name(d).replace(' ', '\n') for d in detectors],
-        rotation=45,
+        [detector_labels.get(d, _pretty_detector_name(d)) for d in detectors],
+        rotation=15,
         ha='right',
         fontsize=10,
     )
@@ -833,18 +884,18 @@ def create_method_comparison_summary(
     # Panel 4: Attack Success Rate summary
     ax4 = axes[1, 1]
     
-    if 'asr' in data.columns:
-        mean_asr = data.groupby(method_col)['asr'].mean().reset_index()
+    if 'asr' in plot_data.columns:
+        mean_asr = plot_data.groupby(method_col)['asr'].mean().reset_index()
         mean_asr = mean_asr.sort_values(by=method_col, key=lambda s: s.map(_method_rank))
         x4 = np.arange(len(mean_asr))
-        colors = [COLORS.get(m, f"C{i}") for i, m in enumerate(mean_asr[method_col])]
+        colors = [COLORS.get(_canonical_method(m), COLORS.get(m, f"C{i}")) for i, m in enumerate(mean_asr[method_col])]
         
         bars = ax4.bar(x4, mean_asr['asr'], color=colors, edgecolor='black', linewidth=0.5)
-        ax4.set_ylabel('Attack Success Rate (ASR)')
-        ax4.set_title('(d) Mean Attack Success Rate', fontweight='bold')
+        ax4.set_ylabel("ASR@1%FPR")
+        ax4.set_title("(d) Mean attack success", fontweight="bold", pad=9)
         ax4.set_xticks(x4)
         ax4.set_xticklabels(
-            [METHOD_NAMES.get(m, m).replace(' ', '\n') for m in mean_asr[method_col]],
+            [_canonical_method(m).upper() for m in mean_asr[method_col]],
             fontsize=10,
         )
         ax4.set_ylim(0, 1.05)
@@ -858,11 +909,21 @@ def create_method_comparison_summary(
                  transform=ax4.transAxes, fontsize=12)
         ax4.set_title('(d) Attack Success Rate', fontweight='bold')
     
-    fig.suptitle('Detection Evasion Results Summary', fontsize=17, fontweight='bold', y=1.02)
-    plt.tight_layout()
+    fig.legend(
+        legend_handles,
+        legend_labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.985),
+        ncol=len(legend_labels),
+        frameon=False,
+        fontsize=9.5,
+        columnspacing=0.9,
+        handlelength=1.0,
+    )
+    fig.subplots_adjust(top=0.88, hspace=0.32, wspace=0.25)
     
     if output_path:
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        plt.savefig(output_path, dpi=300)
         logger.info(f"Saved method comparison summary to {output_path}")
     
     plt.close()
