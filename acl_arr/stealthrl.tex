@@ -203,8 +203,8 @@ Appendix~\ref{app:ablations} reports the small-subset ablations used for model s
 
 We report detection metrics and quality diagnostics:
 \begin{itemize}[leftmargin=*,itemsep=2pt]
-  \item \textbf{TPR@1\%FPR}: True positive rate at 1\% false positive rate. For each detector, we compute the decision threshold as the empirical 99th percentile of its scores on the 15,310 human evaluation samples, then keep that threshold fixed when scoring all clean and attacked AI samples. This is our primary high-precision triage metric: even with human review, detector alerts should not routinely flag human writers or overwhelm reviewers.
-  \item \textbf{TPR@5\%FPR}: The same operating-point metric evaluated at a looser 5\% false positive rate. For each detector, we compute the decision threshold as the empirical 95th percentile of its scores on the same 15,310 human evaluation samples, then keep that threshold fixed when scoring all clean and attacked AI samples. We report this as a supplementary operating point for less conservative human-review queues.
+  \item \textbf{TPR@1\%FPR}: True positive rate at 1\% false positive rate, using a detector threshold calibrated as the empirical 99th percentile of scores on the 15,310 human evaluation samples. This is our primary high-precision operating point.
+  \item \textbf{TPR@5\%FPR}: The same metric at a looser 5\% false positive rate, using the empirical 95th percentile of human scores. We report this as a supplementary operating point.
   \item \textbf{ASR} (Attack Success Rate): Fraction of AI samples classified as human at the 1\% FPR threshold. $\text{ASR} = 1 - \text{TPR@1\%FPR}$.
   \item \textbf{AUROC}: Area under the receiver operating characteristic curve. Threshold-independent measure of overall discriminability.
   \item \textbf{E5 Similarity}: Cosine similarity between E5 embeddings~\cite{wang2022e5} of original and paraphrased text, measuring sentence-level semantic preservation.
