@@ -36,7 +36,7 @@
 \maketitle
 
 \begin{abstract}
-AI-text detectors are increasingly used in high-stakes settings, yet their robustness to meaning-preserving adversarial rewriting remains uncertain. We introduce \emph{StealthRL}, a reinforcement learning framework for stress-testing AI-text detectors with adaptive paraphrase attacks. StealthRL trains a paraphrase policy against a detector ensemble under explicit semantic-fidelity constraints, then evaluates transfer to held-out detector families. On the full filtered MAGE test pool (15,310 human / 14,656 AI), StealthRL reduces mean AUROC from 0.79 to 0.43 and achieves a 0.024 mean TPR@1\%FPR across RoBERTa, Fast-DetectGPT, Binoculars, and MAGE. The attack transfers to two detectors not used during training, showing cross-detector transfer within this panel rather than a single-detector failure. We further analyze detector score distributions, verify stability across repeated stochastic generations, and evaluate quality with E5, BERTScore, bidirectional NLI, and LLM-based Likert ratings. Our results show that the evaluated AI-text detectors remain brittle under realistic paraphrasing pressure and provide a reproducible protocol for adversarial robustness evaluation. An anonymized code package is available at \url{https://anonymous.4open.science/r/StealthRL-154E/}.
+AI-text detectors are increasingly used in high-stakes settings, but their robustness to meaning-preserving adversarial rewriting remains unclear. We introduce \emph{StealthRL}, a reinforcement learning framework for stress-testing detectors with adaptive paraphrase attacks. StealthRL trains a paraphrase policy against a detector ensemble while enforcing semantic fidelity, then evaluates transfer to held-out detector families on the full filtered MAGE test pool. Across RoBERTa, Fast-DetectGPT, Binoculars, and MAGE, the resulting attack sharply degrades detection performance, driving mean TPR@1\%FPR down to 0.024 while preserving high semantic similarity and fluency. The attack also transfers to detectors not used during training, indicating a broader robustness failure rather than overfitting to a single target model. We complement the main results with detector-score analysis, repeated-generation stability checks, and automatic and judge-based quality evaluation. Overall, our findings suggest that current AI-text detectors remain brittle under realistic paraphrasing pressure and motivate robustness evaluation at deployment-relevant operating points. An anonymized code package is available at \url{https://anonymous.4open.science/r/StealthRL-154E/}.
 \end{abstract}
 
 % ============================================================================
@@ -105,6 +105,13 @@ We consider an adversary who has produced AI-generated text and seeks to modify 
 
 We evaluate transfer by testing against two \emph{held-out} detectors (Binoculars and MAGE) not seen during training, assessing whether learned evasion strategies generalize across detector architectures.
 
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{figures/fig_pipeline_vector.tex}}
+\caption{StealthRL training and evaluation pipeline. A paraphrase policy (Qwen3-4B with LoRA) is trained via GRPO against a two-detector ensemble (RoBERTa + Fast-DetectGPT) with semantic similarity reward. The trained policy is then evaluated against four detectors, including the held-out Binoculars and MAGE detectors, at the 1\% FPR operating point.}
+\label{fig:pipeline}
+\end{figure*}
+
 \subsection{Reward Design}
 \label{sec:reward}
 
@@ -149,13 +156,6 @@ We fine-tune Qwen3-4B-Instruct with LoRA adapters using GRPO~\cite{pang2025grpo}
 At inference time, the fine-tuned policy generates a single paraphrase per input. No candidate selection or reranking is applied; the single-pass output is evaluated directly against all four detectors.
 
 Accordingly, the reported StealthRL attack is \emph{single-shot} at test time: each input receives one policy generation call, with no iterative refinement and no target-detector queries during evaluation. Detector access is required only during offline RL training. This differs from detector-guided search baselines such as M3, which use multi-candidate generation and detector-based reranking at evaluation time.
-
-\begin{figure*}[t]
-\centering
-\resizebox{\textwidth}{!}{\input{figures/fig_pipeline_vector.tex}}
-\caption{StealthRL training and evaluation pipeline. A paraphrase policy (Qwen3-4B with LoRA) is trained via GRPO against a two-detector ensemble (RoBERTa + Fast-DetectGPT) with semantic similarity reward. The trained policy is then evaluated against four detectors, including the held-out Binoculars and MAGE detectors, at the 1\% FPR operating point.}
-\label{fig:pipeline}
-\end{figure*}
 
 % ============================================================================
 \section{Experimental Setup}
@@ -273,15 +273,11 @@ Future work should study adversarial training, provenance-aware defenses, semant
 \label{sec:limitations}
 % ============================================================================
 
-\paragraph{Detector coverage.} Our evaluation covers four detectors spanning supervised, zero-shot statistical, paired-LM, and benchmark-provided paradigms. We do not evaluate against watermark-based detectors~\cite{kirchenbauer2023watermark}, which embed signals during generation and may be more robust to paraphrasing attacks. Evaluating StealthRL against watermarked text is an important direction for future work.
+\paragraph{Coverage.} Our evaluation spans four detectors across supervised, zero-shot statistical, paired-LM, and benchmark-provided paradigms, but it is not exhaustive. In particular, we do not evaluate watermark-based detectors~\cite{kirchenbauer2023watermark}, which embed provenance signals during generation and may respond differently to paraphrasing attacks.
 
-\paragraph{Training-ensemble coverage.} The RL reward uses two detectors, RoBERTa and Fast-DetectGPT, while Binoculars and MAGE are held out for transfer evaluation. This separation is useful for measuring cross-detector transfer, but it also means we do not study whether training directly against a larger detector ensemble would further improve or destabilize evasion. Larger ensembles would require substantially more reward-model calls per GRPO update, especially for paired-LM and Longformer-based detectors, and are left for future work.
+\paragraph{Training and data scope.} The RL reward uses only RoBERTa and Fast-DetectGPT, with Binoculars and MAGE held out for transfer evaluation. This lets us measure cross-detector transfer, but it does not test larger training ensembles, which would be substantially more expensive because each GRPO update would require many more detector calls. We also evaluate only on English MAGE data; broader validation across datasets such as RAID~\cite{dugan2024raidsharedbenchmarkrobust}, domains, and languages is still needed.
 
-\paragraph{Dataset diversity.} We evaluate on a single benchmark (MAGE) in English. Broader coverage across datasets (RAID~\cite{dugan2024raidsharedbenchmarkrobust}), domains, and languages is needed to establish generalizability. The MAGE benchmark, while diverse, may not capture all deployment scenarios.
-
-\paragraph{Quality gap.} StealthRL achieves lower semantic fidelity than the high-quality paraphrase baselines (E5 0.901, BERTScore 0.868, and NLI 0.316, compared with M1/M3 E5 0.974/0.973, BERTScore 0.926/0.934, and NLI 0.967/0.965) and lower Likert quality (2.51 vs.\ 3.78/3.77). It still outperforms character-level obfuscation on BERTScore and judged quality (M5: 0.773 and 1.97), but the remaining fidelity cost is a limitation of the current system. We supplement E5 with BERTScore, bidirectional NLI, and LLM-based similarity judgments, but all automatic semantic metrics remain imperfect proxies for human meaning preservation. Improving semantic preservation while maintaining strong evasion is an important direction. Techniques such as constrained decoding, rejection sampling, or multi-objective RL could help close this gap.
-
-\paragraph{Defense evaluation.} We do not explore defensive strategies such as adversarial training, certified robustness, or ensemble diversification that could improve detector resilience. Our focus is on exposing vulnerabilities to motivate defensive research.
+\paragraph{Quality and defenses.} StealthRL still incurs a noticeable quality gap relative to high-fidelity paraphrase baselines, and our semantic metrics remain imperfect proxies for human meaning preservation. We also do not study defenses such as adversarial training, certified robustness, or ensemble diversification. Improving fidelity while preserving evasion strength, and evaluating countermeasures under the same protocol, are the main next steps.
 
 % ============================================================================
 \section{Ethical Considerations}
