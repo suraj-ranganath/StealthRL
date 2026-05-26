@@ -1,6 +1,7 @@
 # StealthRL: Reinforcement Learning Paraphrase Attacks for Multi-Detector Evasion of AI-Text Detectors
 
 [Paper (arXiv)](https://arxiv.org/abs/2602.08934)  
+[Demo](https://stealthrl.pages.dev/)  
 [Model (Hugging Face)](https://huggingface.co/suraj-ranganath/StealthRL)
 
 ![StealthRL Pipeline Overview](figures/StealthRL_Pipeline_Final_Final.png)
