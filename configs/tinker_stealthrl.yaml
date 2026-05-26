@@ -1,0 +1,141 @@
+# StealthRL Training Configuration for Tinker
+
+# Model settings
+model:
+  name: "Qwen/Qwen3-4B-Instruct-2507"  # Base model
+  renderer: "qwen3"  # Tinker renderer name
+
+# LoRA settings
+lora:
+  rank: 32  # OPTIMAL for RL: rank=32 (matches full FT performance, Thinking Machines research)
+  alpha: 32  # Standard α=32 (do NOT scale with rank for optimal LR independence)
+  dropout: 0.05
+  target_modules: null  # null = all linear layers INCLUDING MLP (CRITICAL per LoRA research)
+
+# Training hyperparameters
+training:
+  learning_rate: 2.8e-4  # CRITICAL: LoRA needs 10x FullFT LR (Thinking Machines: 2.8e-4 for Llama 8B, adjust by sqrt for 4B: ~2.8e-4 * sqrt(2) ≈ 4e-4, but 2.8e-4 conservative)
+  batch_size: 16  # CRITICAL: Keep small (4-8) - LoRA penalized by large batches per research. Made it 16 to save time
+  group_size: 4  # GRPO: 4-16 rollouts per prompt (8 is sweet spot per GRPO research)
+  num_epochs: 2
+  num_substeps: 1  # Gradient accumulation (1 = no accumulation for RL on-policy)
+  max_tokens: 512  # Max generation length
+
+# Sampling settings
+sampling:
+  temperature: 1.0  # Standard for RL exploration (keep at 1.0 per GRPO research)
+  temperature_schedule: "constant"  # CRITICAL: Use "constant" for RL (decay hurts exploration)
+  temperature_decay: 0.95  # Not used if constant
+  top_p: 0.95  # Slightly higher for more diversity (0.9-0.95 per research)
+
+# GRPO settings
+grpo:
+  normalize_advantages: true  # Group-normalize advantages (CRITICAL for GRPO)
+  advantage_clip: 10.0  # Increase to 10.0 (5.0 too conservative per GRPO research)
+  reward_clip: null  # Keep null - let advantages do the work
+  remove_constant_reward_groups: true  # Remove degenerate groups
+
+# KL divergence penalty (AuthorMist-inspired)
+kl:
+  penalty_coef: 0.01  # CRITICAL: Increase to 0.01 (0.001 too small, models drift too much per Tinker research)
+  target: null  # Keep null for RL (adaptive KL not recommended for GRPO)
+  adapt_rate: 0.1  # Not used if target=null
+
+# All-negative group handling
+all_negative:
+  min_reward: 0.01  # Minimum reward for all-negative groups
+  downweight: 0.5  # Downweight factor
+
+# Curriculum learning
+curriculum:
+  enabled: false
+  start_quantile: 0.7  # Start with top 70% easiest
+  end_quantile: 0.0  # End with all examples
+  steps: 1000  # Transition steps
+
+# Reward function configuration
+reward:
+  # Weights (α, β, γ)
+  detector_weight: 1.0  # α: Detector evasion
+  semantic_weight: 1.0  # β: Semantic similarity
+  perplexity_weight: 0.5  # γ: Fluency (removed fairness penalty)
+  
+  # Detector ensemble (VALIDATED DETECTORS - Jan 2026)
+  detectors:
+    names:
+      - "roberta_openai"  # RoBERTa-large-openai-detector (AUROC: 0.891, 12x faster)
+      - "fast_detectgpt"  # Fast-DetectGPT gpt-neo-2.7B (AUROC: 0.691, robust)
+    weights:  # Performance-based weights (RoBERTa: higher accuracy, Fast-DetectGPT: complementary)
+      roberta_openai: 0.6  # 60% weight (superior accuracy + speed)
+      fast_detectgpt: 0.4  # 40% weight (different detection method, reduces correlation)
+    
+    # Batch sizes for detector inference (higher = faster but more GPU memory)
+    # RoBERTa is memory efficient and can handle larger batches
+    roberta_batch_size: 128  # RoBERTa-large can handle 128+ on most GPUs
+    # Fast-DetectGPT uses gpt-neo-2.7B which needs more memory
+    fast_detectgpt_batch_size: 32  # Reduce if OOM, increase if you have VRAM
+    
+    # Detector-specific settings
+    fast_detectgpt_model: "gpt-neo-2.7B"  # VALIDATED: AUROC 0.691 on 5000 samples
+    roberta_openai_model: "roberta-large-openai-detector"  # VALIDATED: AUROC 0.891 on 200 samples
+    ghostbuster_model: "roberta-base"  # BACKUP: Not validated yet
+    binoculars_performer: "gpt2"  # BACKUP: Not validated yet
+    binoculars_observer: "gpt2-medium"  # BACKUP: Not validated yet
+    
+    cache_path: "cache/detectors.db"
+  
+  # Semantic similarity (E5)
+  semantic:
+    model: "intfloat/e5-large-v2"
+    threshold: 0.90  # Minimum acceptable similarity
+  
+  # BERTScore (optional, for evaluation only)
+  bertscore:
+    enabled: false  # Enable for comprehensive evaluation
+    model_type: "roberta-large"  # Options: bert-base, roberta-large, microsoft/deberta-base
+    batch_size: 16
+    num_layers: null  # Auto-select best layer
+  
+  # Perplexity (fluency)
+  perplexity:
+    model: "gpt2"
+    min: 5.0  # Too predictable (LLM-like)
+    max: 80.0  # Too unpredictable (incoherent)
+    target: 30.0  # Human-like target
+  
+  # Fairness
+  fairness:
+    mode: "esl_penalty"  # Per-sample ESL penalty
+  
+  # Normalization (Session 4 refinements)
+  normalization:
+    enabled: true
+    detector_zscore: true  # Z-score normalize detector scores
+    semantic_min: 0.90  # Threshold for semantic
+    quality_min: 0.80  # Threshold for quality
+
+# Dataset settings
+dataset:
+  path: "data/mage"  # MAGE dataset (60K+, 14 domains, HuggingFace format)
+  max_examples: null  # Limit total examples per split (null=unlimited, set to 200-1000 for testing)
+  max_train_examples: null  # Optional: limit only train split
+  max_test_examples: null   # Optional: limit only test split
+  seed: 42
+  few_shot: "standard"  # "standard" | null | custom
+
+# Logging
+logging:
+  path: "outputs/tinker"
+  interval: 10  # Log every N batches
+  eval_interval: 100  # Eval every N batches
+  save_interval: 500  # Save every N batches
+  num_groups_to_log: 4  # Detailed logs
+  debug_mode: false
+
+# Parallel training (Tinker async/stream)
+parallel:
+  mode: "stream_minibatch"  # sync | stream_minibatch | async
+  stream_minibatch:
+    num_minibatches: 4  # Pipelined minibatches per substep
+  async:
+    max_steps_off_policy: 2

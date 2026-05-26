@@ -1,0 +1,30 @@
+# StealthBench Evaluation Configuration
+
+detectors:
+  - "fast-detectgpt"
+  - "ghostbuster"
+  - "binoculars"
+  - "roberta-base-openai-detector"
+
+datasets:
+  human_texts: "data/processed/human_test.jsonl"
+  ai_texts: "data/processed/ai_test.jsonl"
+  paraphrased_texts: "data/processed/stealthrl_paraphrased.jsonl"
+  esl_texts: "data/processed/esl_test.jsonl"
+  native_texts: "data/processed/native_test.jsonl"
+
+metrics:
+  - "auroc"
+  - "fpr_at_0.5_tpr"
+  - "fpr_at_1_tpr"
+  - "bertscore"
+  - "perplexity"
+  - "esl_fpr_gap"
+
+operating_points:
+  tpr_targets: [0.95, 0.99]
+
+output:
+  output_dir: "outputs/stealthbench_results"
+  save_plots: true
+  save_csv: true
