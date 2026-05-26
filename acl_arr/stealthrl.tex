@@ -141,34 +141,7 @@ then clamp the resulting value to $[0,1]$. Thus $p_{\text{ens}}$ is a convex ave
 \subsection{Training Pipeline}
 \label{sec:training}
 
-Algorithm~\ref{alg:stealthrl} describes the StealthRL training procedure.
-
-\begin{algorithm}[t]
-\caption{StealthRL Training}
-\label{alg:stealthrl}
-\begin{algorithmic}[1]
-\REQUIRE Training data $\mathcal{D} = \{x_i\}_{i=1}^N$ (AI-generated texts), detector ensemble $\{d_k\}_{k=1}^K$ with weights $\{w_k\}$, E5 similarity model, base LLM $\pi_{\text{ref}}$
-\ENSURE Fine-tuned paraphrase policy $\pi_\theta$
-\STATE Initialize $\pi_\theta \leftarrow \pi_{\text{ref}}$ with LoRA adapters (rank $r{=}32$, $\alpha{=}32$)
-\FOR{epoch $= 1, \ldots, E$}
-  \FOR{batch $\mathcal{B} \subset \mathcal{D}$}
-    \FOR{each $x \in \mathcal{B}$}
-      \STATE Sample group $\{y_1, \ldots, y_G\} \sim \pi_\theta(\cdot \mid x)$ \hfill $\triangleright$ $G{=}8$ candidates
-      \FOR{each $y_g$ in group}
-        \STATE $R_{\text{det}}(y_g) \leftarrow 1 - \sum_{k} w_k \cdot d_k(y_g)$ \hfill $\triangleright$ Ensemble evasion
-        \STATE $R_{\text{sem}}(x, y_g) \leftarrow \cos(\text{E5}(x), \text{E5}(y_g))$ \hfill $\triangleright$ Semantic preservation
-        \STATE $R(x, y_g) \leftarrow \alpha \cdot R_{\text{det}}(y_g) + \beta \cdot R_{\text{sem}}(x, y_g)$
-      \ENDFOR
-      \STATE Compute advantages via group-relative normalization: \\ \quad $A_g \leftarrow (R_g - \bar{R}) / \sigma_R$ \hfill $\triangleright$ GRPO
-    \ENDFOR
-    \STATE Update $\theta$ via clipped policy gradient with KL penalty
-  \ENDFOR
-\ENDFOR
-\RETURN $\pi_\theta$
-\end{algorithmic}
-\end{algorithm}
-
-We fine-tune Qwen3-4B-Instruct with LoRA adapters using GRPO~\cite{pang2025grpo}. The training ensemble comprises RoBERTa and Fast-DetectGPT; Binoculars and the MAGE detector are \emph{held out} for transfer evaluation. Complete training, sampling, and compute settings are reported in Section~\ref{sec:implementation}.
+We fine-tune Qwen3-4B-Instruct with LoRA adapters using GRPO~\cite{pang2025grpo}. For each training batch, the policy samples a group of paraphrases, scores each candidate with the detector ensemble and E5 similarity reward, computes group-relative advantages, and updates the LoRA parameters under the KL penalty. The training ensemble comprises RoBERTa and Fast-DetectGPT; Binoculars and the MAGE detector are \emph{held out} for transfer evaluation. Appendix Algorithm~\ref{alg:stealthrl} provides the full pseudocode, and complete training, sampling, and compute settings are reported in Section~\ref{sec:implementation}.
 
 \subsection{Inference}
 \label{sec:inference}
@@ -247,13 +220,7 @@ All confidence intervals are computed via bootstrap resampling with 500 iteratio
 
 \subsection{LLM-Based Quality Judge}
 
-We additionally evaluate paraphrase quality using an LLM judge, following the growing body of work on LLM-based automatic evaluation. Recent studies have shown that LLMs can serve as effective evaluators of text quality~\cite{fu2023gptscore}, with specialized evaluation models~\cite{kim2024prometheus2} and systematic frameworks for building reliable autoraters~\cite{vu2024foundationalautoraters} demonstrating strong agreement with human judgments. We employ OpenAI \texttt{gpt-5-nano} to score each paraphrase on two 1--5 Likert axes:
-\begin{enumerate}[leftmargin=*,itemsep=2pt]
-  \item \textbf{Linguistic quality}: Fluency, grammaticality, and naturalness of the paraphrase.
-  \item \textbf{Semantic similarity}: Faithfulness of meaning preservation relative to the source.
-\end{enumerate}
-
-For fair cross-method comparison, we evaluate a shared subset of 500 AI samples per method (M1--M5) using identical sample IDs across methods. Each sample is scored independently; the judge sees only the source and paraphrase without method labels. Appendix~\ref{app:prompts} reports the exact judge prompts.
+We additionally evaluate paraphrase quality with an LLM judge, following prior work on automatic text-quality evaluation~\cite{fu2023gptscore,kim2024prometheus2,vu2024foundationalautoraters}. OpenAI \texttt{gpt-5-nano} scores each paraphrase on two 1--5 Likert axes: linguistic quality and semantic similarity. For fair cross-method comparison, we score a shared subset of 500 AI samples per method (M1--M5) using identical sample IDs; the judge sees only the source and paraphrase, without method labels. Appendix~\ref{app:prompts} reports the exact prompts.
 
 % ============================================================================
 \section{Results}
@@ -273,57 +240,24 @@ Figure~\ref{fig:method_comparison} provides a comprehensive visual comparison ac
   \label{fig:method_comparison}
 \end{figure*}
 
-\subsection{Stochastic Decoding Robustness}
-
-Because StealthRL uses stochastic decoding (temperature 1.0, top-p 0.9), we repeat full-pool M2 generation twice using the released checkpoint, identical prompt, identical decoding configuration, and different random seeds. Each repeat uses one generation per input and no detector-based reranking or candidate selection, matching the reported single-shot evaluation protocol. The result is stable: across the original run and two repeats, mean AUROC is 0.432 $\pm$ 0.001, mean TPR@1\%FPR is 0.024 $\pm$ 0.001, and mean ASR is 0.976 $\pm$ 0.001. Per-detector TPR@1\%FPR is also stable: Binoculars, Fast-DetectGPT, and RoBERTa remain at 0.002 $\pm$ 0.000, while MAGE varies only from 0.089 to 0.093. Appendix Table~\ref{tab:stochastic_repeats} reports the complete repeat table.
-
-\subsection{Cross-Architecture Transfer}
-
-A key finding is the strong \emph{transfer} of StealthRL's evasion to detectors that were never used during training. Despite never seeing Binoculars or MAGE during training, M2 achieves 0.002 TPR@1\%FPR on Binoculars and 0.089 on the MAGE detector, alongside 0.002 on both in-ensemble detectors. Figure~\ref{fig:heatmap} visualizes the per-detector, per-method TPR matrix, clearly showing that M2 and M5 achieve near-zero TPR on most of the detector panel.
-
-\begin{figure*}[t]
+\begin{figure}[t]
   \centering
-  \includegraphics[width=0.72\textwidth]{figures/fig_heatmap_tpr.pdf}
-  \caption{TPR@1\%FPR heatmap across detectors and methods. Darker colors indicate higher detection rates. StealthRL (M2) and Homoglyph (M5) achieve near-zero TPR on three detectors, while MAGE remains the most robust held-out detector.}
+  \includegraphics[width=0.86\columnwidth]{figures/fig_heatmap_tpr.pdf}
+  \caption{TPR@1\%FPR heatmap. Lower is better for the attacker; M2 collapses TPR on three detectors and degrades held-out MAGE.}
   \label{fig:heatmap}
-\end{figure*}
+\end{figure}
 
-This cross-architecture transfer is consistent with shared vulnerabilities across the detector families in our panel. Because the held-out detectors use different scoring mechanisms from the reward ensemble, the result suggests that paraphrasing perturbs cues used by multiple current detectors, including token-distribution, likelihood-curvature, paired-LM, and classifier features. We do not claim this identifies a universal mechanism for all detectors; rather, it shows that within this four-detector panel, optimizing against two detectors can transfer to two unseen detector families.
+\subsection{Robustness, Transfer, and Quality}
 
-\subsection{Supplementary 5\% FPR Operating Point}
+StealthRL's evasion transfers to detectors not used during training: M2 reaches 0.002 TPR@1\%FPR on held-out Binoculars and 0.089 on the held-out MAGE detector, alongside 0.002 on both in-ensemble detectors. The same ranking holds at the supplementary 5\% FPR operating point, where M2 obtains 0.076 mean TPR@5\%FPR (Appendix Table~\ref{tab:app_tpr5}). Repeated stochastic generation is also stable: across the original run and two full-pool repeats, mean AUROC is 0.432 $\pm$ 0.001, mean TPR@1\%FPR is 0.024 $\pm$ 0.001, and mean ASR is 0.976 $\pm$ 0.001 (Appendix Table~\ref{tab:stochastic_repeats}).
 
-Appendix Table~\ref{tab:app_tpr5} adds TPR@5\%FPR as a supplementary operating point without replacing any of the primary TPR@1\%FPR reporting above. The qualitative ranking remains similar: StealthRL stays near-zero on Binoculars (0.005), Fast-DetectGPT (0.003), and RoBERTa (0.022), while MAGE remains substantially more robust at 0.272. Averaged across the four-detector panel, M2 reaches a mean TPR@5\%FPR of 0.076.
+Figure~\ref{fig:heatmap} and Appendix Figure~\ref{fig:app_score_dist} provide the per-detector heatmap and score distributions. The distributions show that M2 pushes most AI-sample scores below the calibrated 1\% FPR threshold, explaining why TPR collapses even when a detector such as RoBERTa retains some global rank information. This pattern is consistent with cross-detector vulnerabilities within our panel, but we do not claim a universal mechanism for all detector families.
 
-\subsection{Detector Score Analysis}
-
-To understand \emph{why} M2 and M5 achieve near-zero TPR, we examine the raw detector score distributions in Appendix Figure~\ref{fig:app_score_dist}. For both methods, AI-sample scores are pushed \emph{below} the 1\% FPR threshold, making them statistically indistinguishable from human-written text from the detector's perspective. In contrast, methods M0, M1, M3, and M4 retain a substantial fraction of scores above the threshold, explaining their higher detection rates.
-
-Figure~\ref{fig:method_comparison} already summarizes the core AUROC behavior. In particular, Panel~(a) shows that StealthRL achieves the lowest AUROC on Binoculars (0.055) and Fast-DetectGPT (0.089), while RoBERTa remains substantially degraded at 0.691 and the MAGE detector is the most robust at 0.891.
-
-The RoBERTa AUROC anomaly deserves further discussion. Despite achieving near-zero TPR@1\%FPR (0.002), StealthRL's AUROC on RoBERTa (0.691) is far higher than on Fast-DetectGPT (0.089) or Binoculars (0.055). This apparent contradiction arises because AUROC and TPR@1\%FPR measure fundamentally different properties. AUROC captures global rank separability across all possible thresholds, while TPR@1\%FPR measures detection power at a single strict operating point. RoBERTa retains moderate ability to rank AI-paraphrased text above human text on average, but at the strict 1\% FPR threshold, the overlap between human and AI score distributions is sufficient to render detection ineffective. Concretely, the score distributions for M2 paraphrases are shifted leftward (toward human-like scores) enough that nearly all AI samples fall below the 1\% FPR threshold, even though the distribution means remain partially separated. This pattern suggests that the RL policy learns to target the specific score region near the decision boundary rather than fully collapsing the detector's discriminative capacity. In human-in-the-loop deployments, this still matters: if detector scores no longer surface adversarially paraphrased AI text for review, the human reviewer receives fewer useful signals exactly where adaptive misuse is most likely.
-
-\subsection{Evasion--Quality Tradeoff}
-
-Achieving strong evasion without degrading text quality is the central challenge. Appendix Figure~\ref{fig:app_tradeoff} plots mean ASR@1\%FPR against E5 semantic similarity for each method, so the preferred operating region is the top-right corner. M1 and M3 preserve high similarity (0.974 and 0.973) but achieve only moderate evasion (0.716 and 0.783 mean ASR). M2 and M5 both achieve near-maximal mean ASR (0.976 and 0.972), with comparable E5 similarity (0.901 for M2 vs.\ 0.923 for M5), but M2 achieves substantially better \emph{judged} quality.
-
-Table~\ref{tab:quality} and Appendix Figure~\ref{fig:app_quality} present the LLM-based quality evaluation. E5 similarity, BERTScore, and NLI consistency are computed on the full filtered evaluation pool, whereas the Likert ratings are computed on the matched 500-sample subset used for paid judging. BERTScore adds a token-level contextual view to the global E5 embedding score: M2 reaches 0.868 BERTScore, below M1/M3 (0.926/0.934) and M4 (0.902), but clearly above M5 (0.773). This contrasts with E5, where M5 scores above M2 (0.923 vs.\ 0.901), suggesting that character-level obfuscation can preserve global embedding similarity while damaging contextual token overlap and readability. NLI consistency is stricter: high-quality paraphrasers M1 and M3 remain high (0.967 and 0.965), M5 remains moderately high because character substitution preserves most lexical propositions (0.847), and M2 drops to 0.316. We therefore do not claim that the strongest evasion setting is quality-equivalent to standard paraphrasing; rather, the multi-metric analysis makes the evasion--fidelity cost explicit. The LLM judge supports the readability side of this picture: M2 is rated substantially higher on quality than M5 (2.51 vs.\ 1.97), even though M5 scores higher on judged similarity (2.92 vs.\ 2.64). Overall, E5, BERTScore, NLI, and Likert judgments capture complementary notions of preservation: global semantic proximity, contextual token overlap, bidirectional entailment, and human-facing naturalness. Methods M1 and M3, which achieve weaker evasion, score highest on quality (3.78 and 3.77), illustrating the fundamental tradeoff between evasion effectiveness and output quality.
-
-\begin{table}[H]
-  \centering
-  \small
-  \setlength{\tabcolsep}{6pt}
-  \resizebox{\columnwidth}{!}{\input{table_quality.tex}}
-  \caption{Quality and similarity metrics. E5 Sim., BERTScore, and NLI are computed on the full filtered evaluation pool. Quality and Similarity are mean Likert scores (1--5) from a gpt-5-nano judge on 500 matched samples for methods M1--M5; M0 reports automatic metrics only. Higher is better for E5, BERTScore, NLI, Valid, Quality, and Similarity. Lower PPL indicates lower GPT-2 language-model surprise, while Edit Rate is a magnitude-of-change diagnostic rather than a quality-positive score.}
-  \label{tab:quality}
-\end{table}
+The attack also exposes an evasion--fidelity tradeoff. M2 obtains near-maximal mean ASR (0.976) with E5 similarity 0.901, BERTScore 0.868, NLI 0.316, and judged quality 2.51 (Appendix Table~\ref{tab:quality}). Thus, M2 is more readable than the homoglyph baseline (M5 quality 1.97) but less semantically faithful than high-quality paraphrasing baselines M1/M3. We therefore interpret StealthRL as a robustness stress test rather than a quality-equivalent paraphraser.
 
 \subsection{Discussion}
 
-The severe failure across the four detectors tested is consistent with significant vulnerabilities in current AI-text detection. The results suggest that multiple detector families use statistical, likelihood, and classifier cues that can be shifted by paraphrasing without necessarily requiring wholesale semantic change. Because we do not perform feature-level attribution for each detector, we treat this as an empirical transfer finding for the evaluated panel rather than proof of a single universal mechanism.
-
-This robustness gap has critical security implications. Adversaries can train adaptive attacks against deployed detectors, rendering them ineffective with modest computational resources (a single LoRA fine-tuning run). The strong transfer to held-out architectures suggests that naïve ensembles built from similar current detectors may provide less robustness than expected; it does not rule out purpose-built adversarially trained, provenance-aware, or semantically grounded ensemble defenses.
-
-Our evaluation should therefore be read as a stress test for detector-assisted review workflows, not as an argument for fully automated enforcement. Human review changes the deployment question but does not remove the robustness requirement: detector alerts should be treated as triage signals rather than proof of misconduct, yet reviewers still have finite capacity and depend on calibrated scores to decide what deserves scrutiny. Low precision overloads review queues and increases escalation risk for human writers; low TPR fails to route adversarially paraphrased AI text to review at all. Reporting both 1\% and 5\% FPR operating points captures these queue-size regimes without equating a detector alert with guilt.
+These results show that, for the evaluated detector panel, adaptive paraphrasing can defeat high-precision detector-assisted review workflows with one generation per input and no evaluation-time detector reranking. Human review changes how detector alerts should be used, but it does not remove the need for robust triage signals: low precision overloads reviewers, while low TPR fails to surface adversarially paraphrased AI text for review. Purpose-built adversarial training, provenance-aware defenses, and more semantically grounded detectors are therefore necessary next steps.
 
 % ============================================================================
 \section{Conclusion and Future Work}
@@ -332,16 +266,7 @@ Our evaluation should therefore be read as a stress test for detector-assisted r
 
 StealthRL demonstrates severe detector failure under adaptive RL-based paraphrasing attacks, revealing significant robustness gaps in the AI-text detectors evaluated. By training against a multi-detector ensemble with GRPO and LoRA, we achieve near-zero detection on three of four detectors and a 0.024 mean TPR@1\%FPR with strong cross-architecture transfer, including to two held-out detectors. Our comprehensive evaluation, spanning detection metrics, stochastic repeat analysis, multi-metric quality assessment, and score distribution analysis, provides a complete picture of the evasion--quality tradeoff.
 
-Several directions for future work emerge from our findings:
-\begin{itemize}[leftmargin=*,itemsep=2pt]
-  \item \textbf{Adversarial training}: Incorporating adversarial examples into detector training to improve robustness against adaptive attacks.
-  \item \textbf{Semantic-aware detectors}: Developing detection methods that combine semantic, discourse, provenance, and robustness-oriented signals beyond the cues disrupted by paraphrasing in our detector panel.
-  \item \textbf{Provable robustness}: Establishing theoretical guarantees on detector robustness under bounded perturbations.
-  \item \textbf{Multi-objective optimization}: Improving StealthRL's quality preservation through constrained RL or Pareto-optimal training.
-  \item \textbf{Broader evaluation}: Extending to additional datasets, languages, and detector families (including watermark-based methods).
-\end{itemize}
-
-Our evaluation framework and released code provide a rigorous testbed for measuring progress on adversarially robust AI-text detection.
+Future work should study adversarial training, provenance-aware defenses, semantic and discourse-level detection signals, stronger constrained RL objectives, and broader datasets, languages, and detector families. Our evaluation framework and released code provide a rigorous testbed for measuring progress on adversarially robust AI-text detection.
 
 % ============================================================================
 \section{Limitations}
@@ -367,11 +292,41 @@ Adversarial paraphrasing is dual-use technology. We position StealthRL as a \emp
 We provide an anonymized code package to enable reproducible robustness assessment and to accelerate defensive research. By making attack capabilities transparent, we aim to shift the detector development paradigm toward adversarial robustness rather than clean-distribution accuracy. We believe responsible disclosure of detector vulnerabilities, accompanied by tools for measuring progress, serves the broader goal of trustworthy AI-text detection.
 
 \bibliography{stealthrl_refs}
+\clearpage
 
 % ============================================================================
 \appendix
 % ============================================================================
 
+\section{Training Algorithm}
+\label{app:algorithm}
+
+\begin{algorithm}[H]
+\caption{StealthRL Training}
+\label{alg:stealthrl}
+\begin{algorithmic}[1]
+\REQUIRE Training data $\mathcal{D} = \{x_i\}_{i=1}^N$ (AI-generated texts), detector ensemble $\{d_k\}_{k=1}^K$ with weights $\{w_k\}$, E5 similarity model, base LLM $\pi_{\text{ref}}$
+\ENSURE Fine-tuned paraphrase policy $\pi_\theta$
+\STATE Initialize $\pi_\theta \leftarrow \pi_{\text{ref}}$ with LoRA adapters (rank $r{=}32$, $\alpha{=}32$)
+\FOR{epoch $= 1, \ldots, E$}
+  \FOR{batch $\mathcal{B} \subset \mathcal{D}$}
+    \FOR{each $x \in \mathcal{B}$}
+      \STATE Sample group $\{y_1, \ldots, y_G\} \sim \pi_\theta(\cdot \mid x)$ \hfill $\triangleright$ $G{=}8$
+      \FOR{each $y_g$ in group}
+        \STATE $R_{\text{det}}(y_g) \leftarrow 1 - \sum_{k} w_k \cdot d_k(y_g)$
+        \STATE $R_{\text{sem}}(x, y_g) \leftarrow \cos(\text{E5}(x), \text{E5}(y_g))$
+        \STATE $R(x, y_g) \leftarrow \alpha R_{\text{det}}(y_g) + \beta R_{\text{sem}}(x, y_g)$
+      \ENDFOR
+      \STATE Compute group-relative advantages: $A_g \leftarrow (R_g - \bar{R}) / \sigma_R$
+    \ENDFOR
+    \STATE Update $\theta$ via clipped policy gradient with KL penalty
+  \ENDFOR
+\ENDFOR
+\RETURN $\pi_\theta$
+\end{algorithmic}
+\end{algorithm}
+
+\FloatBarrier
 \section{Full Main Results on the MAGE Test Pool}
 \label{app:mainresults}
 
@@ -433,6 +388,18 @@ We provide an anonymized code package to enable reproducible robustness assessme
 }
 \captionof{table}{Full-pool stochastic repeat analysis for StealthRL (M2) at temperature 1.0 and top-p 0.9. All runs use one generation per input and no reranking; thresholds are the same 1\% FPR thresholds calibrated on human evaluation samples. Detector columns report TPR@1\%FPR.}
 \label{tab:stochastic_repeats}
+\end{center}
+
+\FloatBarrier
+\section{Quality Metrics}
+\label{app:quality}
+
+\begin{center}
+  \small
+  \setlength{\tabcolsep}{6pt}
+  \resizebox{\columnwidth}{!}{\input{table_quality.tex}}
+  \captionof{table}{Quality and similarity metrics. E5 Sim., BERTScore, and NLI are computed on the full filtered evaluation pool. Quality and Similarity are mean Likert scores (1--5) from a gpt-5-nano judge on 500 matched samples for methods M1--M5; M0 reports automatic metrics only. Higher is better for E5, BERTScore, NLI, Valid, Quality, and Similarity. Lower PPL indicates lower GPT-2 language-model surprise, while Edit Rate is a magnitude-of-change diagnostic rather than a quality-positive score.}
+  \label{tab:quality}
 \end{center}
 
 \FloatBarrier
@@ -617,11 +584,10 @@ The main results use the full filtered MAGE test pool (15,310 human / 14,656 AI)
 
 Table~\ref{tab:reward_ablation} reports the initial reward-weight sweep. All runs use RoBERTa and Fast-DetectGPT as the training detectors and are evaluated with the training-loop detector score rather than the final low-FPR detector panel. The sweep identifies $\alpha{=}1.0,\beta{=}0.1$ as the best balanced setting: it has the lowest detector probability and highest evasion rate while retaining high E5 similarity. Increasing the semantic weight to 0.3 does not improve fidelity and weakens evasion, while removing detector reward makes the objective less aligned with the attack goal.
 
-\begin{table*}[t]
-\centering
+\begin{center}
 \small
 \setlength{\tabcolsep}{6pt}
-\resizebox{\textwidth}{!}{%
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{lcccc}
 \toprule
 \textbf{Reward setting} & \textbf{Detector prob.} & \textbf{Evasion rate} & \textbf{E5 Sim.} & \textbf{Total reward} \\
@@ -633,17 +599,16 @@ $\alpha{=}0.0,\beta{=}1.0$ & 0.359 & 0.641 & 0.964 & 0.970 \\
 \bottomrule
 \end{tabular}
 }
-\caption{Training-time reward-weight ablation on the small MAGE development setup. Detector probability is the mean training-ensemble probability of AI generation, so lower detector probability and higher evasion rate are better for the attacker. This diagnostic sweep selected the nonzero but small semantic weight $\beta{=}0.1$.}
+\captionof{table}{Training-time reward-weight ablation on the small MAGE development setup. Detector probability is the mean training-ensemble probability of AI generation, so lower detector probability and higher evasion rate are better for the attacker. This diagnostic sweep selected the nonzero but small semantic weight $\beta{=}0.1$.}
 \label{tab:reward_ablation}
-\end{table*}
+\end{center}
 
 Table~\ref{tab:ablation_selection} reports the later checkpoint-selection evaluation on a fixed 1,000-human / 1,000-AI MAGE selection set. This pass uses the same low-FPR calibration procedure as the main evaluation, but only three detectors (RoBERTa, Fast-DetectGPT, and Binoculars); MAGE was kept for the final full-panel evaluation. The selected $\alpha{=}1.0,\beta{=}0.1$ checkpoint improves low-FPR evasion and generation quality relative to the no-semantic-reward checkpoint, and the replicate shows the same quality-preserving trend.
 
-\begin{table*}[t]
-\centering
+\begin{center}
 \small
-\setlength{\tabcolsep}{5pt}
-\resizebox{\textwidth}{!}{%
+\setlength{\tabcolsep}{3pt}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{lcccccc}
 \toprule
 \textbf{Selection run} & \textbf{Mean AUROC} & \textbf{Mean TPR@1\%FPR} & \textbf{Mean ASR} & \textbf{E5 Sim.} & \textbf{PPL} & \textbf{Judge quality} \\
@@ -654,9 +619,9 @@ $\alpha{=}1.0,\beta{=}0.1$ (replicate) & 0.554 & 0.063 & 0.937 & 0.974 & 30.5 & 
 \bottomrule
 \end{tabular}
 }
-\caption{Checkpoint-selection ablations on a fixed 1,000-human / 1,000-AI MAGE selection set. Metrics are averaged across RoBERTa, Fast-DetectGPT, and Binoculars; lower AUROC and TPR are better for the attacker, while higher ASR and quality metrics are better. The full paper results are recomputed separately on the full filtered MAGE test pool.}
+\captionof{table}{Checkpoint-selection ablations on a fixed 1,000-human / 1,000-AI MAGE selection set. Metrics are averaged across RoBERTa, Fast-DetectGPT, and Binoculars; lower AUROC and TPR are better for the attacker, while higher ASR and quality metrics are better. The full paper results are recomputed separately on the full filtered MAGE test pool.}
 \label{tab:ablation_selection}
-\end{table*}
+\end{center}
 
 We also ran a candidate-budget sweep for the selected M2 policy. Increasing candidates from 1 to 2, 4, and 8 raised mean ASR from 0.997 to 1.000 on the small selection setup, while E5 similarity remained in a narrow 0.898--0.904 band. We therefore report the stricter single-shot setting in the main paper: one generation per input, with no test-time detector-guided search or reranking.
 
@@ -783,8 +748,7 @@ What score (1 to 5) would you assign for semantic similarity, and why?
 \section{Dataset Statistics}
 \label{app:dataset}
 
-\begin{table}[t]
-\centering
+\begin{center}
 \footnotesize
 \setlength{\tabcolsep}{3pt}
 \resizebox{\columnwidth}{!}{%
@@ -802,9 +766,9 @@ Domains         & \multicolumn{3}{c}{Multiple (essays, Q\&A, creative writing)} 
 \bottomrule
 \end{tabular}
 }
-\caption{Dataset statistics for training and evaluation. The Likert evaluation uses 500 AI samples per attack method (M1--M5) with matched sample IDs.}
+\captionof{table}{Dataset statistics for training and evaluation. The Likert evaluation uses 500 AI samples per attack method (M1--M5) with matched sample IDs.}
 \label{tab:dataset}
-\end{table}
+\end{center}
 
 \FloatBarrier
 \section{Supplementary Figures}
