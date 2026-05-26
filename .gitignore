@@ -106,3 +106,4 @@ report/
 demo/data/
 deploy/azure/static_dist/
 deploy/cloudflare/static_dist/
+deploy/cloudflare/static_dist_anonymised/

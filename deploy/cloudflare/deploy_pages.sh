@@ -16,9 +16,11 @@ CLOUDFLARE_PAGES_PROJECT="${CLOUDFLARE_PAGES_PROJECT:-stealthrl}"
 CLOUDFLARE_PAGES_BRANCH="${CLOUDFLARE_PAGES_BRANCH:-$(git branch --show-current 2>/dev/null || echo demo-website)}"
 STEALTHRL_API_BASE_URL="${STEALTHRL_API_BASE_URL:?Set STEALTHRL_API_BASE_URL, e.g. https://<container-app-fqdn>}"
 STATIC_DIST="${STATIC_DIST:-deploy/cloudflare/static_dist}"
+STATIC_VARIANT="${STATIC_VARIANT:-public}"
 
 python deploy/azure/build_static_dist.py \
   --api-base-url "$STEALTHRL_API_BASE_URL" \
+  --variant "$STATIC_VARIANT" \
   --out "$STATIC_DIST"
 
 mkdir -p "$STATIC_DIST/privacy"
