@@ -2,7 +2,8 @@
 
 [Paper (arXiv)](https://arxiv.org/abs/2602.08934)  
 [Demo](https://stealthrl.pages.dev/)  
-[Model (Hugging Face)](https://huggingface.co/suraj-ranganath/StealthRL)
+[Model (Hugging Face)](https://huggingface.co/suraj-ranganath/StealthRL)  
+[Benchmark Dataset (Hugging Face)](https://huggingface.co/datasets/suraj-ranganath/StealthRL-Benchmark)
 
 ![StealthRL Pipeline Overview](figures/StealthRL_Pipeline_Final_Final.png)
 
