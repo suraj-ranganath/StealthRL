@@ -23,3 +23,10 @@ pdffonts stealthrl.pdf   # all fonts should be embedded
 - Bibliography: published venues for peer-reviewed works, official ACL Anthology entries (with DOIs) for ACL venues, arXiv DOIs for preprints; capitalization protected.
 - `acl_natbib.bst` updated to the current upstream acl-org/acl-style-files version.
 - No changes to paper content in response to reviews (separate step).
+
+## Poster
+
+`poster/StealthRL_PlurVA_Poster.pptx` (48" × 36") and its PDF export `poster/StealthRL_PlurVA_Poster.pdf`.
+Refreshed from the February poster so that every number, table entry, figure and claim matches this camera-ready paper:
+results from `table_main_*.tex`, `table_quality.tex`, `table_tpr5.tex`, `table_stochastic_repeats.tex`; figures from `figures/`
+(pipeline rendered from `fig_pipeline_vector.tex`). The QR code links to https://github.com/suraj-ranganath/StealthRL.
